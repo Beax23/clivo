@@ -1,0 +1,2667 @@
+﻿================================================================================
+LISTAGEM COMPLETA DO MÓDULO accounts
+Clivo Platform - Refatoração Arquitetural
+Gerado em: 28/09/2026 10:41:41
+Total de arquivos: 33
+================================================================================
+
+
+================================================================================
+ARQUIVO 1 DE 33
+================================================================================
+📁 PASTA: apps\accounts\__init__.py
+📄 ARQUIVO: __init__.py
+📏 TAMANHO: 0.52 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 17
+================================================================================
+
+"""
+MÃ³dulo de Contas e AutenticaÃ§Ã£o do Clivo.
+
+Este mÃ³dulo gerencia:
+- Identidade do usuÃ¡rio (User)
+- AutenticaÃ§Ã£o (Email/Password + Google OAuth via django-allauth)
+- SessÃµes independentes (App + Console)
+- SeguranÃ§a de conta
+- RecuperaÃ§Ã£o de senha via email
+
+O mÃ³dulo NÃƒO contÃ©m:
+- Auditoria administrativa (pertence ao Console)
+- Controle de membros (pertence ao Workspace/Console)
+- PermissÃµes de plataforma (apenas identidade)
+
+Accounts responde apenas: "Quem Ã© essa pessoa e como ela autentica?"
+"""
+
+
+
+================================================================================
+ARQUIVO 2 DE 33
+================================================================================
+📁 PASTA: apps\accounts\adapters\__init__.py
+📄 ARQUIVO: __init__.py
+📏 TAMANHO: 0.12 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 5
+================================================================================
+
+from apps.accounts.adapters.social import CustomSocialAccountAdapter
+
+__all__ = [
+    'CustomSocialAccountAdapter',
+]
+
+
+
+================================================================================
+ARQUIVO 3 DE 33
+================================================================================
+📁 PASTA: apps\accounts\adapters\social.py
+📄 ARQUIVO: social.py
+📏 TAMANHO: 6.77 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 173
+================================================================================
+
+"""
+Adapter customizado para Social Accounts (Google, etc).
+
+ResponsÃ¡vel por:
+1. Vincular automaticamente um SocialAccount (Google) a um User existente
+   quando o email do Google corresponde a um email jÃ¡ cadastrado
+   (ex: usuÃ¡rio foi adicionado como membro de um Workspace por email).
+2. Sincronizar dados do perfil (nome, avatar) do Google para o User local.
+3. Garantir que emails nÃ£o verificados pelo Google sejam rejeitados.
+4. NÃ£o interferir no redirecionamento pÃ³s-login â€” isso Ã© responsabilidade
+   de `LOGIN_REDIRECT_URL`, que aponta para /workspaces/entrar/.
+
+FLUXO:
+    Google OAuth callback
+        â†“
+    pre_social_login()
+        â”œâ”€â”€ jÃ¡ existe SocialAccount com este uid â†’ sync + login
+        â”œâ”€â”€ existe User com este email           â†’ connect + sync
+        â””â”€â”€ nÃ£o existe User                      â†’ save_user() cria
+        â†“
+    allauth redireciona para LOGIN_REDIRECT_URL
+        â†“
+    /workspaces/entrar/ resolve o contexto
+"""
+
+from allauth.socialaccount.adapter import DefaultSocialAccountAdapter
+from allauth.socialaccount.models import SocialAccount
+from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
+from django.db import transaction
+import logging
+
+logger = logging.getLogger('accounts')
+
+User = get_user_model()
+
+
+class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
+    """
+    Adapter para conectar contas sociais (Google) a usuÃ¡rios existentes
+    com o mesmo email, evitando duplicaÃ§Ã£o de contas.
+    """
+
+    def pre_social_login(self, request, sociallogin):
+        """
+        Chamado ANTES do allauth criar/logar o usuÃ¡rio.
+
+        Fluxo:
+        1. Se jÃ¡ existe SocialAccount com este uid â†’ apenas sincroniza perfil.
+        2. Se existe User com este email (ex: criado por "adicionar membro")
+           â†’ faz o connect (vincula SocialAccount ao User existente).
+        3. Se nÃ£o existe â†’ deixa o allauth criar (save_user).
+        """
+        logger.debug(
+            f"pre_social_login | provider={sociallogin.account.provider} "
+            f"uid={sociallogin.account.uid}"
+        )
+
+        email = sociallogin.account.extra_data.get('email')
+        email_verified = sociallogin.account.extra_data.get('email_verified', False)
+
+        if not email:
+            logger.warning("Google nÃ£o retornou email no extra_data")
+            raise ValidationError('Email nÃ£o fornecido pelo Google')
+
+        email = User.objects.normalize_email(email)
+
+        # ---------------------------------------------------------------
+        # CASO 1: JÃ¡ existe SocialAccount com este uid
+        # ---------------------------------------------------------------
+        existing_social = SocialAccount.objects.filter(
+            provider=sociallogin.account.provider,
+            uid=sociallogin.account.uid,
+        ).first()
+
+        if existing_social:
+            logger.debug(
+                f"SocialAccount jÃ¡ existe para {email} "
+                f"(user={existing_social.user.email})"
+            )
+            self._sync_profile_from_google(
+                existing_social.user,
+                sociallogin.account.extra_data,
+            )
+            return
+
+        # ---------------------------------------------------------------
+        # CASO 2: Existe User com este email, mas sem SocialAccount
+        # (ex: adicionado como membro do Console/Workspace por email)
+        # ---------------------------------------------------------------
+        user = User.objects.filter(email__iexact=email).first()
+
+        if user:
+            logger.debug(f"User existente encontrado: {user.email} (id={user.id})")
+
+            if not email_verified:
+                logger.warning(f"Email {email} nÃ£o verificado pelo Google")
+                raise ValidationError('Email nÃ£o verificado pelo Google')
+
+            # Verifica se este User jÃ¡ tem OUTRO SocialAccount do mesmo provider
+            other_social = SocialAccount.objects.filter(
+                user=user,
+                provider=sociallogin.account.provider,
+            ).first()
+
+            if other_social:
+                logger.warning(
+                    f"User {email} jÃ¡ tem SocialAccount do provider "
+                    f"{sociallogin.account.provider}"
+                )
+                raise ValidationError('Conta Google jÃ¡ vinculada a este usuÃ¡rio')
+
+            with transaction.atomic():
+                # sociallogin.connect() cria o SocialAccount e vincula ao User
+                sociallogin.connect(request, user)
+                self._sync_profile_from_google(user, sociallogin.account.extra_data)
+                logger.info(
+                    f"Account linking realizado: Google â†’ {user.email} (id={user.id})"
+                )
+            return
+
+        # ---------------------------------------------------------------
+        # CASO 3: NÃ£o existe User â†’ allauth criarÃ¡ via save_user()
+        # ---------------------------------------------------------------
+        logger.debug(f"Novo usuÃ¡rio serÃ¡ criado para {email}")
+
+    def save_user(self, request, sociallogin, form=None):
+        """
+        Chamado quando o allauth cria um novo User (CASO 3).
+        ApÃ³s criar, sincroniza o perfil com os dados do Google.
+        """
+        user = super().save_user(request, sociallogin, form)
+        logger.info(f"User criado via social signup: {user.email} (id={user.id})")
+        self._sync_profile_from_google(user, sociallogin.account.extra_data)
+        return user
+
+    @staticmethod
+    def _sync_profile_from_google(user, user_data):
+        """
+        Preenche campos vazios do User com dados do Google.
+        NÃƒO sobrescreve dados jÃ¡ preenchidos localmente.
+        """
+        if not user or not user_data:
+            return
+
+        changed = False
+        update_fields = []
+
+        if not user.first_name:
+            user.first_name = user_data.get('given_name', '') or ''
+            changed = True
+            update_fields.append('first_name')
+
+        if not user.last_name:
+            user.last_name = user_data.get('family_name', '') or ''
+            changed = True
+            update_fields.append('last_name')
+
+        picture = user_data.get('picture')
+        if picture and not user.avatar:
+            user.avatar = picture
+            changed = True
+            update_fields.append('avatar')
+            logger.debug(f"Avatar do Google sincronizado: {picture}")
+
+        if not user.is_active:
+            user.is_active = True
+            changed = True
+            update_fields.append('is_active')
+
+        if changed:
+            user.save(update_fields=update_fields)
+            logger.debug(f"Perfil atualizado para {user.email}: {update_fields}")
+
+
+
+================================================================================
+ARQUIVO 4 DE 33
+================================================================================
+📁 PASTA: apps\accounts\admin.py
+📄 ARQUIVO: admin.py
+📏 TAMANHO: 1.64 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 57
+================================================================================
+
+from django.contrib import admin
+from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.contrib.auth.forms import UserChangeForm, UserCreationForm
+from django.utils.translation import gettext_lazy as _
+
+from apps.accounts.models import User
+
+
+class CustomUserCreationForm(UserCreationForm):
+    """Form para criar usuÃ¡rio no admin."""
+
+    class Meta:
+        model = User
+        fields = ('email',)
+
+
+class CustomUserChangeForm(UserChangeForm):
+    """Form para editar usuÃ¡rio no admin."""
+
+    class Meta:
+        model = User
+        fields = '__all__'
+
+
+@admin.register(User)
+class UserAdmin(BaseUserAdmin):
+    """Admin personalizado para User (sem username)."""
+    
+    form = CustomUserChangeForm
+    add_form = CustomUserCreationForm
+    
+    list_display = ['email', 'full_name', 'is_active', 'is_staff', 'created_at']
+    list_filter = ['is_active', 'is_staff', 'created_at']
+    search_fields = ['email', 'first_name', 'last_name']
+    ordering = ['email']
+    
+    fieldsets = (
+        (None, {'fields': ('email', 'password')}),
+        (_('InformaÃ§Ãµes Pessoais'), {
+            'fields': ('first_name', 'last_name', 'avatar')
+        }),
+        (_('PermissÃµes'), {
+            'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions'),
+        }),
+        (_('Datas'), {
+            'fields': ('created_at', 'updated_at'),
+        }),
+    )
+    
+    add_fieldsets = (
+        (None, {
+            'classes': ('wide',),
+            'fields': ('email', 'password1', 'password2'),
+        }),
+    )
+    
+    readonly_fields = ['created_at', 'updated_at']
+
+
+
+================================================================================
+ARQUIVO 5 DE 33
+================================================================================
+📁 PASTA: apps\accounts\api\__init__.py
+📄 ARQUIVO: __init__.py
+📏 TAMANHO: 0.63 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 28
+================================================================================
+
+from apps.accounts.api.authentication import (
+    LoginView,
+    GoogleLoginView,
+    LogoutView,
+    SessionView,
+    CsrfView,
+)
+from apps.accounts.api.user import UserCreateView, UserMeView
+from apps.accounts.api.password import (
+    PasswordChangeView,
+    PasswordResetView,
+    PasswordResetConfirmView,
+)
+from apps.accounts.api.entry import EntryTargetView
+
+__all__ = [
+    'LoginView',
+    'GoogleLoginView',
+    'LogoutView',
+    'SessionView',
+    'CsrfView',
+    'UserCreateView',
+    'UserMeView',
+    'PasswordChangeView',
+    'PasswordResetView',
+    'PasswordResetConfirmView',
+    'EntryTargetView',
+]
+
+
+
+================================================================================
+ARQUIVO 6 DE 33
+================================================================================
+📁 PASTA: apps\accounts\api\authentication.py
+📄 ARQUIVO: authentication.py
+📏 TAMANHO: 6.93 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 200
+================================================================================
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from django.middleware.csrf import get_token
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.utils.decorators import method_decorator
+from django.core.exceptions import ValidationError
+from django.db import IntegrityError
+from allauth.socialaccount.helpers import complete_social_login
+from allauth.socialaccount import providers
+from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
+import logging
+
+from apps.accounts.serializers import (
+    LoginSerializer,
+    GoogleLoginSerializer,
+    SessionInfoSerializer,
+)
+from apps.accounts.services import (
+    AuthenticationService,
+    SessionService,
+)
+from apps.accounts.exceptions.account_exceptions import (
+    AuthenticationFailedError,
+    EmailAlreadyRegisteredError,
+    SessionError,
+)
+
+logger = logging.getLogger('accounts')
+
+
+@method_decorator(ensure_csrf_cookie, name='dispatch')
+class CsrfView(APIView):
+    """Endpoint para inicializar o cookie CSRF."""
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        get_token(request)
+        return Response({'detail': 'CSRF cookie set'})
+
+
+class LoginView(APIView):
+    """View para login com email e senha."""
+    permission_classes = [AllowAny]
+    serializer_class = LoginSerializer
+
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        try:
+            user = AuthenticationService.authenticate_user(
+                email=serializer.validated_data['email'],
+                password=serializer.validated_data['password']
+            )
+            
+            # Usa SessionService.login para autenticar e registrar sessÃ£o
+            SessionService.login(request, user, 'app')
+            
+            return Response({
+                'detail': 'Login realizado com sucesso',
+                'user': {
+                    'id': str(user.id),
+                    'email': user.email,
+                    'full_name': user.full_name,
+                },
+                'session': SessionService.get_session_info(request)
+            }, status=status.HTTP_200_OK)
+            
+        except AuthenticationFailedError as e:
+            return Response(
+                {'detail': str(e)},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        except SessionError as e:
+            return Response(
+                {'detail': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+class GoogleLoginView(APIView):
+    """
+    View para login com Google via django-allauth.
+    
+    Contrato: POST /api/auth/login/google/ com { "code": "..." }
+    
+    O django-allauth Ã© a autoridade Ãºnica para OAuth.
+    Esta view apenas recebe o code e delega ao allauth.
+    """
+    permission_classes = [AllowAny]
+    serializer_class = GoogleLoginSerializer
+
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        code = serializer.validated_data.get('code')
+        
+        if not code:
+            return Response(
+                {'detail': 'CÃ³digo de autorizaÃ§Ã£o do Google Ã© obrigatÃ³rio'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            # Inicializa o adapter do allauth
+            adapter = GoogleOAuth2Adapter(request)
+            
+            # ObtÃ©m o token e dados do usuÃ¡rio via adapter
+            token_data = adapter.get_access_token_data(code)
+            
+            # Cria o sociallogin via provider
+            provider = providers.registry.by_id('google')
+            sociallogin = provider.sociallogin_from_response(request, token_data)
+            
+            # Delega completamente para o allauth
+            complete_social_login(request, sociallogin)
+            
+            user = sociallogin.user
+            
+            if not user.is_active:
+                return Response(
+                    {'detail': 'Conta desativada'},
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+            
+            # O allauth jÃ¡ fez o login, mas precisamos garantir o UserSession
+            # Usa o signal user_logged_in para isso
+            # O tipo de sessÃ£o Ã© 'app' (padrÃ£o)
+            
+            return Response({
+                'detail': 'Login com Google realizado com sucesso',
+                'user': {
+                    'id': str(user.id),
+                    'email': user.email,
+                    'full_name': user.full_name,
+                    'avatar': user.avatar,
+                },
+                'session': SessionService.get_session_info(request),
+            }, status=status.HTTP_200_OK)
+                
+        except ValidationError as e:
+            return Response(
+                {'detail': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except EmailAlreadyRegisteredError as e:
+            return Response(
+                {'detail': str(e)},
+                status=status.HTTP_409_CONFLICT
+            )
+        except providers.ProviderException as e:
+            logger.error(f'Erro no provider Google: {str(e)}', exc_info=True)
+            return Response(
+                {'detail': 'Erro na autenticaÃ§Ã£o com Google'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            logger.error(f'Erro inesperado no login com Google: {str(e)}', exc_info=True)
+            return Response(
+                {'detail': 'Erro interno ao processar login com Google'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class LogoutView(APIView):
+    """View para logout."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            SessionService.destroy_session(request)
+            return Response(
+                {'detail': 'Logout realizado com sucesso'},
+                status=status.HTTP_200_OK
+            )
+        except SessionError as e:
+            return Response(
+                {'detail': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+class SessionView(APIView):
+    """View para obter informaÃ§Ãµes da sessÃ£o atual."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        session_info = SessionService.get_session_info(request)
+        
+        if session_info is None:
+            return Response(
+                {'detail': 'SessÃ£o nÃ£o encontrada'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        serializer = SessionInfoSerializer(session_info)
+        return Response(serializer.data)
+
+
+
+================================================================================
+ARQUIVO 7 DE 33
+================================================================================
+📁 PASTA: apps\accounts\api\entry.py
+📄 ARQUIVO: entry.py
+📏 TAMANHO: 2.25 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 73
+================================================================================
+
+"""
+Endpoint de resoluÃ§Ã£o de entrada pÃ³s-login.
+
+Responde uma Ãºnica pergunta:
+    "Para onde este usuÃ¡rio autenticado deve ir agora?"
+
+Regras (V1):
+    ConsoleMembershipService.has_access(user)  â†’ console
+    user.is_superuser                          â†’ console  (bootstrap)
+    senÃ£o                                      â†’ workspace
+
+Este endpoint Ã© a FONTE DE VERDADE da decisÃ£o.
+O login.js chama este endpoint apÃ³s autenticar.
+O PostLoginRedirectView (allauth/Google) usa o mesmo serviÃ§o.
+"""
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+import logging
+
+from apps.console.services.membership_service import ConsoleMembershipService
+
+logger = logging.getLogger('accounts')
+
+
+class EntryTargetView(APIView):
+    """
+    Informa para onde o usuÃ¡rio autenticado deve ser redirecionado.
+
+    GET /api/auth/entry/
+
+    Resposta:
+        {"target": "console"}    â†’ /console/
+        {"target": "workspace"}  â†’ /workspaces/entrar/
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        target = resolve_entry_target(request.user)
+        logger.debug(f"entry target para {request.user.email}: {target}")
+        return Response({'target': target}, status=status.HTTP_200_OK)
+
+
+# =============================================================================
+# HELPER COMPARTILHADO
+# =============================================================================
+
+def resolve_entry_target(user) -> str:
+    """
+    Decide o destino de entrada do usuÃ¡rio.
+
+    Retorna:
+        "console"    â†’ usuÃ¡rio Ã© da Clivo (admin do Console)
+        "workspace"  â†’ usuÃ¡rio comum (fluxo de Workspace)
+    """
+    if not user or not user.is_authenticated:
+        return 'workspace'
+
+    # Fonte primÃ¡ria: ConsoleMembership
+    try:
+        if ConsoleMembershipService.has_access(user):
+            return 'console'
+    except Exception as e:
+        logger.warning(f"Falha ao checar ConsoleMembership: {e}")
+
+    # Fallback de bootstrap enquanto ConsoleMembership nÃ£o cobre todos
+    if user.is_superuser:
+        return 'console'
+
+    return 'workspace'
+
+
+
+================================================================================
+ARQUIVO 8 DE 33
+================================================================================
+📁 PASTA: apps\accounts\api\password.py
+📄 ARQUIVO: password.py
+📏 TAMANHO: 3.4 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 101
+================================================================================
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import AllowAny, IsAuthenticated
+import logging
+
+from apps.accounts.serializers import (
+    PasswordChangeSerializer,
+    PasswordResetRequestSerializer,
+    PasswordResetConfirmSerializer,
+)
+from apps.accounts.services import PasswordService
+from apps.accounts.exceptions.account_exceptions import (
+    InvalidPasswordError,
+    TokenInvalidError,
+)
+
+logger = logging.getLogger('accounts')
+
+
+class PasswordChangeView(APIView):
+    """View para alterar senha."""
+    permission_classes = [IsAuthenticated]
+    serializer_class = PasswordChangeSerializer
+
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        try:
+            user = request.user
+            current_session_key = request.session.session_key
+            
+            count_destroyed = PasswordService.change_password(
+                user=user,
+                current_password=serializer.validated_data['current_password'],
+                new_password=serializer.validated_data['new_password'],
+                exclude_session_key=current_session_key
+            )
+            
+            return Response({
+                'detail': 'Senha alterada com sucesso',
+                'other_sessions_destroyed': count_destroyed
+            }, status=status.HTTP_200_OK)
+            
+        except InvalidPasswordError as e:
+            return Response(
+                {'detail': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+class PasswordResetView(APIView):
+    """
+    View para solicitar reset de senha.
+    
+    SeguranÃ§a: Sempre retorna 200 mesmo se email nÃ£o existir.
+    """
+    permission_classes = [AllowAny]
+    serializer_class = PasswordResetRequestSerializer
+
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        email = serializer.validated_data['email']
+        
+        PasswordService.request_password_reset(email)
+        
+        return Response(
+            {'detail': 'Se o email existir, vocÃª receberÃ¡ as instruÃ§Ãµes para resetar a senha'},
+            status=status.HTTP_200_OK
+        )
+
+
+class PasswordResetConfirmView(APIView):
+    """View para confirmar reset de senha."""
+    permission_classes = [AllowAny]
+    serializer_class = PasswordResetConfirmSerializer
+
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        try:
+            count_destroyed = PasswordService.reset_password(
+                uid=serializer.validated_data['uid'],
+                token=serializer.validated_data['token'],
+                new_password=serializer.validated_data['new_password']
+            )
+            
+            return Response({
+                'detail': 'Senha redefinida com sucesso',
+                'sessions_destroyed': count_destroyed
+            }, status=status.HTTP_200_OK)
+            
+        except (TokenInvalidError, InvalidPasswordError) as e:
+            return Response(
+                {'detail': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+
+================================================================================
+ARQUIVO 9 DE 33
+================================================================================
+📁 PASTA: apps\accounts\api\user.py
+📄 ARQUIVO: user.py
+📏 TAMANHO: 2.78 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 87
+================================================================================
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from django.db import IntegrityError
+from django.contrib.auth import logout
+import logging
+
+from apps.accounts.serializers import (
+    UserSerializer,
+    UserCreateSerializer,
+    UserUpdateSerializer,
+)
+from apps.accounts.services import AccountService, SessionService
+from apps.accounts.exceptions.account_exceptions import (
+    EmailAlreadyRegisteredError,
+    SessionError,
+)
+
+logger = logging.getLogger('accounts')
+
+
+class UserCreateView(APIView):
+    """View para criar um novo usuÃ¡rio (registro pÃºblico)."""
+    permission_classes = [AllowAny]
+    serializer_class = UserCreateSerializer
+
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        try:
+            user = serializer.save()
+            
+            SessionService.create_session(request, user, 'app')
+            
+            return Response(
+                UserSerializer(user).data,
+                status=status.HTTP_201_CREATED
+            )
+            
+        except EmailAlreadyRegisteredError as e:
+            return Response(
+                {'detail': str(e)},
+                status=status.HTTP_409_CONFLICT
+            )
+        except IntegrityError:
+            return Response(
+                {'detail': 'Erro de concorrÃªncia. Tente novamente.'},
+                status=status.HTTP_409_CONFLICT
+            )
+
+
+class UserMeView(APIView):
+    """View para gerenciar o prÃ³prio usuÃ¡rio."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        serializer = UserSerializer(request.user)
+        return Response(serializer.data)
+
+    def patch(self, request):
+        user = request.user
+        serializer = UserUpdateSerializer(user, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(UserSerializer(user).data)
+
+    def delete(self, request):
+        """Desativa a prÃ³pria conta e revoga todas as sessÃµes."""
+        try:
+            user = request.user
+            
+            AccountService.deactivate_user(user)
+            SessionService.destroy_all_sessions(user)
+            logout(request)
+            
+            return Response(
+                {'detail': 'Conta desativada com sucesso. Todas as sessÃµes foram encerradas.'},
+                status=status.HTTP_200_OK
+            )
+            
+        except SessionError as e:
+            return Response(
+                {'detail': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+
+================================================================================
+ARQUIVO 10 DE 33
+================================================================================
+📁 PASTA: apps\accounts\apps.py
+📄 ARQUIVO: apps.py
+📏 TAMANHO: 0.4 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 12
+================================================================================
+
+from django.apps import AppConfig
+from django.utils.translation import gettext_lazy as _
+
+
+class AccountsConfig(AppConfig):
+    default_auto_field = 'django.db.models.BigAutoField'
+    name = 'apps.accounts'
+    verbose_name = _('Contas e AutenticaÃ§Ã£o')
+
+    def ready(self):
+        # Importa signals para registrar o user_logged_in handler
+        import apps.accounts.signals  # noqa: F401
+
+
+
+================================================================================
+ARQUIVO 11 DE 33
+================================================================================
+📁 PASTA: apps\accounts\exceptions\__init__.py
+📄 ARQUIVO: __init__.py
+📏 TAMANHO: 0.54 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 23
+================================================================================
+
+from apps.accounts.exceptions.account_exceptions import (
+    AccountError,
+    AuthenticationFailedError,
+    EmailAlreadyRegisteredError,
+    InvalidPasswordError,
+    SessionError,
+    SocialAccountError,
+    UserNotFoundError,
+    UserInactiveError,
+    TokenInvalidError,
+)
+
+__all__ = [
+    'AccountError',
+    'AuthenticationFailedError',
+    'EmailAlreadyRegisteredError',
+    'InvalidPasswordError',
+    'SessionError',
+    'SocialAccountError',
+    'UserNotFoundError',
+    'UserInactiveError',
+    'TokenInvalidError',
+]
+
+
+
+================================================================================
+ARQUIVO 12 DE 33
+================================================================================
+📁 PASTA: apps\accounts\exceptions\account_exceptions.py
+📄 ARQUIVO: account_exceptions.py
+📏 TAMANHO: 0.8 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 43
+================================================================================
+
+class AccountError(Exception):
+    """ExceÃ§Ã£o base para o mÃ³dulo accounts."""
+    pass
+
+
+class AuthenticationFailedError(AccountError):
+    """Erro de autenticaÃ§Ã£o."""
+    pass
+
+
+class EmailAlreadyRegisteredError(AccountError):
+    """Email jÃ¡ estÃ¡ registrado."""
+    pass
+
+
+class InvalidPasswordError(AccountError):
+    """Senha invÃ¡lida."""
+    pass
+
+
+class SessionError(AccountError):
+    """Erro de sessÃ£o."""
+    pass
+
+
+class SocialAccountError(AccountError):
+    """Erro com conta social (Google)."""
+    pass
+
+
+class UserNotFoundError(AccountError):
+    """UsuÃ¡rio nÃ£o encontrado."""
+    pass
+
+
+class UserInactiveError(AccountError):
+    """UsuÃ¡rio inativo."""
+    pass
+
+
+class TokenInvalidError(AccountError):
+    """Token invÃ¡lido ou expirado."""
+    pass
+
+
+
+================================================================================
+ARQUIVO 13 DE 33
+================================================================================
+📁 PASTA: apps\accounts\managers\__init__.py
+📄 ARQUIVO: __init__.py
+📏 TAMANHO: 0.09 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 3
+================================================================================
+
+from apps.accounts.managers.user_manager import UserManager
+
+__all__ = ['UserManager']
+
+
+
+================================================================================
+ARQUIVO 14 DE 33
+================================================================================
+📁 PASTA: apps\accounts\managers\user_manager.py
+📄 ARQUIVO: user_manager.py
+📏 TAMANHO: 1.64 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 46
+================================================================================
+
+from django.contrib.auth.base_user import BaseUserManager
+from django.utils.translation import gettext_lazy as _
+from typing import Optional
+
+
+class UserManager(BaseUserManager):
+    """
+    Manager personalizado para User com UUID e email como identifier.
+    """
+
+    def normalize_email(self, email: str) -> str:
+        """CanonicalizaÃ§Ã£o de email: trim + lowercase."""
+        if email:
+            return email.strip().lower()
+        return email
+
+    def create_user(self, email: str, password: Optional[str] = None, **extra_fields):
+        if not email:
+            raise ValueError(_('O email Ã© obrigatÃ³rio'))
+        
+        email = self.normalize_email(email)
+        user = self.model(email=email, **extra_fields)
+        
+        if password is not None:
+            user.set_password(password)
+        else:
+            user.set_unusable_password()
+        
+        user.save(using=self._db)
+        return user
+
+    def create_superuser(self, email: str, password: Optional[str] = None, **extra_fields):
+        extra_fields.setdefault('is_staff', True)
+        extra_fields.setdefault('is_superuser', True)
+        extra_fields.setdefault('is_active', True)
+
+        if extra_fields.get('is_staff') is not True:
+            raise ValueError(_('SuperusuÃ¡rio deve ter is_staff=True'))
+        if extra_fields.get('is_superuser') is not True:
+            raise ValueError(_('SuperusuÃ¡rio deve ter is_superuser=True'))
+
+        return self.create_user(email, password, **extra_fields)
+
+    def get_by_natural_key(self, email: str):
+        email = self.normalize_email(email)
+        return self.get(email=email)
+
+
+
+================================================================================
+ARQUIVO 15 DE 33
+================================================================================
+📁 PASTA: apps\accounts\middleware.py
+📄 ARQUIVO: middleware.py
+📏 TAMANHO: 0.61 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 19
+================================================================================
+
+"""
+Middleware do mÃ³dulo accounts para gerenciamento de sessÃµes.
+"""
+
+from django.utils.deprecation import MiddlewareMixin
+from apps.accounts.services.session import SessionService
+
+
+class SessionTrackingMiddleware(MiddlewareMixin):
+    """
+    Middleware para rastrear sessÃµes ativas.
+    
+    Atualiza o last_seen_at da sessÃ£o a cada requisiÃ§Ã£o,
+    mas com throttling para evitar writes excessivos.
+    """
+    
+    def process_request(self, request):
+        if request.user.is_authenticated and request.session.session_key:
+            SessionService.update_last_seen(request.session.session_key)
+
+
+
+================================================================================
+ARQUIVO 16 DE 33
+================================================================================
+📁 PASTA: apps\accounts\models\__init__.py
+📄 ARQUIVO: __init__.py
+📏 TAMANHO: 0.13 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 4
+================================================================================
+
+from apps.accounts.models.user import User
+from apps.accounts.models.session import UserSession
+
+__all__ = ['User', 'UserSession']
+
+
+
+================================================================================
+ARQUIVO 17 DE 33
+================================================================================
+📁 PASTA: apps\accounts\models\session.py
+📄 ARQUIVO: session.py
+📏 TAMANHO: 2.5 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 95
+================================================================================
+
+import uuid
+from django.db import models
+from django.utils.translation import gettext_lazy as _
+from django.conf import settings
+from django.utils import timezone
+
+from apps.accounts.models.user import User
+
+
+class UserSession(models.Model):
+    """
+    Modelo para rastreamento de sessÃµes ativas de usuÃ¡rios.
+    
+    Este modelo Ã© apenas para rastreamento e controle.
+    O mecanismo de autenticaÃ§Ã£o Ã© gerenciado pelo Django.
+    """
+    
+    SESSION_TYPES = [
+        ('app', 'App'),
+        ('console', 'Console'),
+    ]
+    
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+        help_text=_('Identificador Ãºnico da sessÃ£o')
+    )
+    
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='sessions',
+        help_text=_('UsuÃ¡rio da sessÃ£o')
+    )
+    
+    session_key = models.CharField(
+        max_length=40,
+        unique=True,
+        help_text=_('Chave da sessÃ£o Django')
+    )
+    
+    session_type = models.CharField(
+        max_length=10,
+        choices=SESSION_TYPES,
+        default='app',
+        help_text=_('Tipo de sessÃ£o: app ou console')
+    )
+    
+    ip_address = models.GenericIPAddressField(
+        null=True,
+        blank=True,
+        help_text=_('EndereÃ§o IP da sessÃ£o')
+    )
+    
+    user_agent = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text=_('User-Agent da sessÃ£o')
+    )
+    
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text=_('Data de criaÃ§Ã£o da sessÃ£o')
+    )
+    
+    last_seen_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=_('Ãšltima atividade da sessÃ£o')
+    )
+    
+    expires_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=_('Data de expiraÃ§Ã£o da sessÃ£o (metadado)')
+    )
+    
+    is_active = models.BooleanField(
+        default=True,
+        help_text=_('SessÃ£o ativa?')
+    )
+    
+    class Meta:
+        db_table = 'accounts_user_session'
+        verbose_name = _('SessÃ£o do UsuÃ¡rio')
+        verbose_name_plural = _('SessÃµes dos UsuÃ¡rios')
+        indexes = [
+            models.Index(fields=['user', 'session_type']),
+            models.Index(fields=['is_active', 'created_at']),
+        ]
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.user.email} - {self.session_type} - {self.session_key[:8]}"
+
+
+
+================================================================================
+ARQUIVO 18 DE 33
+================================================================================
+📁 PASTA: apps\accounts\models\user.py
+📄 ARQUIVO: user.py
+📏 TAMANHO: 3.54 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 127
+================================================================================
+
+import uuid
+from django.db import models
+from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
+from django.utils.translation import gettext_lazy as _
+from django.core.validators import EmailValidator
+from django.db.models.functions import Lower
+
+from apps.accounts.managers.user_manager import UserManager
+
+
+class User(AbstractBaseUser, PermissionsMixin):
+    """
+    Modelo principal de usuÃ¡rio do Clivo.
+
+    Este modelo representa a identidade Ãºnica de uma pessoa na plataforma.
+    NÃƒO contÃ©m informaÃ§Ãµes especÃ­ficas de domÃ­nio (workspace, console, etc.).
+
+    O is_staff e is_superuser sÃ£o restritos ao Django Admin/Infraestrutura.
+    Nao representam autoridade da Clivo. Para isso, use:
+    - ConsoleMembership (acesso ao Console)
+    - WorkspaceMembership (acesso a Workspaces)
+    """
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+        help_text=_('Identificador Ãºnico universal do usuÃ¡rio')
+    )
+
+    email = models.EmailField(
+        max_length=254,
+        unique=True,
+        db_index=True,
+        validators=[EmailValidator()],
+        help_text=_('Email principal do usuÃ¡rio (usado para login)')
+    )
+
+    first_name = models.CharField(
+        max_length=150,
+        blank=True,
+        help_text=_('Primeiro nome do usuÃ¡rio')
+    )
+
+    last_name = models.CharField(
+        max_length=150,
+        blank=True,
+        help_text=_('Sobrenome do usuÃ¡rio')
+    )
+
+    avatar = models.URLField(
+        max_length=500,
+        blank=True,
+        null=True,
+        help_text=_('URL da foto de perfil (vem do Google ou upload)')
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+        help_text=_('Designa se o usuÃ¡rio pode fazer login')
+    )
+
+    is_staff = models.BooleanField(
+        default=False,
+        help_text=_('Designa se o usuÃ¡rio tem acesso ao admin Django')
+    )
+
+    is_superuser = models.BooleanField(
+        default=False,
+        help_text=_('Designa se o usuÃ¡rio tem todos os poderes no admin')
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text=_('Data de criaÃ§Ã£o da conta')
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        help_text=_('Data da Ãºltima atualizaÃ§Ã£o')
+    )
+
+    USERNAME_FIELD = 'email'
+    REQUIRED_FIELDS = []
+
+    objects = UserManager()
+
+    class Meta:
+        db_table = 'accounts_user'
+        verbose_name = _('UsuÃ¡rio')
+        verbose_name_plural = _('UsuÃ¡rios')
+        indexes = [
+            models.Index(fields=['created_at']),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                Lower('email'),
+                name='accounts_user_email_ci_unique'
+            ),
+        ]
+        ordering = ['-created_at']
+
+    @classmethod
+    def normalize_email(cls, email: str) -> str:
+        """CanonicalizaÃ§Ã£o de email: trim + lowercase."""
+        if email:
+            return email.strip().lower()
+        return email
+
+    def __str__(self):
+        return self.email
+
+    @property
+    def full_name(self) -> str:
+        if self.first_name and self.last_name:
+            return f"{self.first_name} {self.last_name}"
+        return self.first_name or self.email
+
+    def clean(self):
+        super().clean()
+        self.email = self.normalize_email(self.email)
+
+    def get_full_name(self) -> str:
+        return self.full_name
+
+    def get_short_name(self) -> str:
+        return self.first_name
+
+
+
+================================================================================
+ARQUIVO 19 DE 33
+================================================================================
+📁 PASTA: apps\accounts\serializers\__init__.py
+📄 ARQUIVO: __init__.py
+📏 TAMANHO: 0.69 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 27
+================================================================================
+
+from apps.accounts.serializers.user import (
+    UserSerializer,
+    UserCreateSerializer,
+    UserUpdateSerializer,
+)
+from apps.accounts.serializers.authentication import (
+    LoginSerializer,
+    GoogleLoginSerializer,
+    SessionInfoSerializer,
+)
+from apps.accounts.serializers.password import (
+    PasswordChangeSerializer,
+    PasswordResetRequestSerializer,
+    PasswordResetConfirmSerializer,
+)
+
+__all__ = [
+    'UserSerializer',
+    'UserCreateSerializer',
+    'UserUpdateSerializer',
+    'LoginSerializer',
+    'GoogleLoginSerializer',
+    'SessionInfoSerializer',
+    'PasswordChangeSerializer',
+    'PasswordResetRequestSerializer',
+    'PasswordResetConfirmSerializer',
+]
+
+
+
+================================================================================
+ARQUIVO 20 DE 33
+================================================================================
+📁 PASTA: apps\accounts\serializers\authentication.py
+📄 ARQUIVO: authentication.py
+📏 TAMANHO: 0.84 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 25
+================================================================================
+
+from rest_framework import serializers
+
+
+class LoginSerializer(serializers.Serializer):
+    """Serializer para login."""
+    email = serializers.EmailField(required=True)
+    password = serializers.CharField(
+        required=True,
+        style={'input_type': 'password'},
+        write_only=True
+    )
+
+
+class GoogleLoginSerializer(serializers.Serializer):
+    """Serializer para login com Google (via allauth)."""
+    code = serializers.CharField(required=True)
+
+
+class SessionInfoSerializer(serializers.Serializer):
+    """Serializer para informaÃ§Ãµes da sessÃ£o."""
+    session_type = serializers.ChoiceField(choices=['app', 'console'])
+    created_at = serializers.DateTimeField()
+    last_seen_at = serializers.DateTimeField(required=False, allow_null=True)
+    user_id = serializers.UUIDField()
+    email = serializers.EmailField()
+
+
+
+================================================================================
+ARQUIVO 21 DE 33
+================================================================================
+📁 PASTA: apps\accounts\serializers\password.py
+📄 ARQUIVO: password.py
+📏 TAMANHO: 1.8 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 56
+================================================================================
+
+from rest_framework import serializers
+from django.utils.translation import gettext_lazy as _
+
+
+class PasswordChangeSerializer(serializers.Serializer):
+    """Serializer para alteraÃ§Ã£o de senha."""
+    current_password = serializers.CharField(
+        required=True,
+        style={'input_type': 'password'},
+        write_only=True
+    )
+    new_password = serializers.CharField(
+        required=True,
+        style={'input_type': 'password'},
+        write_only=True
+    )
+    new_password_confirm = serializers.CharField(
+        required=True,
+        style={'input_type': 'password'},
+        write_only=True
+    )
+
+    def validate(self, attrs):
+        if attrs['new_password'] != attrs['new_password_confirm']:
+            raise serializers.ValidationError({
+                'new_password_confirm': _('As senhas nÃ£o coincidem')
+            })
+        return attrs
+
+
+class PasswordResetRequestSerializer(serializers.Serializer):
+    """Serializer para solicitar reset de senha."""
+    email = serializers.EmailField(required=True)
+
+
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    """Serializer para confirmar reset de senha."""
+    uid = serializers.CharField(required=True)
+    token = serializers.CharField(required=True)
+    new_password = serializers.CharField(
+        required=True,
+        style={'input_type': 'password'},
+        write_only=True
+    )
+    new_password_confirm = serializers.CharField(
+        required=True,
+        style={'input_type': 'password'},
+        write_only=True
+    )
+
+    def validate(self, attrs):
+        if attrs['new_password'] != attrs['new_password_confirm']:
+            raise serializers.ValidationError({
+                'new_password_confirm': _('As senhas nÃ£o coincidem')
+            })
+        return attrs
+
+
+
+================================================================================
+ARQUIVO 22 DE 33
+================================================================================
+📁 PASTA: apps\accounts\serializers\user.py
+📄 ARQUIVO: user.py
+📏 TAMANHO: 2.19 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 74
+================================================================================
+
+from rest_framework import serializers
+from django.utils.translation import gettext_lazy as _
+
+from apps.accounts.models import User
+from apps.accounts.services.account import AccountService
+
+
+class UserSerializer(serializers.ModelSerializer):
+    """Serializer para o modelo User."""
+    
+    full_name = serializers.SerializerMethodField()
+    avatar_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = [
+            'id', 'email', 'first_name', 'last_name', 'full_name',
+            'avatar', 'avatar_url', 'is_active', 'is_superuser', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at', 'is_active', 'is_superuser', 'email']
+
+    def get_full_name(self, obj):
+        return obj.full_name
+    
+    def get_avatar_url(self, obj):
+        """Retorna a URL do avatar ou None."""
+        return obj.avatar if obj.avatar else None
+
+
+class UserCreateSerializer(serializers.ModelSerializer):
+    """Serializer para criar usuÃ¡rio."""
+    
+    password = serializers.CharField(
+        write_only=True,
+        required=True,
+        style={'input_type': 'password'}
+    )
+    
+    password_confirm = serializers.CharField(
+        write_only=True,
+        required=True,
+        style={'input_type': 'password'}
+    )
+
+    class Meta:
+        model = User
+        fields = [
+            'email', 'first_name', 'last_name', 
+            'password', 'password_confirm'
+        ]
+
+    def validate(self, attrs):
+        if attrs['password'] != attrs['password_confirm']:
+            raise serializers.ValidationError({
+                'password_confirm': _('As senhas nÃ£o coincidem')
+            })
+        return attrs
+
+    def create(self, validated_data):
+        validated_data.pop('password_confirm')
+        password = validated_data.pop('password')
+        
+        return AccountService.create_account(
+            password=password,
+            **validated_data
+        )
+
+
+class UserUpdateSerializer(serializers.ModelSerializer):
+    """Serializer para atualizar usuÃ¡rio."""
+
+    class Meta:
+        model = User
+        fields = ['first_name', 'last_name', 'avatar']
+
+
+
+================================================================================
+ARQUIVO 23 DE 33
+================================================================================
+📁 PASTA: apps\accounts\services\__init__.py
+📄 ARQUIVO: __init__.py
+📏 TAMANHO: 0.52 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 15
+================================================================================
+
+from apps.accounts.services.account import AccountService
+from apps.accounts.services.authentication import AuthenticationService
+from apps.accounts.services.password import PasswordService
+from apps.accounts.services.session import SessionService
+from apps.accounts.services.email import EmailService
+from apps.accounts.services.google import GoogleAuthService
+
+__all__ = [
+    'AccountService',
+    'AuthenticationService',
+    'PasswordService',
+    'SessionService',
+    'EmailService',
+    'GoogleAuthService',
+]
+
+
+
+================================================================================
+ARQUIVO 24 DE 33
+================================================================================
+📁 PASTA: apps\accounts\services\account.py
+📄 ARQUIVO: account.py
+📏 TAMANHO: 2.85 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 92
+================================================================================
+
+from typing import Optional
+from django.db import transaction, IntegrityError
+from django.core.exceptions import ValidationError
+from django.utils.translation import gettext_lazy as _
+
+from apps.accounts.models import User
+from apps.accounts.exceptions.account_exceptions import (
+    EmailAlreadyRegisteredError,
+    UserNotFoundError,
+    UserInactiveError,
+)
+
+
+class AccountService:
+    """ServiÃ§o para gerenciamento de contas."""
+
+    @staticmethod
+    def get_user_by_id(user_id: str) -> Optional[User]:
+        try:
+            return User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return None
+
+    @staticmethod
+    def get_user_by_email(email: str) -> Optional[User]:
+        email = User.normalize_email(email)
+        try:
+            return User.objects.get(email=email)
+        except User.DoesNotExist:
+            return None
+
+    @staticmethod
+    def create_account(
+        email: str,
+        password: str,
+        first_name: str = '',
+        last_name: str = '',
+        **extra_fields
+    ) -> User:
+        """
+        Cria uma nova conta de usuÃ¡rio com senha.
+        
+        Password Ã© obrigatÃ³rio para criaÃ§Ã£o de conta via este mÃ©todo.
+        Para contas sociais (Google), o allauth gerencia a criaÃ§Ã£o.
+        """
+        email = User.normalize_email(email)
+        
+        try:
+            with transaction.atomic():
+                user = User.objects.create_user(
+                    email=email,
+                    password=password,
+                    first_name=first_name,
+                    last_name=last_name,
+                    **extra_fields
+                )
+                return user
+                
+        except IntegrityError as e:
+            # Verifica se Ã© a constraint de email Ãºnico
+            if 'accounts_user_email_ci_unique' in str(e):
+                raise EmailAlreadyRegisteredError('Este email jÃ¡ estÃ¡ registrado')
+            # Re-levanta outras IntegrityError
+            raise
+
+    @staticmethod
+    def update_user(user: User, **fields) -> User:
+        allowed_fields = ['first_name', 'last_name', 'avatar']
+        
+        for field, value in fields.items():
+            if field in allowed_fields and hasattr(user, field):
+                setattr(user, field, value)
+        
+        user.clean()
+        user.save()
+        return user
+
+    @staticmethod
+    def deactivate_user(user: User) -> None:
+        """Desativa a conta. A revogaÃ§Ã£o de sessÃµes deve ser feita pelo chamador."""
+        user.is_active = False
+        user.save()
+
+    @staticmethod
+    def activate_user(user: User) -> None:
+        user.is_active = True
+        user.save()
+
+    @staticmethod
+    def check_user_active(user: User) -> None:
+        if not user.is_active:
+            raise UserInactiveError('UsuÃ¡rio inativo')
+
+
+
+================================================================================
+ARQUIVO 25 DE 33
+================================================================================
+📁 PASTA: apps\accounts\services\authentication.py
+📄 ARQUIVO: authentication.py
+📏 TAMANHO: 0.86 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 24
+================================================================================
+
+from django.contrib.auth import authenticate
+
+from apps.accounts.models import User
+from apps.accounts.exceptions.account_exceptions import AuthenticationFailedError
+
+
+class AuthenticationService:
+    """ServiÃ§o de autenticaÃ§Ã£o do Clivo."""
+
+    @staticmethod
+    def authenticate_user(email: str, password: str) -> User:
+        """Autentica um usuÃ¡rio com email e senha."""
+        email = User.normalize_email(email)
+        user = authenticate(email=email, password=password)
+        
+        if user is None:
+            raise AuthenticationFailedError('Credenciais invÃ¡lidas')
+        
+        # O Django jÃ¡ impede login de usuÃ¡rio inativo no authenticate
+        # Esta verificaÃ§Ã£o Ã© redundante, mantida como defesa
+        if not user.is_active:
+            raise AuthenticationFailedError('Credenciais invÃ¡lidas')
+        
+        return user
+
+
+
+================================================================================
+ARQUIVO 26 DE 33
+================================================================================
+📁 PASTA: apps\accounts\services\email.py
+📄 ARQUIVO: email.py
+📏 TAMANHO: 5.84 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 181
+================================================================================
+
+from django.core.mail import EmailMultiAlternatives
+from django.template.loader import render_to_string
+from django.utils.html import strip_tags
+from django.conf import settings
+from typing import Optional, Union, List
+
+
+class EmailService:
+    """
+    ServiÃ§o para envio de emails do mÃ³dulo accounts.
+
+    Este Ã© o PONTO ÃšNICO de envio transacional de email da plataforma.
+    DomÃ­nios NÃƒO devem importar `django.core.mail` diretamente â€”
+    devem chamar `EmailService.send()` ou um dos helpers especÃ­ficos.
+
+    Responsabilidades:
+        - Reset de senha
+        - Convite de workspace
+        - Envio do cÃ³digo do cliente
+    """
+
+    # ==================================================================
+    # GENERIC SEND
+    # ==================================================================
+
+    @staticmethod
+    def send(
+        to: Union[str, List[str]],
+        subject: str,
+        text: str = '',
+        html: str = '',
+        from_email: Optional[str] = None,
+        fail_silently: bool = False,
+    ):
+        """
+        Envio genÃ©rico de email.
+
+        Args:
+            to: lista de emails ou email Ãºnico
+            subject: assunto
+            text: corpo texto puro
+            html: corpo HTML (opcional)
+            from_email: remetente (default: DEFAULT_FROM_EMAIL)
+            fail_silently: se True, engole exceÃ§Ãµes
+
+        Returns:
+            NÃºmero de emails enviados com sucesso.
+        """
+        if isinstance(to, str):
+            to = [to]
+
+        from_email = from_email or getattr(
+            settings, 'DEFAULT_FROM_EMAIL', 'suporte@clivoos.com'
+        )
+
+        if html:
+            msg = EmailMultiAlternatives(
+                subject=subject,
+                body=text or strip_tags(html),
+                from_email=from_email,
+                to=to,
+            )
+            msg.attach_alternative(html, 'text/html')
+            return msg.send(fail_silently=fail_silently)
+
+        from django.core.mail import send_mail
+        return send_mail(
+            subject=subject,
+            message=text,
+            from_email=from_email,
+            recipient_list=to,
+            fail_silently=fail_silently,
+        )
+
+    # ==================================================================
+    # PASSWORD RESET
+    # ==================================================================
+
+    @staticmethod
+    def send_password_reset_email(user, token_data: dict, frontend_url: Optional[str] = None):
+        frontend_url = frontend_url or getattr(
+            settings, 'FRONTEND_URL', 'http://localhost:9000'
+        )
+        reset_url = (
+            f"{frontend_url}/reset-password"
+            f"?uid={token_data['uid']}&token={token_data['token']}"
+        )
+
+        context = {
+            'user': user,
+            'reset_url': reset_url,
+            'site_name': getattr(settings, 'SITE_NAME', 'Clivo'),
+        }
+
+        html_message = render_to_string('accounts/email/password_reset.html', context)
+        plain_message = strip_tags(html_message)
+
+        EmailService.send(
+            to=user.email,
+            subject='RedefiniÃ§Ã£o de senha - Clivo',
+            text=plain_message,
+            html=html_message,
+        )
+
+    # ==================================================================
+    # WORKSPACE INVITATION
+    # ==================================================================
+
+    @staticmethod
+    def send_workspace_invitation(invitation, invite_url: str):
+        """
+        Envia o email de convite de workspace.
+
+        Args:
+            invitation: WorkspaceInvitation
+            invite_url: URL completa do convite
+        """
+        invited_by = invitation.invited_by
+        inviter_name = ''
+        if invited_by:
+            inviter_name = invited_by.full_name or invited_by.email or ''
+
+        workspace = invitation.workspace
+        governance = invitation.governance
+
+        context = {
+            'invitation': invitation,
+            'invite_url': invite_url,
+            'workspace': workspace,
+            'governance': governance,
+            'inviter_name': inviter_name,
+            'site_name': getattr(settings, 'SITE_NAME', 'Clivo'),
+            'frontend_url': getattr(settings, 'FRONTEND_URL', '').rstrip('/'),
+            'expires_at': invitation.expires_at,
+        }
+
+        subject = f'{inviter_name or "AlguÃ©m"} te convidou para o {workspace.name}'
+
+        html_message = render_to_string('email_convite.html', context)
+        plain_message = render_to_string('email_convite.txt', context)
+
+        EmailService.send(
+            to=invitation.email,
+            subject=subject,
+            text=plain_message,
+            html=html_message,
+        )
+
+    # ==================================================================
+    # CLIENT PORTAL CODE
+    # ==================================================================
+
+    @staticmethod
+    def send_client_code_email(client, workspace, portal_url: str):
+        """
+        Envia o cÃ³digo do cliente + link do Portal.
+
+        Args:
+            client: Client
+            workspace: Workspace
+            portal_url: URL completa do Portal
+        """
+        context = {
+            'client_name': client.name,
+            'workspace_name': workspace.name,
+            'public_code': client.public_code,
+            'portal_url': portal_url,
+            'site_name': getattr(settings, 'SITE_NAME', 'Clivo'),
+        }
+
+        subject = f'Seu acesso ao espaÃ§o de {client.name} â€” Clivo'
+
+        html_message = render_to_string('emails/cliente_code.html', context)
+        plain_message = strip_tags(html_message)
+
+        EmailService.send(
+            to=client.email,
+            subject=subject,
+            text=plain_message,
+            html=html_message,
+        )
+
+
+
+================================================================================
+ARQUIVO 27 DE 33
+================================================================================
+📁 PASTA: apps\accounts\services\google.py
+📄 ARQUIVO: google.py
+📏 TAMANHO: 1.98 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 58
+================================================================================
+
+"""
+ServiÃ§o para autenticaÃ§Ã£o com Google via django-allauth.
+"""
+
+from allauth.socialaccount.helpers import complete_social_login
+from allauth.socialaccount import providers
+from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
+from django.core.exceptions import ValidationError
+
+from apps.accounts.models import User
+from apps.accounts.exceptions.account_exceptions import SocialAccountError
+
+
+class GoogleAuthService:
+    """
+    ServiÃ§o para autenticaÃ§Ã£o com Google.
+    
+    Encapsula toda a interaÃ§Ã£o com django-allauth.
+    A View nÃ£o precisa conhecer os internals do allauth.
+    """
+
+    @staticmethod
+    def authenticate_with_code(request, code: str) -> User:
+        """
+        Autentica um usuÃ¡rio com o cÃ³digo de autorizaÃ§Ã£o do Google.
+        
+        Args:
+            request: Django request
+            code: CÃ³digo de autorizaÃ§Ã£o do Google
+            
+        Returns:
+            User: UsuÃ¡rio autenticado/criado
+            
+        Raises:
+            ValidationError: Erro de validaÃ§Ã£o
+            SocialAccountError: Erro no provider
+        """
+        try:
+            # Inicializa o adapter do allauth
+            adapter = GoogleOAuth2Adapter(request)
+            
+            # ObtÃ©m o token e dados do usuÃ¡rio via adapter
+            token_data = adapter.get_access_token_data(code)
+            
+            # Cria o sociallogin via provider
+            provider = providers.registry.by_id('google')
+            sociallogin = provider.sociallogin_from_response(request, token_data)
+            
+            # Delega completamente para o allauth
+            complete_social_login(request, sociallogin)
+            
+            return sociallogin.user
+            
+        except ValidationError:
+            raise
+        except Exception as e:
+            # Converte erros do provider para exceÃ§Ã£o do domÃ­nio
+            raise SocialAccountError(f'Erro na autenticaÃ§Ã£o com Google: {str(e)}')
+
+
+
+================================================================================
+ARQUIVO 28 DE 33
+================================================================================
+📁 PASTA: apps\accounts\services\password.py
+📄 ARQUIVO: password.py
+📏 TAMANHO: 3.78 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 107
+================================================================================
+
+from django.contrib.auth import password_validation
+from django.core.exceptions import ValidationError
+from django.utils.translation import gettext_lazy as _
+from django.contrib.auth.tokens import default_token_generator
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.utils.encoding import force_bytes, force_str
+from django.db import transaction, IntegrityError
+
+from apps.accounts.models import User
+from apps.accounts.exceptions.account_exceptions import (
+    InvalidPasswordError,
+    TokenInvalidError,
+)
+from apps.accounts.services.account import AccountService
+from apps.accounts.services.email import EmailService
+from apps.accounts.services.session import SessionService
+
+
+class PasswordService:
+    """ServiÃ§o para gerenciamento de senhas."""
+
+    @staticmethod
+    def validate_password(password: str, user: User = None) -> None:
+        """
+        Valida a forÃ§a da senha usando os validadores do Django.
+        Esta Ã© a ÃšNICA autoridade para validaÃ§Ã£o de senha.
+        """
+        try:
+            password_validation.validate_password(password, user)
+        except ValidationError as e:
+            # MantÃ©m todas as mensagens de erro
+            raise InvalidPasswordError(' '.join(e.messages))
+
+    @staticmethod
+    def change_password(
+        user: User,
+        current_password: str,
+        new_password: str,
+        exclude_session_key: str = None
+    ) -> int:
+        if not user.check_password(current_password):
+            raise InvalidPasswordError('Senha atual incorreta')
+        
+        PasswordService.validate_password(new_password, user)
+        
+        with transaction.atomic():
+            user.set_password(new_password)
+            user.save()
+            
+            count_destroyed = SessionService.destroy_all_sessions(
+                user=user,
+                exclude_current=exclude_session_key
+            )
+        
+        return count_destroyed
+
+    @staticmethod
+    def generate_password_reset_token(user: User) -> dict:
+        token = default_token_generator.make_token(user)
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+        
+        return {
+            'uid': uid,
+            'token': token,
+        }
+
+    @staticmethod
+    def verify_password_reset_token(uid: str, token: str) -> User:
+        try:
+            user_id = force_str(urlsafe_base64_decode(uid))
+            user = AccountService.get_user_by_id(user_id)
+            
+            if user is None:
+                raise TokenInvalidError('UsuÃ¡rio invÃ¡lido')
+            
+            if not user.is_active:
+                raise TokenInvalidError('UsuÃ¡rio inativo')
+            
+            if not default_token_generator.check_token(user, token):
+                raise TokenInvalidError('Token invÃ¡lido ou expirado')
+            
+            return user
+            
+        except (TypeError, ValueError, OverflowError):
+            raise TokenInvalidError('Token invÃ¡lido')
+
+    @staticmethod
+    def reset_password(uid: str, token: str, new_password: str) -> int:
+        user = PasswordService.verify_password_reset_token(uid, token)
+        
+        PasswordService.validate_password(new_password, user)
+        
+        with transaction.atomic():
+            user.set_password(new_password)
+            user.save()
+            
+            count_destroyed = SessionService.destroy_all_sessions(user)
+        
+        return count_destroyed
+
+    @staticmethod
+    def request_password_reset(email: str) -> None:
+        user = AccountService.get_user_by_email(email)
+        
+        if user and user.is_active:
+            token_data = PasswordService.generate_password_reset_token(user)
+            EmailService.send_password_reset_email(user, token_data)
+
+
+
+================================================================================
+ARQUIVO 29 DE 33
+================================================================================
+📁 PASTA: apps\accounts\services\session.py
+📄 ARQUIVO: session.py
+📏 TAMANHO: 8.77 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 257
+================================================================================
+
+from typing import Optional, Dict, Any
+from django.http import HttpRequest
+from django.utils import timezone
+from django.contrib.sessions.models import Session
+from django.contrib.auth import login, logout
+from django.conf import settings
+
+from apps.accounts.models import User, UserSession
+from apps.accounts.exceptions.account_exceptions import SessionError
+
+
+class SessionService:
+    """
+    ServiÃ§o para gerenciamento de sessÃµes do Clivo.
+    
+    Gerencia:
+    - CriaÃ§Ã£o de sessÃµes (App e Console)
+    - Rastreamento via UserSession
+    - InvalidaÃ§Ã£o de sessÃµes
+    
+    O Django Ã© a autoridade real de autenticaÃ§Ã£o.
+    UserSession Ã© apenas rastreamento/observabilidade.
+    """
+    
+    # Tipos de sessÃ£o vÃ¡lidos
+    VALID_SESSION_TYPES = {'app', 'console'}
+    
+    # Intervalo mÃ­nimo entre updates do last_seen (5 minutos)
+    LAST_SEEN_INTERVAL_SECONDS = 300
+
+    @staticmethod
+    def validate_session_type(session_type: str) -> None:
+        """Valida se o tipo de sessÃ£o Ã© permitido."""
+        if session_type not in SessionService.VALID_SESSION_TYPES:
+            raise SessionError(f'Tipo de sessÃ£o invÃ¡lido: {session_type}')
+
+    @staticmethod
+    def register_session(
+        request: HttpRequest,
+        user: User,
+        session_type: str = 'app'
+    ) -> UserSession:
+        """
+        Registra uma sessÃ£o no UserSession (apÃ³s o login do Django).
+        
+        Este mÃ©todo Ã© chamado pelo signal user_logged_in.
+        NÃ£o faz login, apenas registra a sessÃ£o.
+        """
+        SessionService.validate_session_type(session_type)
+        
+        session_key = request.session.session_key
+        
+        if not session_key:
+            raise SessionError('SessÃ£o Django nÃ£o encontrada')
+
+        # Remove qualquer UserSession existente com esta chave (seguranÃ§a)
+        UserSession.objects.filter(session_key=session_key).delete()
+
+        # Cria o registro de sessÃ£o
+        user_session = UserSession.objects.create(
+            user=user,
+            session_key=session_key,
+            session_type=session_type,
+            ip_address=request.META.get('REMOTE_ADDR', ''),
+            user_agent=request.META.get('HTTP_USER_AGENT', '')[:255],
+            expires_at=timezone.now() + timezone.timedelta(
+                seconds=settings.SESSION_COOKIE_AGE
+            ),
+            last_seen_at=timezone.now()
+        )
+
+        request.session['user_session_id'] = str(user_session.id)
+        request.session['session_type'] = session_type
+        
+        # Limpa o marcador de sessÃ£o
+        request.session.pop('_clivo_session_type', None)
+
+        return user_session
+
+    @staticmethod
+    def ensure_session(
+        request: HttpRequest,
+        user: User,
+        session_type: str = 'app'
+    ) -> UserSession:
+        """
+        Garante que existe um UserSession para o usuÃ¡rio.
+        
+        Se jÃ¡ existir, retorna. Se nÃ£o, cria.
+        """
+        SessionService.validate_session_type(session_type)
+
+        existing_id = request.session.get('user_session_id')
+
+        if existing_id:
+            try:
+                user_session = UserSession.objects.get(
+                    id=existing_id,
+                    user=user,
+                    is_active=True
+                )
+                # Atualiza o tipo se necessÃ¡rio
+                if user_session.session_type != session_type:
+                    user_session.session_type = session_type
+                    user_session.save(update_fields=['session_type'])
+                return user_session
+            except UserSession.DoesNotExist:
+                request.session.pop('user_session_id', None)
+
+        # NÃ£o existe â†’ registra
+        return SessionService.register_session(request, user, session_type)
+
+    @staticmethod
+    def login(
+        request: HttpRequest,
+        user: User,
+        session_type: str = 'app'
+    ) -> UserSession:
+        """
+        Autentica o usuÃ¡rio e garante o registro da sessÃ£o.
+        
+        Este mÃ©todo deve ser usado por todas as views que fazem login.
+        """
+        if not user.is_active:
+            raise SessionError('Conta desativada')
+
+        SessionService.validate_session_type(session_type)
+
+        # Marca o tipo de sessÃ£o para o signal (na sessÃ£o, para atravessar redirects)
+        request.session['_clivo_session_type'] = session_type
+
+        # Faz login - Django gerencia a sessÃ£o
+        login(request, user)
+
+        # ApÃ³s o login, o signal jÃ¡ deve ter criado o UserSession
+        # Mas garantimos que existe
+        user_session = SessionService.ensure_session(request, user, session_type)
+
+        return user_session
+
+    @staticmethod
+    def destroy_session(request: HttpRequest) -> None:
+        """Destroi a sessÃ£o atual."""
+        if not request.user.is_authenticated:
+            raise SessionError('UsuÃ¡rio nÃ£o autenticado')
+
+        user_session_id = request.session.get('user_session_id')
+        if user_session_id:
+            try:
+                user_session = UserSession.objects.get(id=user_session_id)
+                user_session.is_active = False
+                user_session.save(update_fields=['is_active'])
+            except UserSession.DoesNotExist:
+                pass
+
+        # Remove o marcador de sessÃ£o
+        request.session.pop('_clivo_session_type', None)
+        request.session.pop('user_session_id', None)
+
+        logout(request)
+
+    @staticmethod
+    def destroy_all_sessions(user: User, exclude_current: Optional[str] = None) -> int:
+        """
+        Destroi todas as sessÃµes do usuÃ¡rio, exceto a atual se especificada.
+        
+        Returns: NÃºmero de sessÃµes destruÃ­das.
+        """
+        sessions = UserSession.objects.filter(
+            user=user,
+            is_active=True
+        )
+
+        if exclude_current:
+            sessions = sessions.exclude(session_key=exclude_current)
+
+        session_keys = list(sessions.values_list('session_key', flat=True))
+        count = len(session_keys)
+
+        if session_keys:
+            # Remove as sessÃµes Django primeiro
+            Session.objects.filter(session_key__in=session_keys).delete()
+            # Depois marca o UserSession como inativo
+            sessions.update(is_active=False)
+
+        return count
+
+    @staticmethod
+    def destroy_sessions_by_type(user: User, session_type: str) -> int:
+        """
+        Destroi todas as sessÃµes de um tipo especÃ­fico.
+        """
+        SessionService.validate_session_type(session_type)
+        
+        sessions = UserSession.objects.filter(
+            user=user,
+            session_type=session_type,
+            is_active=True
+        )
+
+        session_keys = list(sessions.values_list('session_key', flat=True))
+        count = len(session_keys)
+
+        if session_keys:
+            Session.objects.filter(session_key__in=session_keys).delete()
+            sessions.update(is_active=False)
+
+        return count
+
+    @staticmethod
+    def get_session_info(request: HttpRequest) -> Optional[Dict[str, Any]]:
+        """ObtÃ©m informaÃ§Ãµes da sessÃ£o atual."""
+        if not request.user.is_authenticated or not request.session.session_key:
+            return None
+
+        user_session_id = request.session.get('user_session_id')
+
+        if user_session_id:
+            try:
+                user_session = UserSession.objects.get(
+                    id=user_session_id,
+                    user=request.user,
+                    is_active=True
+                )
+                return {
+                    'session_type': user_session.session_type,
+                    'created_at': user_session.created_at,
+                    'last_seen_at': user_session.last_seen_at,
+                    'user_id': request.user.id,
+                    'email': request.user.email,
+                }
+            except UserSession.DoesNotExist:
+                pass
+
+        # InconsistÃªncia: sessÃ£o autenticada sem UserSession ativo
+        return None
+
+    @staticmethod
+    def update_last_seen(session_key: str) -> bool:
+        """Atualiza o last_seen_at de uma sessÃ£o."""
+        try:
+            user_session = UserSession.objects.get(
+                session_key=session_key,
+                is_active=True
+            )
+            
+            if user_session.last_seen_at:
+                elapsed = (timezone.now() - user_session.last_seen_at).total_seconds()
+                if elapsed < SessionService.LAST_SEEN_INTERVAL_SECONDS:
+                    return False
+            
+            user_session.last_seen_at = timezone.now()
+            user_session.save(update_fields=['last_seen_at'])
+            return True
+            
+        except UserSession.DoesNotExist:
+            return False
+
+
+
+================================================================================
+ARQUIVO 30 DE 33
+================================================================================
+📁 PASTA: apps\accounts\signals.py
+📄 ARQUIVO: signals.py
+📏 TAMANHO: 0.79 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 27
+================================================================================
+
+from django.contrib.auth.signals import user_logged_in
+from django.dispatch import receiver
+
+from apps.accounts.services.session import SessionService
+
+
+@receiver(user_logged_in)
+def ensure_user_session(sender, request, user, **kwargs):
+    """
+    Garante que toda vez que o Django registrar um login
+    (via allauth/Google redirect, via LoginView, ou qualquer outro caminho),
+    exista um UserSession correspondente.
+    
+    O tipo de sessÃ£o Ã© determinado por:
+    1. request.session['_clivo_session_type'] (definido antes do login)
+    2. 'app' (fallback)
+    """
+    session_type = request.session.get(
+        '_clivo_session_type',
+        'app'
+    )
+
+    SessionService.ensure_session(
+        request=request,
+        user=user,
+        session_type=session_type,
+    )
+
+
+
+================================================================================
+ARQUIVO 31 DE 33
+================================================================================
+📁 PASTA: apps\accounts\tests.py
+📄 ARQUIVO: tests.py
+📏 TAMANHO: 0.06 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 4
+================================================================================
+
+from django.test import TestCase
+
+# Create your tests here.
+
+
+
+
+================================================================================
+ARQUIVO 32 DE 33
+================================================================================
+📁 PASTA: apps\accounts\urls.py
+📄 ARQUIVO: urls.py
+📏 TAMANHO: 1.92 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 53
+================================================================================
+
+from django.urls import path
+
+from apps.accounts.api.authentication import (
+    LoginView as APILoginView,
+    GoogleLoginView,
+    LogoutView,
+    SessionView,
+    CsrfView,
+)
+from apps.accounts.api.password import (
+    PasswordChangeView,
+    PasswordResetView,
+    PasswordResetConfirmView,
+)
+from apps.accounts.api.user import UserCreateView, UserMeView
+from apps.accounts.api.entry import EntryTargetView
+from apps.accounts.views import (
+    LoginView,
+    GoogleOAuthEntryView,
+    PostLoginRedirectView,
+    ConsoleView,
+)
+
+urlpatterns = [
+    # ===== PÃGINAS =====
+    path('', PostLoginRedirectView.as_view(), name='home'),
+    path('login/', LoginView.as_view(), name='login-page'),
+    path('console/', ConsoleView.as_view(), name='console'),
+
+    # ===== GOOGLE OAUTH ENTRY =====
+    path('auth/google/', GoogleOAuthEntryView.as_view(), name='google-oauth-entry'),
+
+    # ===== CSRF =====
+    path('api/auth/csrf/', CsrfView.as_view(), name='csrf'),
+
+    # ===== API - AutenticaÃ§Ã£o =====
+    path('api/auth/login/', APILoginView.as_view(), name='login'),
+    path('api/auth/login/google/', GoogleLoginView.as_view(), name='google-login'),
+    path('api/auth/logout/', LogoutView.as_view(), name='logout'),
+    path('api/auth/session/', SessionView.as_view(), name='session'),
+
+    # ===== API - ResoluÃ§Ã£o de entrada =====
+    path('api/auth/entry/', EntryTargetView.as_view(), name='entry-target'),
+
+    # ===== API - Senha =====
+    path('api/auth/password/change/', PasswordChangeView.as_view(), name='password-change'),
+    path('api/auth/password/reset/', PasswordResetView.as_view(), name='password-reset'),
+    path('api/auth/password/reset/confirm/', PasswordResetConfirmView.as_view(), name='password-reset-confirm'),
+
+    # ===== API - UsuÃ¡rio =====
+    path('api/users/', UserCreateView.as_view(), name='user-create'),
+    path('api/users/me/', UserMeView.as_view(), name='user-me'),
+]
+
+
+
+================================================================================
+ARQUIVO 33 DE 33
+================================================================================
+📁 PASTA: apps\accounts\views.py
+📄 ARQUIVO: views.py
+📏 TAMANHO: 3 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 109
+================================================================================
+
+from django.shortcuts import render, redirect
+from django.views import View
+import logging
+
+from apps.accounts.api.entry import resolve_entry_target
+
+logger = logging.getLogger('accounts')
+
+
+class LoginView(View):
+    """View para a pÃ¡gina de login."""
+
+    def get(self, request):
+        return render(request, 'login.html')
+
+
+class GoogleOAuthEntryView(View):
+    """
+    Ponto de entrada para autenticaÃ§Ã£o com Google.
+
+    Redireciona para o fluxo oficial do allauth.
+    Esta view NÃƒO implementa OAuth manualmente.
+
+    Query params:
+        ?surface=app     â†’ sessÃ£o do tipo App (Mesa)
+        ?surface=console â†’ sessÃ£o do tipo Console
+    """
+
+    def get(self, request):
+        surface = request.GET.get('surface', 'app')
+
+        if surface not in {'app', 'console'}:
+            surface = 'app'
+
+        request.session['_clivo_session_type'] = surface
+
+        logger.debug(f"Iniciando OAuth Google com surface={surface}")
+
+        return redirect('/accounts/google/login/')
+
+
+class PostLoginRedirectView(View):
+    """
+    Roteador de pÃ³s-login.
+
+    Usado pelo allauth (Google) apÃ³s autenticaÃ§Ã£o bem-sucedida.
+    A decisÃ£o Ã© a mesma do endpoint /api/auth/entry/ â€” ambos
+    delegam para resolve_entry_target().
+
+    Regra:
+        ConsoleMember / superuser  â†’ /console/
+        Qualquer outro autenticado â†’ /workspaces/entrar/
+    """
+
+    def get(self, request):
+        if not request.user.is_authenticated:
+            return redirect('/login/')
+
+        request.session.pop('_clivo_session_type', None)
+
+        target = resolve_entry_target(request.user)
+
+        if target == 'console':
+            logger.debug(
+                f"PÃ³s-login (allauth): {request.user.email} â†’ /console/"
+            )
+            return redirect('/console/')
+
+        logger.debug(
+            f"PÃ³s-login (allauth): {request.user.email} â†’ /workspaces/entrar/"
+        )
+        return redirect('/workspaces/entrar/')
+
+
+class MesaView(View):
+    """
+    View para a pÃ¡gina da Mesa (arquiteto).
+
+    A Mesa em si ainda Ã© um stub. Ela sÃ³ exige autenticaÃ§Ã£o.
+    A resoluÃ§Ã£o de Workspace ocorre em /workspaces/entrar/.
+    """
+
+    def get(self, request):
+        if not request.user.is_authenticated:
+            return redirect('/login/')
+
+        return render(request, 'mesa.html')
+
+
+class ConsoleView(View):
+    """
+    View para a pÃ¡gina do Console (Admin da Clivo).
+
+    V1: superuser OU ConsoleMembership.
+    V2: migrar 100% para ConsoleMembership via IsConsoleAdmin.
+    """
+
+    def get(self, request):
+        if not request.user.is_authenticated:
+            return redirect('/login/')
+
+        if resolve_entry_target(request.user) != 'console':
+            logger.debug(
+                f"UsuÃ¡rio {request.user.email} sem acesso ao Console â€” "
+                f"redirecionando para /workspaces/entrar/"
+            )
+            return redirect('/workspaces/entrar/')
+
+        return render(request, 'console.html')
+
+
+
+================================================================================
+FIM DA LISTAGEM
+================================================================================
+Total de arquivos: 33
+Total de linhas: 2222
+Tamanho total: 0.17 MB
+Arquivo gerado em: 28/09/2026 10:41:42
+================================================================================

@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Convite para {{ workspace.name }}</title>
+</head>
+<body style="margin:0;padding:0;background:#F7F7F9;font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',Roboto,sans-serif;-webkit-font-smoothing:antialiased;">
+
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#F7F7F9;padding:40px 16px;">
+        <tr>
+            <td align="center">
+
+                <!-- Card -->
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:520px;background:#FFFFFF;border-radius:16px;border:1px solid #E9E9EC;overflow:hidden;">
+
+                    <!-- Header -->
+                    <tr>
+                        <td style="padding:32px 40px 8px 40px;">
+                            <div style="font-size:20px;font-weight:800;letter-spacing:-0.04em;color:#101014;">
+                                Clivo
+                            </div>
+                        </td>
+                    </tr>
+
+                    <!-- Title -->
+                    <tr>
+                        <td style="padding:24px 40px 0 40px;">
+                            <h1 style="margin:0 0 12px 0;font-size:24px;font-weight:700;letter-spacing:-0.03em;color:#101014;line-height:1.2;">
+                                {% if inviter_name %}{{ inviter_name }} te convidou{% else %}Você foi convidado{% endif %}
+                            </h1>
+                            <p style="margin:0;font-size:14px;line-height:1.6;color:#6B6B76;">
+                                Você foi convidado para participar do workspace
+                                <strong style="color:#101014;">{{ workspace.name }}</strong>
+                                como
+                                <strong style="color:#101014;">{{ governance.name }}</strong>.
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Workspace info card -->
+                    <tr>
+                        <td style="padding:24px 40px 0 40px;">
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#F7F7F9;border-radius:12px;">
+                                <tr>
+                                    <td style="padding:16px 20px;">
+                                        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                                            <tr>
+                                                <td style="width:44px;vertical-align:middle;">
+                                                    <div style="width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#F2A9E6,#B78CF2);text-align:center;line-height:44px;color:#fff;font-size:16px;font-weight:700;">
+                                                        {{ workspace.name|slice:":1"|upper }}
+                                                    </div>
+                                                </td>
+                                                <td style="padding-left:14px;vertical-align:middle;">
+                                                    <div style="font-size:14px;font-weight:600;color:#101014;margin-bottom:2px;">
+                                                        {{ workspace.name }}
+                                                    </div>
+                                                    {% if workspace.city or workspace.state %}
+                                                    <div style="font-size:12px;color:#9797A1;">
+                                                        {{ workspace.city }}{% if workspace.city and workspace.state %} · {% endif %}{{ workspace.state }}
+                                                    </div>
+                                                    {% endif %}
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <!-- CTA -->
+                    <tr>
+                        <td align="center" style="padding:32px 40px 8px 40px;">
+                            <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                                <tr>
+                                    <td align="center" style="background:#101014;border-radius:8px;">
+                                        <a href="{{ invite_url }}"
+                                           style="display:inline-block;padding:14px 28px;font-size:14px;font-weight:600;color:#FFFFFF;text-decoration:none;letter-spacing:-0.01em;">
+                                            Aceitar convite →
+                                        </a>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <!-- Small hint -->
+                    <tr>
+                        <td style="padding:20px 40px 0 40px;">
+                            <p style="margin:0;font-size:12px;line-height:1.6;color:#9797A1;text-align:center;">
+                                Ou copie e cole este link no navegador:<br>
+                                <span style="color:#6B6B76;word-break:break-all;">{{ invite_url }}</span>
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td style="padding:32px 40px 32px 40px;">
+                            <div style="height:1px;background:#E9E9EC;margin-bottom:20px;"></div>
+                            <p style="margin:0;font-size:12px;line-height:1.6;color:#9797A1;text-align:center;">
+                                Este convite expira em
+                                <strong style="color:#6B6B76;">{{ expires_at|date:"d/m/Y" }}</strong>.
+                                Se você não esperava este email, pode ignorá-lo com segurança.
+                            </p>
+                        </td>
+                    </tr>
+
+                </table>
+
+                <!-- Footer outside card -->
+                <p style="margin:24px 0 0 0;font-size:11px;color:#B7B7BE;text-align:center;">
+                    {{ site_name }} · Do briefing à entrega das chaves, reunido em um só lugar.
+                </p>
+
+            </td>
+        </tr>
+    </table>
+
+</body>
+</html>

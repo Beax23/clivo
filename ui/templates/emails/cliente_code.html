@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acesso ao Portal · Clivo</title>
+</head>
+<body style="margin:0;padding:0;background:#F7F7F9;font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',sans-serif;color:#101014;">
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:#F7F7F9;padding:40px 20px;">
+        <tr>
+            <td align="center">
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width:520px;background:#FFFFFF;border-radius:14px;overflow:hidden;border:1px solid #E9E9EC;">
+
+                    <!-- Header -->
+                    <tr>
+                        <td style="padding:32px 36px 12px;">
+                            <div style="font-size:15px;font-weight:700;color:#4F46E5;letter-spacing:-0.2px;">Clivo</div>
+                        </td>
+                    </tr>
+
+                    <!-- Body -->
+                    <tr>
+                        <td style="padding:8px 36px 24px;">
+                            <h1 style="margin:0 0 12px;font-size:22px;font-weight:700;color:#101014;letter-spacing:-0.3px;line-height:1.3;">
+                                Olá, {{ client_name }}
+                            </h1>
+                            <p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:#6B6B76;">
+                                O escritório <strong style="color:#101014;">{{ workspace_name }}</strong>
+                                preparou um espaço no Clivo para você acompanhar seus projetos e responder o briefing.
+                            </p>
+
+                            <p style="margin:0 0 10px;font-size:12px;font-weight:600;letter-spacing:0.4px;color:#9797A1;text-transform:uppercase;">
+                                Seu código de acesso
+                            </p>
+
+                            <div style="background:#EEF2FF;border-radius:10px;padding:18px 20px;text-align:center;margin-bottom:24px;">
+                                <div style="font-family:'SF Mono',Menlo,Consolas,monospace;font-size:26px;font-weight:700;color:#4F46E5;letter-spacing:0.1em;">
+                                    {{ public_code }}
+                                </div>
+                            </div>
+
+                            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin-bottom:8px;">
+                                <tr>
+                                    <td align="center">
+                                        <a href="{{ portal_url }}"
+                                           style="display:inline-block;background:#101014;color:#FFFFFF;font-size:14px;font-weight:600;text-decoration:none;padding:12px 28px;border-radius:8px;">
+                                            Abrir meu espaço
+                                        </a>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <p style="margin:20px 0 0;font-size:12px;line-height:1.6;color:#9797A1;text-align:center;">
+                                Ou acesse <span style="color:#4F46E5;word-break:break-all;">{{ portal_url }}</span>
+                                e informe o código.
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Divider -->
+                    <tr>
+                        <td style="padding:0 36px;">
+                            <div style="height:1px;background:#EFEFF1;"></div>
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td style="padding:20px 36px 32px;">
+                            <p style="margin:0;font-size:11.5px;line-height:1.6;color:#9797A1;">
+                                Este código é pessoal e intransferível. Se você não esperava receber este email, pode ignorá-lo.
+                            </p>
+                        </td>
+                    </tr>
+
+                </table>
+
+                <p style="margin:24px 0 0;font-size:11px;color:#B7B7BE;">
+                    Clivo · Sistema Operacional para Escritórios de Arquitetura
+                </p>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

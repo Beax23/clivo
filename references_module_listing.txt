@@ -1,0 +1,1388 @@
+﻿================================================================================
+LISTAGEM COMPLETA DO MÓDULO references
+Clivo Platform - Refatoração Arquitetural
+Gerado em: 01/10/2026 12:38:03
+Total de arquivos: 13
+================================================================================
+
+
+================================================================================
+ARQUIVO 1 DE 13
+================================================================================
+📁 PASTA: apps\references\__init__.py
+📄 ARQUIVO: __init__.py
+📏 TAMANHO: 6.54 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 170
+================================================================================
+
+"""
+References â€” curadoria de referÃªncias visuais e conceituais do escritÃ³rio.
+
+============================================================================
+REGRA ARQUITETURAL
+============================================================================
+
+`references` responde por:
+
+    - registrar o que o escritÃ³rio escolheu como referÃªncia
+    - classificar essa referÃªncia (space, material, lighting, etc)
+    - preservar a curadoria do arquiteto
+
+`references` NÃƒO responde por:
+
+    - identidade do usuÃ¡rio            â†’ pertence a `accounts`
+    - contexto do cliente              â†’ pertence a `clients`
+    - projeto                          â†’ pertence a `projects` (futuro)
+    - arquivos e mÃ­dia                 â†’ pertence a `documents` (futuro)
+    - conexÃ£o com sistemas externos    â†’ pertence a `integrations`
+    - timeline factual                 â†’ pertence a `timeline`
+
+============================================================================
+PRINCÃPIO
+============================================================================
+
+    ExternalReference  â‰   Reference
+
+Uma Ã© o RECURSO BRUTO de fora. A outra Ã© o SIGNIFICADO dentro do Clivo.
+
+    Pinterest Pin
+        â†“
+    integrations.ExternalReference      (o recurso externo)
+        â†“
+    references.Reference                 (o que o escritÃ³rio decidiu
+                                          que aquilo Ã©: "cozinha integrada")
+        â†“
+    projects.Project / clients.Client    (futuro â€” quem consome a referÃªncia)
+
+A `Reference` pode existir SEM `ExternalReference`. Ex:
+
+    - arquiteto digitou uma URL manualmente
+    - arquiteto anotou uma ideia como referÃªncia
+    - futuramente, um `Document` interno (upload do arquiteto)
+
+Ou pode existir COM `ExternalReference`. Ex:
+
+    - Pin importado do Pinterest
+    - Imagem importada do Unsplash
+
+============================================================================
+MODELO (P0)
+============================================================================
+
+    Reference
+        â””â”€â”€ uma referÃªncia curada pelo escritÃ³rio
+
+O P0 tem UM ÃšNICO MODEL. NÃ£o criamos antecipadamente:
+
+    âŒ ReferenceTag           (sistema de tags Ã© complexidade que ninguÃ©m pediu)
+    âŒ ReferenceCollection    (moodboard vem depois; talvez pertenÃ§a a `projects`)
+    âŒ ReferenceLink          (relaÃ§Ã£o com projetos/briefings serÃ¡ criada POR ELES)
+    âŒ ReferenceOrder         (ordenaÃ§Ã£o visual Ã© parte de moodboard)
+
+Cada um desses nasce quando existir demanda real. Criar tabela vazia
+hoje Ã© dÃ­vida tÃ©cnica amanhÃ£.
+
+============================================================================
+CATEGORY â€” CLASSIFICAÃ‡ÃƒO SEMÃ‚NTICA
+============================================================================
+
+`Reference.category` responde a pergunta:
+
+    "Para que serve esta referÃªncia?"
+
+Valores controlados no P0:
+
+    space       â†’ ambiente / layout
+    material    â†’ material / acabamento
+    lighting    â†’ iluminaÃ§Ã£o
+    furniture   â†’ mobiliÃ¡rio
+    facade      â†’ fachada
+    landscape   â†’ paisagismo
+    color       â†’ cor
+    style       â†’ estilo / atmosfera
+    layout      â†’ distribuiÃ§Ã£o / circulaÃ§Ã£o
+    other       â†’ outro
+
+NÃƒO Ã© sistema de tags. Ã‰ uma classificaÃ§Ã£o simples e curada.
+
+Se a experiÃªncia real mostrar que alguma categoria nÃ£o funciona, uma
+migration futura ajusta. NÃ£o estamos fingindo que uma enum Ã© eterna.
+
+============================================================================
+SOBRE `description`
+===================
+`description` Ã© o texto que o arquiteto registra sobre a referÃªncia:
+
+    "gostei da iluminaÃ§Ã£o natural + madeira clara"
+
+NÃ£o Ã© o mesmo que:
+    - `title` (rÃ³tulo curto)
+    - `notes` de inteligÃªncia (sugestÃ£o automÃ¡tica, se existir um dia)
+    - `metadata` (dados auxiliares)
+
+============================================================================
+SOBRE `url` E `thumbnail_url`
+=============================
+    ExternalReference.url_original = endereÃ§o do recurso externo original
+    Reference.url                   = URL apresentada/curada na referÃªncia
+
+Podem coincidir. NÃ£o precisam. `Reference.url` Ã© a URL canÃ´nica
+dentro do Clivo.
+
+`thumbnail_url` Ã© campo de apresentaÃ§Ã£o. Sem ele, referÃªncias visuais
+ficam piores. NÃ£o Ã© fonte de verdade â€” Ã© preview.
+
+============================================================================
+SOBRE `source`
+==============
+`source` descreve a origem primÃ¡ria do recurso, tecnolÃ³gica ou humana:
+
+    manual      â†’ arquiteto adicionou diretamente
+    pinterest   â†’ importado do Pinterest
+    unsplash    â†’ importado do Unsplash
+    drive       â†’ importado do Google Drive
+    client      â†’ enviado pelo prÃ³prio cliente
+
+`client` Ã© origem humana, nÃ£o tecnolÃ³gica. Isso Ã© intencional.
+
+============================================================================
+SOBRE `external_reference`
+==========================
+FK nullable para `integrations.ExternalReference`.
+
+Preenchida quando a referÃªncia vem de uma integraÃ§Ã£o (Pinterest,
+Unsplash, Drive, Gmail). Nula quando a referÃªncia Ã© manual.
+
+O `ReferenceViewSet` DEVE validar que o `ExternalReference`
+associado pertence a um contexto compatÃ­vel com o workspace da
+referÃªncia. Isso evita referÃªncia cruzada entre tenants.
+
+============================================================================
+SOBRE `metadata`
+================
+`metadata` Ã© espaÃ§o para dados acessÃ³rios e NÃƒO-SECRETOS.
+
+    NUNCA substituir campos ou relaÃ§Ãµes de domÃ­nio por chaves
+    em `metadata`. Se algo virar relaÃ§Ã£o real, promove para FK.
+
+============================================================================
+FRONTEIRA CONGELADA (V1)
+============================================================================
+
+    accounts      â†’ identidade e autenticaÃ§Ã£o
+    workspaces    â†’ tenancy e membros
+    clients       â†’ contexto do cliente
+    integrations  â†’ conexÃµes externas
+    meetings      â†’ evidÃªncia de conversas
+    references    â†’ curadoria de referÃªncias (este app)
+    documents     â†’ arquivos e mÃ­dia (futuro)
+    projects      â†’ operaÃ§Ã£o do projeto (futuro)
+    intelligence  â†’ interpretaÃ§Ã£o transversal (futuro)
+    timeline      â†’ memÃ³ria factual transversal (futuro)
+
+`references` organiza o significado da referÃªncia dentro do Clivo.
+`references` NÃƒO Ã© dona do arquivo nem do recurso externo bruto.
+"""
+
+default_app_config = 'apps.references.apps.ReferencesConfig'
+
+
+
+================================================================================
+ARQUIVO 2 DE 13
+================================================================================
+📁 PASTA: apps\references\admin.py
+📄 ARQUIVO: admin.py
+📏 TAMANHO: 1.33 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 45
+================================================================================
+
+from django.contrib import admin
+
+from apps.references.models import Reference
+
+
+@admin.register(Reference)
+class ReferenceAdmin(admin.ModelAdmin):
+    list_display = [
+        'title', 'workspace', 'kind', 'category', 'source',
+        'external_reference', 'created_by', 'created_at',
+    ]
+    list_filter = ['kind', 'category', 'source', 'workspace']
+    search_fields = [
+        'title',
+        'description',
+        'url',
+        'workspace__name',
+    ]
+    readonly_fields = ['id', 'created_at', 'updated_at']
+    ordering = ['-created_at']
+    autocomplete_fields = ['workspace', 'external_reference', 'created_by']
+    date_hierarchy = 'created_at'
+
+    fieldsets = (
+        ('IdentificaÃ§Ã£o', {
+            'fields': ('id', 'workspace', 'title'),
+        }),
+        ('ClassificaÃ§Ã£o', {
+            'fields': ('kind', 'category', 'source'),
+        }),
+        ('Origem', {
+            'fields': ('external_reference', 'url', 'thumbnail_url'),
+        }),
+        ('Curadoria', {
+            'fields': ('description',),
+        }),
+        ('Metadados', {
+            'fields': ('metadata',),
+            'classes': ('collapse',),
+        }),
+        ('Rastreabilidade', {
+            'fields': ('created_by', 'created_at', 'updated_at'),
+            'classes': ('collapse',),
+        }),
+    )
+
+
+
+================================================================================
+ARQUIVO 3 DE 13
+================================================================================
+📁 PASTA: apps\references\api\__init__.py
+📄 ARQUIVO: __init__.py
+📏 TAMANHO: 0.2 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 7
+================================================================================
+
+"""
+Camada HTTP/API do mÃ³dulo references.
+
+SeparaÃ§Ã£o:
+    serializers/  â†’ validaÃ§Ã£o e representaÃ§Ã£o de entrada/saÃ­da
+    views/        â†’ endpoints, permissÃµes, orquestraÃ§Ã£o de services
+"""
+
+
+
+================================================================================
+ARQUIVO 4 DE 13
+================================================================================
+📁 PASTA: apps\references\api\serializers\__init__.py
+📄 ARQUIVO: __init__.py
+📏 TAMANHO: 0.34 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 13
+================================================================================
+
+from apps.references.api.serializers.reference_serializers import (
+    ReferenceListSerializer,
+    ReferenceDetailSerializer,
+    ReferenceCreateSerializer,
+    ReferenceUpdateSerializer,
+)
+
+__all__ = [
+    'ReferenceListSerializer',
+    'ReferenceDetailSerializer',
+    'ReferenceCreateSerializer',
+    'ReferenceUpdateSerializer',
+]
+
+
+
+================================================================================
+ARQUIVO 5 DE 13
+================================================================================
+📁 PASTA: apps\references\api\serializers\reference_serializers.py
+📄 ARQUIVO: reference_serializers.py
+📏 TAMANHO: 6.4 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 202
+================================================================================
+
+"""
+Serializers de Reference.
+
+SEPARAÃ‡ÃƒO DE RESPONSABILIDADES
+------------------------------
+    ReferenceListSerializer     â†’ listagem
+    ReferenceDetailSerializer   â†’ detalhe completo
+    ReferenceCreateSerializer   â†’ criaÃ§Ã£o (campos de entrada)
+    ReferenceUpdateSerializer   â†’ atualizaÃ§Ã£o parcial
+
+REGRA DE SEGURANÃ‡A
+------------------
+`workspace`, `created_by`, `created_at`, `updated_at` e `id` sÃ£o
+sempre read-only. VÃªm do contexto autenticado, nunca do body.
+
+`source` Ã© editÃ¡vel apenas na criaÃ§Ã£o.
+`external_reference` Ã© definido apenas na criaÃ§Ã£o.
+"""
+
+from rest_framework import serializers
+
+from apps.references.models import Reference
+
+
+# =========================================================================
+# LEITURA
+# =========================================================================
+
+class ReferenceListSerializer(serializers.ModelSerializer):
+    """
+    Serializer de listagem.
+
+    ExpÃµe o necessÃ¡rio para a lista de referÃªncias:
+    tÃ­tulo, tipo, categoria, origem, thumbnail, URL.
+    """
+
+    kind_display = serializers.CharField(
+        source='get_kind_display', read_only=True
+    )
+    category_display = serializers.CharField(
+        source='get_category_display', read_only=True
+    )
+    source_display = serializers.CharField(
+        source='get_source_display', read_only=True
+    )
+
+    class Meta:
+        model = Reference
+        fields = [
+            'id',
+            'title',
+            'kind', 'kind_display',
+            'category', 'category_display',
+            'source', 'source_display',
+            'external_reference',
+            'url',
+            'thumbnail_url',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = fields
+
+
+class ReferenceDetailSerializer(serializers.ModelSerializer):
+    """
+    Serializer completo para o detalhe.
+
+    Inclui `description`, `metadata`, e rastreabilidade de quem criou.
+    """
+
+    kind_display = serializers.CharField(
+        source='get_kind_display', read_only=True
+    )
+    category_display = serializers.CharField(
+        source='get_category_display', read_only=True
+    )
+    source_display = serializers.CharField(
+        source='get_source_display', read_only=True
+    )
+    created_by_name = serializers.CharField(
+        source='created_by.full_name', read_only=True, allow_null=True
+    )
+    created_by_email = serializers.EmailField(
+        source='created_by.email', read_only=True, allow_null=True
+    )
+
+    class Meta:
+        model = Reference
+        fields = [
+            'id',
+            'workspace',
+            'title',
+            'kind', 'kind_display',
+            'category', 'category_display',
+            'source', 'source_display',
+            'external_reference',
+            'url',
+            'thumbnail_url',
+            'description',
+            'metadata',
+            'created_by', 'created_by_name', 'created_by_email',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = [
+            'id',
+            'workspace',
+            'created_by',
+            'created_by_name',
+            'created_by_email',
+            'created_at',
+            'updated_at',
+        ]
+
+
+# =========================================================================
+# ESCRITA
+# =========================================================================
+
+class ReferenceCreateSerializer(serializers.Serializer):
+    """
+    CriaÃ§Ã£o de referÃªncia.
+
+    NÃƒO aceita `workspace` nem `created_by` â€” vÃªm do contexto autenticado.
+
+    `category` nasce como `other` se nÃ£o for passado.
+    `source` nasce como `manual` se nÃ£o for passado.
+    `external_reference_id` Ã© opcional â€” se passado, o ViewSet valida
+    que o recurso pertence a um contexto compatÃ­vel com o workspace.
+    """
+
+    title = serializers.CharField(max_length=200)
+    kind = serializers.ChoiceField(
+        choices=[c[0] for c in Reference.KIND_CHOICES],
+        default=Reference.KIND_IMAGE,
+    )
+    category = serializers.ChoiceField(
+        choices=[c[0] for c in Reference.CATEGORY_CHOICES],
+        default=Reference.CATEGORY_OTHER,
+    )
+    source = serializers.ChoiceField(
+        choices=[c[0] for c in Reference.SOURCE_CHOICES],
+        default=Reference.SOURCE_MANUAL,
+    )
+    external_reference_id = serializers.UUIDField(
+        required=False, allow_null=True,
+    )
+    url = serializers.URLField(
+        required=False, allow_blank=True, max_length=2000,
+    )
+    thumbnail_url = serializers.URLField(
+        required=False, allow_blank=True, allow_null=True, max_length=2000,
+    )
+    description = serializers.CharField(required=False, allow_blank=True)
+    metadata = serializers.DictField(required=False, default=dict)
+
+    def validate_title(self, value):
+        value = (value or '').strip()
+        if not value:
+            raise serializers.ValidationError('O tÃ­tulo Ã© obrigatÃ³rio.')
+        return value
+
+
+class ReferenceUpdateSerializer(serializers.Serializer):
+    """
+    AtualizaÃ§Ã£o parcial de referÃªncia.
+
+    Campos editÃ¡veis:
+        title, kind, category, url, thumbnail_url, description, metadata
+
+    Campos NÃƒO editÃ¡veis (histÃ³ricos ou contextuais):
+        workspace       â†’ imutÃ¡vel
+        created_by      â†’ histÃ³rico
+        source          â†’ histÃ³rico (origem da referÃªncia)
+        external_reference â†’ histÃ³rico (ligaÃ§Ã£o com recurso externo)
+    """
+
+    title = serializers.CharField(max_length=200, required=False)
+    kind = serializers.ChoiceField(
+        choices=[c[0] for c in Reference.KIND_CHOICES],
+        required=False,
+    )
+    category = serializers.ChoiceField(
+        choices=[c[0] for c in Reference.CATEGORY_CHOICES],
+        required=False,
+    )
+    url = serializers.URLField(
+        required=False, allow_blank=True, max_length=2000,
+    )
+    thumbnail_url = serializers.URLField(
+        required=False, allow_blank=True, allow_null=True, max_length=2000,
+    )
+    description = serializers.CharField(required=False, allow_blank=True)
+    metadata = serializers.DictField(required=False)
+
+    def validate_title(self, value):
+        if value is None:
+            return value
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError('O tÃ­tulo Ã© obrigatÃ³rio.')
+        return value
+
+
+
+================================================================================
+ARQUIVO 6 DE 13
+================================================================================
+📁 PASTA: apps\references\api\views\__init__.py
+📄 ARQUIVO: __init__.py
+📏 TAMANHO: 0.11 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 5
+================================================================================
+
+from apps.references.api.views.reference_views import ReferenceViewSet
+
+__all__ = [
+    'ReferenceViewSet',
+]
+
+
+
+================================================================================
+ARQUIVO 7 DE 13
+================================================================================
+📁 PASTA: apps\references\api\views\reference_views.py
+📄 ARQUIVO: reference_views.py
+📏 TAMANHO: 12.01 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 337
+================================================================================
+
+"""
+ReferenceViewSet â€” CRUD de referÃªncias.
+
+REGRA ARQUITETURAL
+------------------
+- Views finas.
+- Tenant isolation: referÃªncia pertence a um workspace, e o usuÃ¡rio sÃ³
+  vÃª referÃªncias do workspace atual (resolvido via `current_workspace_id`
+  na sessÃ£o).
+- Capabilities aplicadas via `_require_capability`, no mesmo padrÃ£o
+  que `clients.ClientViewSet` e `meetings.MeetingViewSet`.
+
+VALIDAÃ‡ÃƒO DE OWNERSHIP DO EXTERNAL REFERENCE
+--------------------------------------------
+Quando uma referÃªncia Ã© criada com `external_reference_id`, o ViewSet
+valida que o `ExternalReference`:
+
+    1. existe
+    2. pertence ao mesmo usuÃ¡rio OU Ã© pÃºblico do workspace
+
+Como `ExternalReference` no P0 nÃ£o tem FK para workspace, a validaÃ§Ã£o
+hoje Ã©:
+
+    - o `imported_by` Ã© o prÃ³prio usuÃ¡rio, OU
+    - o `imported_by` Ã© algum membro do workspace atual
+
+Isso impede referÃªncia cruzada entre tenants.
+
+CAPABILITIES
+------------
+    references.reference.view     â†’ list, retrieve
+    references.reference.create   â†’ create
+    references.reference.update   â†’ update, partial_update
+    references.reference.delete   â†’ destroy
+"""
+
+import logging
+
+from rest_framework import viewsets, status
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+
+from apps.references.models import Reference
+from apps.references.api.serializers import (
+    ReferenceListSerializer,
+    ReferenceDetailSerializer,
+    ReferenceCreateSerializer,
+    ReferenceUpdateSerializer,
+)
+from apps.workspaces.queries import WorkspaceQueries
+from apps.workspaces.models import WorkspaceMembership
+from apps.console.models import ConsoleGovernanceCapability
+
+logger = logging.getLogger('references')
+
+
+class ReferenceViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet de Reference.
+
+    Resolve o Workspace ativo da sessÃ£o e aplica tenant isolation
+    + capability.
+    """
+
+    permission_classes = [IsAuthenticated]
+    lookup_field = 'id'
+
+    # ------------------------------------------------------------------
+    # CONTEXTO
+    # ------------------------------------------------------------------
+
+    def _current_workspace(self):
+        workspace_id = self.request.session.get('current_workspace_id')
+        if not workspace_id:
+            return None
+        return WorkspaceQueries.get_for_user(workspace_id, self.request.user)
+
+    def _require_capability(self, workspace, capability_code):
+        membership = WorkspaceMembership.objects.filter(
+            workspace=workspace,
+            user=self.request.user,
+        ).select_related('governance').first()
+
+        if membership is None:
+            return Response(
+                {'error': 'VocÃª nÃ£o Ã© membro deste Workspace'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if membership.governance.key == 'proprietario':
+            return None
+
+        has = ConsoleGovernanceCapability.objects.filter(
+            governance=membership.governance,
+            capability__code=capability_code,
+            capability__is_active=True,
+        ).exists()
+
+        if not has:
+            return Response(
+                {'error': f'Sua governanÃ§a nÃ£o permite esta aÃ§Ã£o ({capability_code}).'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        return None
+
+    # ------------------------------------------------------------------
+    # QUERYSET
+    # ------------------------------------------------------------------
+
+    def get_queryset(self):
+        workspace = self._current_workspace()
+        if workspace is None:
+            return Reference.objects.none()
+        return (
+            Reference.objects
+            .filter(workspace=workspace)
+            .select_related('external_reference', 'created_by')
+            .order_by('-created_at')
+        )
+
+    def _get_reference_or_404(self, reference_id):
+        workspace = self._current_workspace()
+        if workspace is None:
+            return None
+        return Reference.objects.filter(
+            id=reference_id, workspace=workspace
+        ).first()
+
+    # ------------------------------------------------------------------
+    # VALIDAÃ‡ÃƒO DE OWNERSHIP DO EXTERNAL REFERENCE
+    # ------------------------------------------------------------------
+
+    def _resolve_external_reference(self, external_reference_id, workspace):
+        """
+        Resolve e valida um `ExternalReference` para associaÃ§Ã£o.
+
+        Retorna `(external_reference, error_response)`:
+            - `(instance, None)` se vÃ¡lido
+            - `(None, Response)` se invÃ¡lido
+        """
+        from apps.integrations.models import ExternalReference
+
+        try:
+            external_reference = ExternalReference.objects.get(
+                id=external_reference_id
+            )
+        except (ExternalReference.DoesNotExist, ValueError):
+            return None, Response(
+                {'error': 'Recurso externo nÃ£o encontrado.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validar ownership: o recurso deve ter sido importado por
+        # algum membro do workspace atual (ou pelo prÃ³prio usuÃ¡rio).
+        #
+        # `ExternalReference` no P0 nÃ£o tem FK para workspace. A
+        # validaÃ§Ã£o usa `imported_by` como Ã¢ncora contextual.
+        workspace_user_ids = WorkspaceMembership.objects.filter(
+            workspace=workspace,
+        ).values_list('user_id', flat=True)
+
+        if external_reference.imported_by_id is None:
+            # Recurso Ã³rfÃ£o (imported_by nulo) nÃ£o pode ser associado
+            # por seguranÃ§a.
+            return None, Response(
+                {'error': 'Recurso externo sem origem definida.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if external_reference.imported_by_id not in set(workspace_user_ids):
+            return None, Response(
+                {'error': 'Recurso externo nÃ£o pertence a este workspace.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        return external_reference, None
+
+    # ------------------------------------------------------------------
+    # SERIALIZER
+    # ------------------------------------------------------------------
+
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return ReferenceCreateSerializer
+        if self.action in ('update', 'partial_update'):
+            return ReferenceUpdateSerializer
+        if self.action == 'list':
+            return ReferenceListSerializer
+        return ReferenceDetailSerializer
+
+    # ------------------------------------------------------------------
+    # CRUD
+    # ------------------------------------------------------------------
+
+    def list(self, request, *args, **kwargs):
+        workspace = self._current_workspace()
+        if workspace is None:
+            return Response({'error': 'Nenhum workspace ativo'}, status=400)
+
+        err = self._require_capability(workspace, 'references.reference.view')
+        if err is not None:
+            return err
+
+        qs = self.get_queryset()
+        serializer = ReferenceListSerializer(qs, many=True)
+        return Response(serializer.data)
+
+    def create(self, request, *args, **kwargs):
+        workspace = self._current_workspace()
+        if workspace is None:
+            return Response({'error': 'Nenhum workspace ativo'}, status=400)
+
+        err = self._require_capability(workspace, 'references.reference.create')
+        if err is not None:
+            return err
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        external_reference = None
+        ext_id = serializer.validated_data.get('external_reference_id')
+        if ext_id:
+            external_reference, err = self._resolve_external_reference(
+                ext_id, workspace
+            )
+            if err is not None:
+                return err
+
+        reference = Reference.objects.create(
+            workspace=workspace,
+            title=serializer.validated_data['title'],
+            kind=serializer.validated_data.get('kind', Reference.KIND_IMAGE),
+            category=serializer.validated_data.get(
+                'category', Reference.CATEGORY_OTHER
+            ),
+            source=serializer.validated_data.get(
+                'source', Reference.SOURCE_MANUAL
+            ),
+            external_reference=external_reference,
+            url=serializer.validated_data.get('url', ''),
+            thumbnail_url=serializer.validated_data.get('thumbnail_url'),
+            description=serializer.validated_data.get('description', ''),
+            metadata=serializer.validated_data.get('metadata', {}),
+            created_by=request.user,
+        )
+
+        return Response(
+            ReferenceDetailSerializer(reference).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    def retrieve(self, request, *args, **kwargs):
+        reference = self._get_reference_or_404(kwargs.get('id'))
+        if reference is None:
+            return Response({'error': 'ReferÃªncia nÃ£o encontrada'}, status=404)
+
+        err = self._require_capability(
+            reference.workspace, 'references.reference.view'
+        )
+        if err is not None:
+            return err
+
+        return Response(ReferenceDetailSerializer(reference).data)
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        reference = self._get_reference_or_404(kwargs.get('id'))
+        if reference is None:
+            return Response({'error': 'ReferÃªncia nÃ£o encontrada'}, status=404)
+
+        err = self._require_capability(
+            reference.workspace, 'references.reference.update'
+        )
+        if err is not None:
+            return err
+
+        serializer = self.get_serializer(data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+
+        data = serializer.validated_data
+        fields_to_update = []
+
+        if 'title' in data:
+            reference.title = data['title']
+            fields_to_update.append('title')
+
+        if 'kind' in data:
+            reference.kind = data['kind']
+            fields_to_update.append('kind')
+
+        if 'category' in data:
+            reference.category = data['category']
+            fields_to_update.append('category')
+
+        if 'url' in data:
+            reference.url = data['url']
+            fields_to_update.append('url')
+
+        if 'thumbnail_url' in data:
+            reference.thumbnail_url = data['thumbnail_url']
+            fields_to_update.append('thumbnail_url')
+
+        if 'description' in data:
+            reference.description = data['description']
+            fields_to_update.append('description')
+
+        if 'metadata' in data:
+            reference.metadata = data['metadata']
+            fields_to_update.append('metadata')
+
+        if fields_to_update:
+            fields_to_update.append('updated_at')
+            reference.save(update_fields=fields_to_update)
+
+        return Response(ReferenceDetailSerializer(reference).data)
+
+    def destroy(self, request, *args, **kwargs):
+        reference = self._get_reference_or_404(kwargs.get('id'))
+        if reference is None:
+            return Response({'error': 'ReferÃªncia nÃ£o encontrada'}, status=404)
+
+        err = self._require_capability(
+            reference.workspace, 'references.reference.delete'
+        )
+        if err is not None:
+            return err
+
+        # DELETE da Reference NÃƒO apaga o ExternalReference associado.
+        # O `on_delete=SET_NULL` da FK garante isso no banco: quando a
+        # Reference some, o ExternalReference continua existindo.
+        #
+        # TambÃ©m NÃƒO apaga arquivo/documento (quando documents existir).
+        reference.delete()
+        return Response(
+            {'detail': 'ReferÃªncia excluÃ­da com sucesso'},
+            status=status.HTTP_204_NO_CONTENT,
+        )
+
+
+
+================================================================================
+ARQUIVO 8 DE 13
+================================================================================
+📁 PASTA: apps\references\apps.py
+📄 ARQUIVO: apps.py
+📏 TAMANHO: 0.48 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 17
+================================================================================
+
+from django.apps import AppConfig
+from django.utils.translation import gettext_lazy as _
+
+
+class ReferencesConfig(AppConfig):
+    default_auto_field = 'django.db.models.BigAutoField'
+    name = 'apps.references'
+    verbose_name = _('ReferÃªncias')
+
+    def ready(self):
+        """
+        Inicializa o mÃ³dulo references.
+
+        Signals nÃ£o sÃ£o registrados por padrÃ£o. No P0, Ã© apenas CRUD.
+        """
+        # import apps.references.signals  # noqa: F401
+        pass
+
+
+
+================================================================================
+ARQUIVO 9 DE 13
+================================================================================
+📁 PASTA: apps\references\capabilities.py
+📄 ARQUIVO: capabilities.py
+📏 TAMANHO: 1.61 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 55
+================================================================================
+
+"""
+Capabilities declaradas pelo mÃ³dulo references.
+
+REGRA: capability nasce no app que executa a aÃ§Ã£o.
+O Console descobre, cataloga e permite que GovernanÃ§as selecionem.
+
+Formato: <app>.<resource>.<action> â€” o primeiro segmento DEVE ser
+o label do AppConfig ('references').
+
+NOTA SOBRE GRANULARIDADE
+------------------------
+NÃ£o existe capability por kind ("pode ver imagem", "pode ver documento").
+
+O que Ã© permissÃ£o:
+
+    "pode ver referÃªncias do workspace"
+    "pode criar referÃªncia"
+    "pode editar referÃªncia"
+    "pode excluir referÃªncia"
+
+ColeÃ§Ãµes, moodboards e tags nÃ£o tÃªm capability prÃ³pria no P0 â€”
+essas funcionalidades ainda nÃ£o existem.
+"""
+
+CAPABILITIES = [
+    {
+        'code': 'references.reference.view',
+        'name': 'Ver referÃªncias',
+        'description': (
+            'Permite listar e visualizar as referÃªncias do workspace, '
+            'incluindo imagens, documentos e links curados.'
+        ),
+    },
+    {
+        'code': 'references.reference.create',
+        'name': 'Criar referÃªncia',
+        'description': (
+            'Permite registrar novas referÃªncias no workspace.'
+        ),
+    },
+    {
+        'code': 'references.reference.update',
+        'name': 'Editar referÃªncia',
+        'description': (
+            'Permite alterar tÃ­tulo, notas, URL e demais dados de uma referÃªncia.'
+        ),
+    },
+    {
+        'code': 'references.reference.delete',
+        'name': 'Excluir referÃªncia',
+        'description': (
+            'Permite excluir referÃªncias do workspace. AÃ§Ã£o irreversÃ­vel.'
+        ),
+    },
+]
+
+
+
+================================================================================
+ARQUIVO 10 DE 13
+================================================================================
+📁 PASTA: apps\references\models\__init__.py
+📄 ARQUIVO: __init__.py
+📏 TAMANHO: 0.09 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 5
+================================================================================
+
+from apps.references.models.reference import Reference
+
+__all__ = [
+    'Reference',
+]
+
+
+
+================================================================================
+ARQUIVO 11 DE 13
+================================================================================
+📁 PASTA: apps\references\models\reference.py
+📄 ARQUIVO: reference.py
+📏 TAMANHO: 8.3 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 282
+================================================================================
+
+"""
+Modelo Reference.
+
+Representa uma referÃªncia curada pelo escritÃ³rio.
+
+REGRA ARQUITETURAL
+------------------
+`Reference` Ã© o SIGNIFICADO dentro do Clivo.
+
+Ela NÃƒO Ã©:
+    - o arquivo (`documents`)
+    - o recurso externo (`integrations.ExternalReference`)
+    - a coleÃ§Ã£o/moodboard
+    - a tag
+
+Ela Ã©:
+    "isto Ã© uma referÃªncia relevante para o escritÃ³rio"
+
+RelaÃ§Ã£o com `integrations.ExternalReference`:
+
+    Pinterest Pin
+        â†“
+    integrations.ExternalReference      (o recurso bruto)
+        â†“
+    references.Reference                 (o que o arquiteto decidiu que Ã©)
+        â†“
+    projects.Project / clients.Client    (futuro â€” quem consome)
+
+`external_reference` Ã© nullable. Uma referÃªncia pode existir:
+
+    COM ExternalReference:
+        - Pin importado do Pinterest
+        - Imagem importada do Unsplash
+
+    SEM ExternalReference:
+        - arquiteto digitou uma URL manualmente
+        - arquiteto anotou uma ideia como referÃªncia
+        - futuramente, upload interno (via `documents`)
+
+SOBRE `category`
+----------------
+`category` responde: "para que serve esta referÃªncia?".
+
+Valores controlados no P0. NÃ£o Ã© sistema de tags. Ã‰ classificaÃ§Ã£o
+semÃ¢ntica simples e curada.
+
+Se a experiÃªncia real mostrar que alguma categoria nÃ£o funciona,
+uma migration futura ajusta.
+
+SOBRE `url` E `thumbnail_url`
+-----------------------------
+    ExternalReference.url_original = URL do recurso externo original
+    Reference.url                   = URL apresentada/curada na referÃªncia
+
+Podem coincidir. NÃ£o precisam.
+
+`thumbnail_url` Ã© campo de apresentaÃ§Ã£o. Sem ele, referÃªncias
+visuais ficam piores. NÃ£o Ã© fonte de verdade.
+
+SOBRE `document`
+----------------
+`Reference` NÃƒO tem FK para `documents` ainda, porque `documents` nÃ£o
+existe. Quando existir, ele cria a relaÃ§Ã£o. A referÃªncia continua
+sendo o significado; o arquivo continua sendo responsabilidade de
+`documents`.
+
+SOBRE `metadata`
+----------------
+`metadata` Ã© espaÃ§o para dados acessÃ³rios e NÃƒO-SECRETOS.
+
+    NUNCA substituir campos ou relaÃ§Ãµes de domÃ­nio por chaves
+    em `metadata`. Se algo virar relaÃ§Ã£o real, promove para FK.
+"""
+
+import uuid
+
+from django.conf import settings
+from django.db import models
+from django.utils.translation import gettext_lazy as _
+
+
+class Reference(models.Model):
+
+    # ------------------------------------------------------------------
+    # KIND â€” tipo do recurso
+    # ------------------------------------------------------------------
+
+    KIND_IMAGE = 'image'
+    KIND_DOCUMENT = 'document'
+    KIND_LINK = 'link'
+    KIND_OTHER = 'other'
+
+    KIND_CHOICES = [
+        (KIND_IMAGE, 'Imagem'),
+        (KIND_DOCUMENT, 'Documento'),
+        (KIND_LINK, 'Link'),
+        (KIND_OTHER, 'Outro'),
+    ]
+
+    # ------------------------------------------------------------------
+    # SOURCE â€” origem primÃ¡ria
+    # ------------------------------------------------------------------
+
+    SOURCE_MANUAL = 'manual'
+    SOURCE_PINTEREST = 'pinterest'
+    SOURCE_UNSPLASH = 'unsplash'
+    SOURCE_DRIVE = 'drive'
+    SOURCE_CLIENT = 'client'
+
+    SOURCE_CHOICES = [
+        (SOURCE_MANUAL, 'Manual'),
+        (SOURCE_PINTEREST, 'Pinterest'),
+        (SOURCE_UNSPLASH, 'Unsplash'),
+        (SOURCE_DRIVE, 'Google Drive'),
+        (SOURCE_CLIENT, 'Enviada pelo cliente'),
+    ]
+
+    # ------------------------------------------------------------------
+    # CATEGORY â€” classificaÃ§Ã£o semÃ¢ntica
+    # ------------------------------------------------------------------
+
+    CATEGORY_SPACE = 'space'
+    CATEGORY_MATERIAL = 'material'
+    CATEGORY_LIGHTING = 'lighting'
+    CATEGORY_FURNITURE = 'furniture'
+    CATEGORY_FACADE = 'facade'
+    CATEGORY_LANDSCAPE = 'landscape'
+    CATEGORY_COLOR = 'color'
+    CATEGORY_STYLE = 'style'
+    CATEGORY_LAYOUT = 'layout'
+    CATEGORY_OTHER = 'other'
+
+    CATEGORY_CHOICES = [
+        (CATEGORY_SPACE, 'Ambiente'),
+        (CATEGORY_MATERIAL, 'Material'),
+        (CATEGORY_LIGHTING, 'IluminaÃ§Ã£o'),
+        (CATEGORY_FURNITURE, 'MobiliÃ¡rio'),
+        (CATEGORY_FACADE, 'Fachada'),
+        (CATEGORY_LANDSCAPE, 'Paisagismo'),
+        (CATEGORY_COLOR, 'Cor'),
+        (CATEGORY_STYLE, 'Estilo'),
+        (CATEGORY_LAYOUT, 'Layout'),
+        (CATEGORY_OTHER, 'Outro'),
+    ]
+
+    # ------------------------------------------------------------------
+    # CAMPOS
+    # ------------------------------------------------------------------
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
+
+    workspace = models.ForeignKey(
+        'workspaces.Workspace',
+        on_delete=models.CASCADE,
+        related_name='references',
+        help_text=_('Workspace ao qual a referÃªncia pertence'),
+    )
+
+    title = models.CharField(
+        max_length=200,
+        help_text=_('TÃ­tulo/legenda da referÃªncia'),
+    )
+
+    kind = models.CharField(
+        max_length=20,
+        choices=KIND_CHOICES,
+        default=KIND_IMAGE,
+        db_index=True,
+        help_text=_('Tipo do recurso (imagem, documento, link)'),
+    )
+
+    category = models.CharField(
+        max_length=30,
+        choices=CATEGORY_CHOICES,
+        default=CATEGORY_OTHER,
+        db_index=True,
+        help_text=_(
+            'ClassificaÃ§Ã£o semÃ¢ntica da referÃªncia '
+            '(ambiente, material, iluminaÃ§Ã£o, etc).'
+        ),
+    )
+
+    source = models.CharField(
+        max_length=30,
+        choices=SOURCE_CHOICES,
+        default=SOURCE_MANUAL,
+        db_index=True,
+        help_text=_('Origem primÃ¡ria do recurso, tecnolÃ³gica ou humana'),
+    )
+
+    external_reference = models.ForeignKey(
+        'integrations.ExternalReference',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='references',
+        help_text=_(
+            'Recurso externo bruto (Pinterest Pin, imagem do Unsplash, etc). '
+            'Nulo quando a referÃªncia Ã© manual.'
+        ),
+    )
+
+    url = models.URLField(
+        max_length=2000,
+        blank=True,
+        help_text=_(
+            'URL apresentada/curada na referÃªncia. '
+            'Pode divergir de `ExternalReference.url_original`.'
+        ),
+    )
+
+    thumbnail_url = models.URLField(
+        max_length=2000,
+        blank=True,
+        null=True,
+        help_text=_('URL de miniatura para apresentaÃ§Ã£o visual'),
+    )
+
+    description = models.TextField(
+        blank=True,
+        help_text=_(
+            'O que o arquiteto registrou sobre esta referÃªncia '
+            '(por que ela importa).'
+        ),
+    )
+
+    metadata = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text=_(
+            'EspaÃ§o para dados acessÃ³rios e nÃ£o-secretos. '
+            'NUNCA substituir campos ou relaÃ§Ãµes de domÃ­nio por chaves aqui.'
+        ),
+    )
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_references',
+        help_text=_('UsuÃ¡rio que criou a referÃªncia'),
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'reference'
+        verbose_name = _('ReferÃªncia')
+        verbose_name_plural = _('ReferÃªncias')
+        indexes = [
+            models.Index(fields=['workspace', 'kind']),
+            models.Index(fields=['workspace', 'category']),
+            models.Index(fields=['workspace', 'source']),
+            models.Index(fields=['external_reference']),
+            models.Index(fields=['created_at']),
+        ]
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.title} ({self.get_category_display()})"
+
+    # ------------------------------------------------------------------
+    # HELPERS
+    # ------------------------------------------------------------------
+
+    @property
+    def is_manual(self) -> bool:
+        return self.source == self.SOURCE_MANUAL
+
+    @property
+    def has_external_origin(self) -> bool:
+        return self.external_reference_id is not None
+
+    @property
+    def has_thumbnail(self) -> bool:
+        return bool(self.thumbnail_url)
+
+
+
+================================================================================
+ARQUIVO 12 DE 13
+================================================================================
+📁 PASTA: apps\references\urls.py
+📄 ARQUIVO: urls.py
+📏 TAMANHO: 0.79 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 35
+================================================================================
+
+"""
+URLs do mÃ³dulo references.
+
+ExpÃµe:
+    /referencias/                    â†’ pÃ¡gina HTML de ReferÃªncias
+    /api/references/                 â†’ CRUD de referÃªncias
+    /api/references/<id>/            â†’ detalhe/ediÃ§Ã£o/exclusÃ£o
+"""
+
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+
+from apps.references.api.views import ReferenceViewSet
+from apps.references.views import ReferenciasView
+
+
+router = DefaultRouter()
+router.register(
+    r'references',
+    ReferenceViewSet,
+    basename='reference',
+)
+
+
+urlpatterns = [
+    # ===== PÃGINAS =====
+    path(
+        'referencias/',
+        ReferenciasView.as_view(),
+        name='referencias-page',
+    ),
+
+    # ===== APIs =====
+    path('api/', include(router.urls)),
+]
+
+
+
+================================================================================
+ARQUIVO 13 DE 13
+================================================================================
+📁 PASTA: apps\references\views.py
+📄 ARQUIVO: views.py
+📏 TAMANHO: 0.73 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 30
+================================================================================
+
+"""
+Views HTML do mÃ³dulo references.
+
+PÃ¡gina servida pelo shell (sidebar.html):
+    /referencias/  â†’ ReferenciasView
+
+A pÃ¡gina consome a API do prÃ³prio mÃ³dulo:
+    GET    /api/references/
+    POST   /api/references/
+    GET    /api/references/<id>/
+    PATCH  /api/references/<id>/
+    DELETE /api/references/<id>/
+"""
+
+from django.shortcuts import render, redirect
+from django.views import View
+
+
+class ReferenciasView(View):
+    """
+    PÃ¡gina de ReferÃªncias.
+
+    Exige login. O shell (sidebar.html) resolve o resto no client-side.
+    """
+
+    def get(self, request):
+        if not request.user.is_authenticated:
+            return redirect('/login/')
+
+        return render(request, 'referencias.html')
+
+
+
+================================================================================
+FIM DA LISTAGEM
+================================================================================
+Total de arquivos: 13
+Total de linhas: 1203
+Tamanho total: 0.08 MB
+Arquivo gerado em: 01/10/2026 12:38:03
+================================================================================

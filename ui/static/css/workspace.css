@@ -1,0 +1,583 @@
+/* ============================================
+   ROOT VARIABLES — CLIVO WORKSPACE
+   ============================================ */
+:root {
+    --bg-primary: #FFFFFF;
+    --bg-secondary: #F9FAFB;
+    --bg-tertiary: #F3F4F6;
+    --bg-hover: #F3F4F6;
+
+    --text-primary: #111827;
+    --text-secondary: #6B7280;
+    --text-tertiary: #9CA3AF;
+    --text-muted: #9CA3AF;
+
+    --border-color: #E5E7EB;
+    --border-light: #F3F4F6;
+
+    --accent: #000000;
+    --accent-rgb: 0, 0, 0;
+    --accent-hover: #1F2937;
+
+    --blue: #000000;
+    --blue-rgb: 0, 0, 0;
+
+    --green: #10B981;
+    --green-bg: #D1FAE5;
+    --red: #EF4444;
+    --orange: #F59E0B;
+
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+    --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+    --shadow-xl: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);
+
+    --radius-sm: 6px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+    --radius-2xl: 20px;
+
+    --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+
+    --transition: 150ms ease-out;
+    --transition-slow: 200ms ease-out;
+}
+
+[data-theme="dark"] {
+    --bg-primary: #0A0A0A;
+    --bg-secondary: #121212;
+    --bg-tertiary: #0A0A0A;
+    --bg-hover: #222222;
+
+    --text-primary: #F5F5F5;
+    --text-secondary: #B0B0B0;
+    --text-tertiary: #808080;
+    --text-muted: #666666;
+
+    --border-color: #333333;
+    --border-light: #1F1F1F;
+
+    --accent: #FFFFFF;
+    --accent-rgb: 255, 255, 255;
+    --accent-hover: #E0E0E0;
+
+    --blue: #FFFFFF;
+    --blue-rgb: 255, 255, 255;
+}
+
+/* ============================================
+   RESET & BASE
+   ============================================ */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+body {
+    font-family: var(--font-family);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    min-height: 100vh;
+    min-height: 100dvh;
+    overflow-x: hidden;
+}
+::selection {
+    background: var(--accent);
+    color: white;
+}
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--text-tertiary); }
+
+/* ============================================
+   ANIMATIONS
+   ============================================ */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeInScale {
+    from { opacity: 0; transform: scale(0.98); }
+    to { opacity: 1; transform: scale(1); }
+}
+@keyframes slideInRight {
+    from { opacity: 0; transform: translateX(30px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+@keyframes slideOutRight {
+    from { opacity: 1; transform: translateX(0); }
+    to { opacity: 0; transform: translateX(30px); }
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Barra de progresso indeterminada — varredura contínua */
+@keyframes progressSweep {
+    0%   { left: -40%; width: 40%; }
+    50%  { left: 30%;  width: 55%; }
+    100% { left: 100%; width: 40%; }
+}
+
+/* ============================================
+   TOAST SYSTEM
+   ============================================ */
+.toast-container {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-width: 340px;
+    width: 100%;
+}
+@media (min-width: 768px) {
+    .toast-container { right: 24px; top: 24px; }
+}
+.toast {
+    padding: 14px 16px;
+    border-radius: var(--radius-md);
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-lg);
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+    animation: slideInRight 0.2s ease-out forwards;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.toast.hiding { animation: slideOutRight 0.15s ease-out forwards; }
+.toast-success .toast-icon { color: var(--green); }
+.toast-error .toast-icon { color: var(--red); }
+.toast-info .toast-icon { color: var(--accent); }
+.toast-icon { font-size: 18px; flex-shrink: 0; }
+.toast-content { flex: 1; }
+.toast-close {
+    background: none; border: none;
+    color: var(--text-tertiary);
+    cursor: pointer; font-size: 14px; padding: 4px;
+    transition: color var(--transition);
+}
+.toast-close:hover { color: var(--text-primary); }
+
+/* ============================================
+   LAYOUT — SPLIT SCREEN
+   ============================================ */
+.workspace-page {
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+    overflow: hidden;
+}
+.workspace-container {
+    width: 100%;
+    max-width: 100%;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    min-height: 100dvh;
+}
+@media (min-width: 1024px) {
+    .workspace-container {
+        flex-direction: row;
+        align-items: stretch;
+    }
+}
+
+/* ============================================
+   LADO ESQUERDO (Formulário)
+   ============================================ */
+.workspace-card-wrapper {
+    flex: 0 0 50%;
+    position: relative;
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    padding: 32px 48px;
+    background: var(--bg-primary);
+}
+
+.workspace-topbar {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    animation: fadeIn 0.4s ease forwards;
+    transform: translateY(-2px);
+}
+.workspace-logo {
+    display: flex;
+    align-items: center;
+}
+.workspace-logo-text {
+    font-size: 26px;
+    font-weight: 800;
+    color: var(--text-primary);
+    letter-spacing: -0.04em;
+    font-family: var(--font-family);
+}
+
+/* ============================================
+   BARRA DE PROGRESSO (TOPBAR)
+   ============================================ */
+.workspace-progress {
+    position: absolute;
+    top: -32px;              /* sobe até o topo da área de padding */
+    left: -48px;             /* estica até a borda esquerda do wrapper */
+    right: -48px;            /* estica até a borda direita do wrapper */
+    height: 2px;
+    overflow: hidden;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 150ms ease-out;
+    z-index: 10;
+}
+.workspace-progress-bar {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -40%;
+    width: 40%;
+    background: var(--accent);
+    border-radius: 9999px;
+    box-shadow: 0 0 8px rgba(var(--accent-rgb), 0.4);
+}
+
+/* Estado: carregando — a barra aparece e anima */
+.workspace-topbar.is-loading .workspace-progress {
+    opacity: 1;
+}
+.workspace-topbar.is-loading .workspace-progress-bar {
+    animation: progressSweep 1.1s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+
+/* ============================================
+   BOTÃO VOLTAR
+   ============================================ */
+.workspace-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px 6px 8px;
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    font-family: var(--font-family);
+    text-decoration: none;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: background var(--transition), color var(--transition);
+}
+.workspace-back:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+.workspace-back:active {
+    transform: scale(0.97);
+}
+.workspace-back:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+.workspace-back i {
+    font-size: 12px;
+    transition: transform var(--transition);
+}
+.workspace-back:hover i {
+    transform: translateX(-2px);
+}
+.workspace-back-label {
+    line-height: 1;
+}
+
+.workspace-card-center {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-bottom: 2rem;
+}
+
+/* ============================================
+   LADO DIREITO — MURAL
+   ============================================ */
+.workspace-mural {
+    flex: 0 0 50%;
+    position: relative;
+    min-height: 100vh;
+    min-height: 100dvh;
+    overflow: hidden;
+    background: var(--bg-primary);
+    padding: 12px 12px 12px 0;
+}
+.workspace-mural-inner {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(180deg, #A2BFE1 0%, #E9F3FA 55%, #F7EFE3 100%);
+    border-radius: var(--radius-2xl);
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+}
+
+.mural-content { text-align: center; }
+.mural-content h2 {
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+}
+.mural-content p {
+    font-size: 16px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+.mural-features {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    margin-top: 24px;
+    flex-wrap: wrap;
+}
+.mural-features span {
+    padding: 6px 16px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 9999px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+[data-theme="dark"] .mural-content h2 { color: var(--text-primary); }
+[data-theme="dark"] .mural-features span {
+    background: var(--bg-hover);
+    border-color: var(--border-color);
+    color: var(--text-tertiary);
+}
+
+/* ============================================
+   CARD DO WORKSPACE
+   ============================================ */
+.workspace-card {
+    width: 100%;
+    max-width: 380px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    animation: fadeInScale 0.5s ease 0.1s forwards;
+    opacity: 0;
+}
+
+/* Etapa (indicador) */
+.workspace-step {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 20px;
+}
+.workspace-step-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--text-primary);
+    flex-shrink: 0;
+}
+.workspace-step-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-tertiary);
+    letter-spacing: 0.02em;
+}
+
+/* Header */
+.workspace-header { margin-bottom: 28px; }
+.workspace-title {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.03em;
+    line-height: 1.15;
+    margin-bottom: 10px;
+}
+.workspace-subtitle {
+    font-size: 14px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    font-weight: 400;
+}
+
+/* ============================================
+   FORMS
+   ============================================ */
+.workspace-form {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.form-group label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+.label-optional {
+    color: var(--text-tertiary);
+    font-weight: 400;
+    margin-left: 2px;
+}
+.form-group input {
+    width: 100%;
+    height: 44px;
+    padding: 0 14px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-size: 13px;
+    font-family: var(--font-family);
+    transition: all var(--transition);
+    outline: none;
+}
+.form-group input::placeholder {
+    color: var(--text-tertiary);
+}
+.form-group input:focus {
+    border-color: var(--text-muted);
+    box-shadow: 0 0 0 1px var(--text-muted);
+}
+.form-group input:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Linha com Cidade + UF */
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 88px;
+    gap: 12px;
+}
+.form-group-state input.input-uf {
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 500;
+    padding: 0 8px;
+}
+
+/* ============================================
+   BOTÕES
+   ============================================ */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    height: 44px;
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: 13px;
+    font-weight: 500;
+    font-family: var(--font-family);
+    cursor: pointer;
+    transition: all var(--transition);
+    text-decoration: none;
+}
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+.btn-primary {
+    background: var(--accent);
+    color: #FFFFFF;
+}
+.btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
+.btn-primary:active:not(:disabled) { transform: scale(0.98); }
+.btn-full { width: 100%; }
+
+.btn-arrow {
+    font-size: 11px;
+    opacity: 0.85;
+    transition: transform var(--transition);
+}
+.btn:hover:not(:disabled) .btn-arrow {
+    transform: translateX(2px);
+}
+
+.btn .spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+}
+
+/* ============================================
+   RODAPÉ
+   ============================================ */
+.workspace-footer {
+    position: absolute;
+    bottom: 32px;
+    left: 48px;
+    right: 48px;
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.5;
+    text-align: left;
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+@media (max-width: 1024px) {
+    .workspace-container { flex-direction: column; }
+    .workspace-mural { display: none; }
+    .workspace-card-wrapper {
+        padding: 32px 24px;
+        flex: 1;
+        justify-content: center;
+    }
+    .workspace-footer {
+        position: relative;
+        bottom: 0; left: 0; right: 0;
+        text-align: center;
+        margin-top: 48px;
+    }
+
+    /* Em telas menores, a barra acompanha o padding menor */
+    .workspace-progress {
+        top: -32px;
+        left: -24px;
+        right: -24px;
+    }
+}
+@media (max-width: 480px) {
+    .workspace-title { font-size: 24px; }
+    .workspace-card { padding: 0 16px; }
+    .form-row { grid-template-columns: 1fr 72px; }
+}

@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#FFFFFF">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Clivo - Console">
+    <title>Clivo</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,450;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'css/console.css' %}">
+
+    <style>
+        .loading-overlay {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            min-height: 100dvh;
+            font-size: 14px;
+            color: var(--text-tertiary);
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', sans-serif;
+        }
+        .hidden { display: none !important; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .spin-icon { animation: spin 0.8s linear infinite; }
+
+        /* Capabilities column */
+        .cap-count {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 26px;
+            height: 20px;
+            padding: 0 8px;
+            border-radius: 999px;
+            background: var(--bg-secondary);
+            color: var(--text-secondary);
+            font-size: 11px;
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+        }
+        .cap-count.zero {
+            color: var(--text-tertiary);
+            background: transparent;
+            border: 1px dashed var(--border-color);
+        }
+        .scope-badge {
+            font-size: 9.5px;
+            font-weight: 600;
+            padding: 2px 7px;
+            border-radius: 999px;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            margin-left: 8px;
+        }
+        .scope-badge.console {
+            background: var(--blue-bg);
+            color: var(--blue);
+        }
+        .scope-badge.workspace {
+            background: var(--purple-bg);
+            color: var(--purple);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="app">
+        <div id="loadingState" class="loading-overlay">
+            <div style="display:flex; align-items:center; gap:10px;">
+                <div style="width:16px; height:16px; border:2px solid var(--border-color); border-top-color: var(--blue); border-radius:50%; animation: spin 0.8s linear infinite;"></div>
+                Carregando...
+            </div>
+        </div>
+
+        <div id="appContent" class="app-container hidden">
+
+            <!-- ICON RAIL -->
+            <div class="icon-rail">
+                <div class="logo">C</div>
+                <button class="rail-btn" id="notificationsBtn" title="Notificações">
+                    <i class="lucide" data-lucide="bell"></i>
+                    <span class="tooltip">Atualizações</span>
+                </button>
+                <button class="rail-btn" id="newBtn" title="Novo">
+                    <i class="lucide" data-lucide="plus"></i>
+                    <span class="tooltip">Adicionar novo</span>
+                </button>
+                <button class="rail-btn" id="searchBtn" title="Buscar">
+                    <i class="lucide" data-lucide="search"></i>
+                    <span class="tooltip">Buscar</span>
+                </button>
+
+                <div class="rail-spacer"></div>
+
+                <div class="rail-bottom">
+                    <button class="logout-btn" id="logoutBtn" title="Sair">
+                        <i class="lucide" data-lucide="log-out"></i>
+                        <span class="tooltip">Sair</span>
+                    </button>
+                    <button class="theme-toggle" id="themeToggle" title="Alternar tema">
+                        <span id="themeIconWrapper" style="display:flex; align-items:center; justify-content:center;">
+                            <i class="lucide" data-lucide="sun"></i>
+                        </span>
+                        <span class="tooltip">Alterar tema</span>
+                    </button>
+                    <div class="rail-avatar" id="userAvatar" title="Conta">
+                        <img id="userAvatarImg" src="" alt="">
+                        <span class="fallback-text" id="userAvatarFallback">?</span>
+                        <span class="tooltip">Meu perfil</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SIDEBAR -->
+            <aside class="sidebar">
+                <div class="sidebar-inner">
+                    <div class="workspace-switch" id="workspaceSwitch">
+                        <div class="ws-avatar" id="wsAvatar">
+                            <img id="wsAvatarImg" src="" alt="" style="display:none; width:100%; height:100%; object-fit:cover; border-radius:50%;">
+                            <span id="wsAvatarText">C</span>
+                        </div>
+                        <div class="ws-name" id="wsName">Console Clivo</div>
+                        <i class="lucide" data-lucide="chevron-down" style="width:14px; height:14px; opacity:0.4;"></i>
+                    </div>
+
+                    <nav class="sidebar-nav">
+                        <div class="nav-group">
+                            <div class="nav-label">Controle</div>
+                            <a href="#" class="active" data-nav="governances">
+                                <i class="lucide" data-lucide="shield"></i><span>Governanças</span>
+                            </a>
+                            <a href="#" data-nav="plans">
+                                <i class="lucide" data-lucide="package"></i><span>Planos</span>
+                            </a>
+                            <a href="#" data-nav="features">
+                                <i class="lucide" data-lucide="puzzle"></i><span>Features</span>
+                            </a>
+                            <a href="#" data-nav="workspaces">
+                                <i class="lucide" data-lucide="layers"></i><span>Workspaces</span>
+                            </a>
+                        </div>
+                        <div class="nav-group">
+                            <div class="nav-label">Infraestrutura</div>
+                            <a href="#" data-nav="providers">
+                                <i class="lucide" data-lucide="server"></i><span>Providers</span>
+                            </a>
+                        </div>
+                        <div class="nav-group">
+                            <div class="nav-label">Administração</div>
+                            <a href="#" data-nav="users">
+                                <i class="lucide" data-lucide="users"></i><span>Usuários</span>
+                            </a>
+                            <a href="#" data-nav="team">
+                                <i class="lucide" data-lucide="user-cog"></i><span>Equipe</span>
+                            </a>
+                        </div>
+                    </nav>
+                </div>
+            </aside>
+
+            <!-- MAIN CONTENT -->
+            <main class="main-content" id="mainContent">
+                <div class="main-inner">
+
+                    <div class="page-header">
+                        <div class="breadcrumb">
+                            <span class="breadcrumb-item">Console Clivo</span>
+                            <span class="breadcrumb-separator">›</span>
+                            <span class="breadcrumb-item active" id="pageTitle">Governanças</span>
+                        </div>
+                    </div>
+
+                    <!-- ===== VIEW: GOVERNANÇAS ===== -->
+                    <div id="viewGovernances" class="view-content">
+                        <div class="apple-grid">
+                            <div class="apple-panel">
+                                <div class="apple-panel-header">
+                                    <div class="apple-panel-title">
+                                        <i class="lucide" data-lucide="shield" style="width:18px; height:18px; opacity:0.6;"></i>
+                                        <h3>Governanças</h3>
+                                        <span class="apple-badge" id="govCount">0</span>
+                                    </div>
+                                </div>
+                                <div class="apple-panel-body">
+                                    <div class="apple-form-wrapper" id="governanceFormWrapper">
+                                        <form id="governanceForm">
+                                            <input type="hidden" id="editGovernanceId">
+                                            <div class="apple-form-group">
+                                                <label for="govName">Nome</label>
+                                                <input type="text" id="govName" placeholder="Ex: Arquiteto" required>
+                                            </div>
+                                            <div class="apple-form-group">
+                                                <label for="govDescription">Descrição</label>
+                                                <textarea id="govDescription" placeholder="O que esta governança permite..." rows="2"></textarea>
+                                            </div>
+                                            <div class="apple-form-row">
+                                                <div class="apple-form-checkbox">
+                                                    <input type="checkbox" id="govProtected">
+                                                    <label for="govProtected">Protegida (não pode ser excluída)</label>
+                                                </div>
+                                                <div class="apple-form-actions">
+                                                    <button type="submit" class="apple-btn apple-btn-primary" id="saveGovernanceBtn" style="padding: 6px 16px;">
+                                                        <i class="lucide" data-lucide="check" style="width:14px; height:14px;"></i> Salvar
+                                                    </button>
+                                                    <button type="button" class="apple-btn apple-btn-secondary" id="cancelGovernanceBtn" style="display:none; padding: 6px 16px;">Cancelar</button>
+                                                </div>
+                                            </div>
+                                        </form>
+                                    </div>
+
+                                    <div class="apple-table-wrapper">
+                                        <table class="apple-governance-table">
+                                            <thead>
+                                                <tr>
+                                                    <th style="width:42%;">Governança</th>
+                                                    <th style="width:16%;text-align:center;">Capabilities</th>
+                                                    <th style="width:16%;text-align:center;">Status</th>
+                                                    <th style="width:26%;text-align:right;">Ações</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="governancesTableBody">
+                                                <tr>
+                                                    <td colspan="4" style="text-align:center; color:var(--text-tertiary); padding:30px 0; font-size:12.5px;">
+                                                        Nenhuma governança criada
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="apple-panel">
+                                <div class="apple-panel-header">
+                                    <div class="apple-panel-title">
+                                        <i class="lucide" data-lucide="zap" style="width:18px; height:18px; opacity:0.6;"></i>
+                                        <h3 id="capabilitiesTitle">Capacidades</h3>
+                                        <span class="apple-badge" id="selectedCapCount">0</span>
+                                    </div>
+                                    <span class="apple-panel-subtitle" id="selectedGovName">Todas as capacidades</span>
+                                </div>
+                                <div class="apple-panel-body">
+                                    <div class="apple-capabilities">
+                                        <div class="apple-filter">
+                                            <div class="apple-filter-left">
+                                                <i class="lucide" data-lucide="sliders-horizontal" style="width:14px; height:14px; opacity:0.5;"></i>
+                                                <select id="capFilter">
+                                                    <option value="all">Todos os apps</option>
+                                                </select>
+                                            </div>
+                                            <div class="apple-filter-right">
+                                                <button class="apple-btn apple-btn-sm" id="selectAllCaps">
+                                                    <i class="lucide" data-lucide="check-square" style="width:12px; height:12px;"></i> Selecionar tudo
+                                                </button>
+                                                <button class="apple-btn apple-btn-sm" id="deselectAllCaps">
+                                                    <i class="lucide" data-lucide="square" style="width:12px; height:12px;"></i> Desmarcar
+                                                </button>
+                                                <button class="apple-btn apple-btn-sm apple-btn-primary" id="assignCapabilitiesBtn" disabled>
+                                                    <i class="lucide" data-lucide="save" style="width:12px; height:12px;"></i> Atribuir
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div class="apple-capabilities-list" id="capabilitiesList">
+                                            <div class="apple-empty">
+                                                <i class="lucide" data-lucide="inbox" style="width:32px; height:32px; opacity:0.3; margin-bottom:8px;"></i>
+                                                <p>Nenhuma capability disponível</p>
+                                                <span>Crie um app com capabilities.py para começar</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ===== VIEW: PLANOS ===== -->
+                    <div id="viewPlans" class="view-content" style="display:none;">
+                        <div class="apple-grid">
+                            <div class="apple-panel">
+                                <div class="apple-panel-header">
+                                    <div class="apple-panel-title">
+                                        <i class="lucide" data-lucide="package" style="width:18px; height:18px; opacity:0.6;"></i>
+                                        <h3>Planos</h3>
+                                        <span class="apple-badge" id="planCount">0</span>
+                                    </div>
+                                </div>
+                                <div class="apple-panel-body">
+                                    <div class="apple-form-wrapper" id="planFormWrapper">
+                                        <form id="planForm">
+                                            <input type="hidden" id="editPlanId">
+                                            <div class="apple-form-group">
+                                                <label for="planName">Nome</label>
+                                                <input type="text" id="planName" placeholder="Ex: Premium" required>
+                                            </div>
+                                            <div class="apple-form-group">
+                                                <label for="planDescription">Descrição</label>
+                                                <textarea id="planDescription" placeholder="Descrição comercial..." rows="2"></textarea>
+                                            </div>
+                                            <div class="apple-form-row">
+                                                <div class="apple-form-group" style="flex:1; margin:0;">
+                                                    <label for="planPrice">Preço</label>
+                                                    <input type="number" id="planPrice" placeholder="0.00" step="0.01" min="0" required>
+                                                </div>
+                                                <div class="apple-form-group" style="flex:1; margin:0;">
+                                                    <label for="planCurrency">Moeda</label>
+                                                    <select id="planCurrency">
+                                                        <option value="BRL">BRL</option>
+                                                        <option value="USD">USD</option>
+                                                    </select>
+                                                </div>
+                                                <div class="apple-form-group" style="flex:1; margin:0;">
+                                                    <label for="planBillingPeriod">Período</label>
+                                                    <select id="planBillingPeriod">
+                                                        <option value="monthly">Mensal</option>
+                                                        <option value="yearly">Anual</option>
+                                                        <option value="lifetime">Vitalício</option>
+                                                        <option value="custom">Custom</option>
+                                                    </select>
+                                                </div>
+                                                <div class="apple-form-group" style="flex:1; margin:0;">
+                                                    <label for="planTrialDays">Trial (dias)</label>
+                                                    <input type="number" id="planTrialDays" placeholder="0" min="0" value="0">
+                                                </div>
+                                            </div>
+                                            <div class="apple-form-row" style="margin-top:10px;">
+                                                <div class="apple-form-checkbox">
+                                                    <input type="checkbox" id="planIsPublic" checked>
+                                                    <label for="planIsPublic">Público</label>
+                                                </div>
+                                                <div class="apple-form-checkbox">
+                                                    <input type="checkbox" id="planIsActive" checked>
+                                                    <label for="planIsActive">Ativo</label>
+                                                </div>
+                                                <div class="apple-form-checkbox">
+                                                    <input type="checkbox" id="planIsDefault">
+                                                    <label for="planIsDefault">Inicial (todo Workspace começa neste plano)</label>
+                                                </div>
+                                                <div class="apple-form-actions" style="margin-left:auto;">
+                                                    <button type="submit" class="apple-btn apple-btn-primary" id="savePlanBtn" style="padding: 6px 16px;">
+                                                        <i class="lucide" data-lucide="check" style="width:14px; height:14px;"></i> Salvar
+                                                    </button>
+                                                    <button type="button" class="apple-btn apple-btn-secondary" id="cancelPlanBtn" style="display:none; padding: 6px 16px;">Cancelar</button>
+                                                </div>
+                                            </div>
+                                        </form>
+                                    </div>
+
+                                    <div class="apple-table-wrapper">
+                                        <table class="apple-governance-table">
+                                            <thead>
+                                                <tr>
+                                                    <th style="width:36%;">Plano</th>
+                                                    <th style="width:22%;">Preço</th>
+                                                    <th style="width:14%;text-align:center;">Workspaces</th>
+                                                    <th style="width:13%;text-align:center;">Inicial</th>
+                                                    <th style="width:15%;text-align:right;">Ações</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="plansTableBody">
+                                                <tr>
+                                                    <td colspan="5" style="text-align:center; color:var(--text-tertiary); padding:30px 0; font-size:12.5px;">
+                                                        Nenhum plano criado
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="apple-panel">
+                                <div class="apple-panel-header">
+                                    <div class="apple-panel-title">
+                                        <i class="lucide" data-lucide="puzzle" style="width:18px; height:18px; opacity:0.6;"></i>
+                                        <h3>Features do plano</h3>
+                                        <span class="apple-badge" id="selectedPlanFeatureCount">0</span>
+                                    </div>
+                                    <span class="apple-panel-subtitle" id="selectedPlanName">Selecione um plano</span>
+                                </div>
+                                <div class="apple-panel-body">
+                                    <div class="apple-capabilities">
+                                        <div class="apple-filter">
+                                            <div class="apple-filter-left">
+                                                <i class="lucide" data-lucide="puzzle" style="width:14px; height:14px; opacity:0.5;"></i>
+                                                <select id="addFeatureToPlanSelect" disabled>
+                                                    <option value="">Adicionar feature ao plano...</option>
+                                                </select>
+                                            </div>
+                                            <div class="apple-filter-right">
+                                                <button class="apple-btn apple-btn-sm apple-btn-primary" id="addFeatureToPlanBtn" disabled>
+                                                    <i class="lucide" data-lucide="plus" style="width:12px; height:12px;"></i> Adicionar
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div class="apple-capabilities-list" id="planFeaturesList">
+                                            <div class="apple-empty">
+                                                <i class="lucide" data-lucide="package" style="width:32px; height:32px; opacity:0.3; margin-bottom:8px;"></i>
+                                                <p>Selecione um plano</p>
+                                                <span>As features do plano aparecerão aqui</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ===== VIEW: FEATURES ===== -->
+                    <div id="viewFeatures" class="view-content" style="display:none;">
+                        <div class="apple-grid">
+                            <div class="apple-panel">
+                                <div class="apple-panel-header">
+                                    <div class="apple-panel-title">
+                                        <i class="lucide" data-lucide="puzzle" style="width:18px; height:18px; opacity:0.6;"></i>
+                                        <h3>Features</h3>
+                                        <span class="apple-badge" id="featureCount">0</span>
+                                    </div>
+                                </div>
+                                <div class="apple-panel-body">
+                                    <div class="apple-form-wrapper" id="featureFormWrapper">
+                                        <form id="featureForm">
+                                            <input type="hidden" id="editFeatureId">
+                                            <div class="apple-form-group">
+                                                <label for="featureName">Nome</label>
+                                                <input type="text" id="featureName" placeholder="Ex: Intelligence" required>
+                                            </div>
+                                            <div class="apple-form-group">
+                                                <label for="featureDescription">Descrição</label>
+                                                <textarea id="featureDescription" placeholder="Descrição comercial..." rows="2"></textarea>
+                                            </div>
+                                            <div class="apple-form-row">
+                                                <div class="apple-form-checkbox">
+                                                    <input type="checkbox" id="featureIsActive" checked>
+                                                    <label for="featureIsActive">Ativa</label>
+                                                </div>
+                                                <div class="apple-form-actions" style="margin-left:auto;">
+                                                    <button type="submit" class="apple-btn apple-btn-primary" id="saveFeatureBtn" style="padding: 6px 16px;">
+                                                        <i class="lucide" data-lucide="check" style="width:14px; height:14px;"></i> Salvar
+                                                    </button>
+                                                    <button type="button" class="apple-btn apple-btn-secondary" id="cancelFeatureBtn" style="display:none; padding: 6px 16px;">Cancelar</button>
+                                                </div>
+                                            </div>
+                                        </form>
+                                    </div>
+
+                                    <div class="apple-table-wrapper">
+                                        <table class="apple-governance-table">
+                                            <thead>
+                                                <tr>
+                                                    <th style="width:65%;">Feature</th>
+                                                    <th style="width:35%;text-align:right;">Ações</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="featuresTableBody">
+                                                <tr>
+                                                    <td colspan="2" style="text-align:center; color:var(--text-tertiary); padding:30px 0; font-size:12.5px;">
+                                                        Nenhuma feature criada
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="apple-panel">
+                                <div class="apple-panel-header">
+                                    <div class="apple-panel-title">
+                                        <i class="lucide" data-lucide="info" style="width:18px; height:18px; opacity:0.6;"></i>
+                                        <h3>Detalhes da Feature</h3>
+                                    </div>
+                                    <span class="apple-panel-subtitle" id="selectedFeatureName">Selecione uma feature</span>
+                                </div>
+                                <div class="apple-panel-body">
+                                    <div class="apple-capabilities">
+                                        <div class="apple-capabilities-list" id="featureDetailsList">
+                                            <div class="apple-empty">
+                                                <i class="lucide" data-lucide="puzzle" style="width:32px; height:32px; opacity:0.3; margin-bottom:8px;"></i>
+                                                <p>Selecione uma feature</p>
+                                                <span>As informações aparecerão aqui</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ===== VIEW: PROVIDERS ===== -->
+                    <div id="viewProviders" class="view-content" style="display:none;">
+                        <div class="apple-grid">
+                            <div class="apple-panel">
+                                <div class="apple-panel-header">
+                                    <div class="apple-panel-title">
+                                        <i class="lucide" data-lucide="server" style="width:18px; height:18px; opacity:0.6;"></i>
+                                        <h3>Providers</h3>
+                                        <span class="apple-badge" id="providerCount">0</span>
+                                    </div>
+                                </div>
+                                <div class="apple-panel-body">
+                                    <div class="apple-form-wrapper" id="providerFormWrapper">
+                                        <form id="providerForm">
+                                            <input type="hidden" id="editProviderId">
+                                            <div class="apple-form-group">
+                                                <label for="providerName">Nome</label>
+                                                <input type="text" id="providerName" placeholder="Ex: OpenAI" required>
+                                            </div>
+                                            <div class="apple-form-group">
+                                                <label for="providerCategory">Categoria</label>
+                                                <input type="text" id="providerCategory" placeholder="Ex: ai, storage, email">
+                                            </div>
+                                            <div class="apple-form-group">
+                                                <label for="providerDescription">Descrição</label>
+                                                <textarea id="providerDescription" placeholder="Descrição do provider..." rows="2"></textarea>
+                                            </div>
+                                            <div class="apple-form-row">
+                                                <div class="apple-form-checkbox">
+                                                    <input type="checkbox" id="providerIsActive" checked>
+                                                    <label for="providerIsActive">Ativo</label>
+                                                </div>
+                                                <div class="apple-form-actions" style="margin-left:auto;">
+                                                    <button type="submit" class="apple-btn apple-btn-primary" id="saveProviderBtn" style="padding: 6px 16px;">
+                                                        <i class="lucide" data-lucide="check" style="width:14px; height:14px;"></i> Salvar
+                                                    </button>
+                                                    <button type="button" class="apple-btn apple-btn-secondary" id="cancelProviderBtn" style="display:none; padding: 6px 16px;">Cancelar</button>
+                                                </div>
+                                            </div>
+                                        </form>
+                                    </div>
+
+                                    <div class="apple-table-wrapper">
+                                        <table class="apple-governance-table">
+                                            <thead>
+                                                <tr>
+                                                    <th style="width:50%;">Provider</th>
+                                                    <th style="width:25%;text-align:center;">Conexões</th>
+                                                    <th style="width:25%;text-align:right;">Ações</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="providersTableBody">
+                                                <tr>
+                                                    <td colspan="3" style="text-align:center; color:var(--text-tertiary); padding:30px 0; font-size:12.5px;">
+                                                        Nenhum provider criado
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="apple-panel">
+                                <div class="apple-panel-header">
+                                    <div class="apple-panel-title">
+                                        <i class="lucide" data-lucide="link" style="width:18px; height:18px; opacity:0.6;"></i>
+                                        <h3>Conexões</h3>
+                                        <span class="apple-badge" id="selectedConnCount">0</span>
+                                    </div>
+                                    <span class="apple-panel-subtitle" id="selectedProviderName">Selecione um provider</span>
+                                </div>
+                                <div class="apple-panel-body">
+                                    <div class="apple-capabilities">
+                                        <div class="apple-filter">
+                                            <div class="apple-filter-left">
+                                                <i class="lucide" data-lucide="plug" style="width:14px; height:14px; opacity:0.5;"></i>
+                                                <span style="font-size:11.5px; color:var(--text-secondary);">Conexões do provider</span>
+                                            </div>
+                                            <div class="apple-filter-right">
+                                                <button class="apple-btn apple-btn-sm apple-btn-primary" id="addConnectionBtn" disabled>
+                                                    <i class="lucide" data-lucide="plus" style="width:12px; height:12px;"></i> Nova conexão
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div class="apple-capabilities-list" id="connectionsList">
+                                            <div class="apple-empty">
+                                                <i class="lucide" data-lucide="server" style="width:32px; height:32px; opacity:0.3; margin-bottom:8px;"></i>
+                                                <p>Selecione um provider</p>
+                                                <span>As conexões aparecerão aqui</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ===== VIEW: WORKSPACES ===== -->
+                    <div id="viewWorkspaces" class="view-content" style="display:none;">
+                        <div class="apple-grid apple-grid-single">
+                            <div class="apple-panel">
+                                <div class="apple-panel-header">
+                                    <div class="apple-panel-title">
+                                        <i class="lucide" data-lucide="layers" style="width:18px; height:18px; opacity:0.6;"></i>
+                                        <h3>Workspaces</h3>
+                                        <span class="apple-badge" id="workspaceCount">0</span>
+                                    </div>
+                                    <div class="apple-filter" style="border:none; padding:0;">
+                                        <div class="apple-filter-left">
+                                            <i class="lucide" data-lucide="search" style="width:14px; height:14px; opacity:0.5;"></i>
+                                            <input type="text" id="workspaceSearch" placeholder="Buscar por nome, slug ou cidade..." style="min-width:220px;">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="apple-panel-body">
+                                    <div class="apple-table-wrapper">
+                                        <table class="apple-governance-table">
+                                            <thead>
+                                                <tr>
+                                                    <th style="width:30%;">Workspace</th>
+                                                    <th style="width:20%;">Plano</th>
+                                                    <th style="width:14%;text-align:center;">Membros</th>
+                                                    <th style="width:16%;">Localização</th>
+                                                    <th style="width:20%;text-align:center;">Criado em</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="workspacesTableBody">
+                                                <tr>
+                                                    <td colspan="5" style="text-align:center; color:var(--text-tertiary); padding:30px 0; font-size:12.5px;">
+                                                        Carregando workspaces...
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ===== VIEW: USUÁRIOS ===== -->
+                    <div id="viewUsers" class="view-content" style="display:none;">
+                        <div class="apple-grid apple-grid-single">
+                            <div class="apple-panel">
+                                <div class="apple-panel-header">
+                                    <div class="apple-panel-title">
+                                        <i class="lucide" data-lucide="users" style="width:18px; height:18px; opacity:0.6;"></i>
+                                        <h3>Usuários</h3>
+                                        <span class="apple-badge" id="userCount">0</span>
+                                    </div>
+                                    <div class="apple-filter" style="border:none; padding:0;">
+                                        <div class="apple-filter-left">
+                                            <i class="lucide" data-lucide="search" style="width:14px; height:14px; opacity:0.5;"></i>
+                                            <input type="text" id="userSearch" placeholder="Buscar por email ou nome..." style="min-width:220px;">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="apple-panel-body">
+                                    <div class="apple-table-wrap">
+                                        <table class="apple-table">
+                                            <thead>
+                                                <tr>
+                                                    <th style="width:35%;">Usuário</th>
+                                                    <th style="width:25%;">Email</th>
+                                                    <th style="width:20%;text-align:center;">Workspaces</th>
+                                                    <th style="width:20%;text-align:center;">Criado em</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="usersTableBody">
+                                                <tr>
+                                                    <td colspan="4" style="text-align:center; color:var(--text-tertiary); padding:30px 0; font-size:12.5px;">
+                                                        Carregando usuários...
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ===== VIEW: EQUIPE ===== -->
+                    <div id="viewTeam" class="view-content" style="display:none;">
+                        <div class="apple-grid apple-grid-single">
+                            <div class="apple-panel">
+                                <div class="apple-panel-header">
+                                    <div class="apple-panel-title">
+                                        <i class="lucide" data-lucide="users" style="width:18px; height:18px; opacity:0.6;"></i>
+                                        <h3>Equipe Clivo</h3>
+                                        <span class="apple-badge" id="teamCount">0</span>
+                                    </div>
+                                    <button class="apple-btn apple-btn-primary" id="addTeamMemberBtn">
+                                        <i class="lucide" data-lucide="plus" style="width:14px; height:14px;"></i> Adicionar
+                                    </button>
+                                </div>
+                                <div class="apple-panel-body">
+                                    <div class="apple-table-wrap">
+                                        <table class="apple-table">
+                                            <thead>
+                                                <tr>
+                                                    <th style="width:40%;">Usuário</th>
+                                                    <th style="width:40%;">Email</th>
+                                                    <th style="width:20%;text-align:right;">Ações</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="teamTableBody">
+                                                <tr>
+                                                    <td colspan="3" style="text-align:center; color:var(--text-tertiary); padding:30px 0; font-size:13px;">
+                                                        <i class="lucide" data-lucide="loader-circle" style="width:24px; height:24px; display:block; margin:0 auto 8px; opacity:0.5; animation: spin 0.8s linear infinite;"></i>
+                                                        Carregando equipe...
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- ===== MODALS ===== -->
+
+    <!-- MODAL: ADICIONAR MEMBRO -->
+    <div class="apple-modal-overlay" id="addMemberModal">
+        <div class="apple-modal">
+            <div class="apple-modal-header">
+                <h2>Adicionar membro</h2>
+                <button class="apple-modal-close" data-modal="addMemberModal">
+                    <i class="lucide" data-lucide="x" style="width:18px; height:18px;"></i>
+                </button>
+            </div>
+            <form id="addMemberForm">
+                <div class="apple-form-group">
+                    <label for="memberEmail">Email</label>
+                    <input type="email" id="memberEmail" placeholder="email@clivo.com" required>
+                </div>
+                <p style="font-size:12px; color:var(--text-tertiary); margin-bottom:14px; line-height:1.5;">
+                    Todo membro adicionado ao Console recebe acesso administrativo integral.
+                    Se o usuário ainda não tem conta, ela será criada e vinculada ao Google no primeiro login.
+                </p>
+                <div class="apple-form-actions">
+                    <button type="submit" class="apple-btn apple-btn-primary" id="addMemberSubmitBtn">Adicionar</button>
+                    <button type="button" class="apple-btn apple-btn-secondary" data-modal="addMemberModal">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: ADICIONAR CONEXÃO -->
+    <div class="apple-modal-overlay" id="addConnectionModal">
+        <div class="apple-modal">
+            <div class="apple-modal-header">
+                <h2>Nova conexão</h2>
+                <button class="apple-modal-close" data-modal="addConnectionModal">
+                    <i class="lucide" data-lucide="x" style="width:18px; height:18px;"></i>
+                </button>
+            </div>
+            <form id="addConnectionForm">
+                <div class="apple-form-group">
+                    <label for="connectionName">Nome</label>
+                    <input type="text" id="connectionName" placeholder="Ex: Clivo Production" required>
+                </div>
+                <div class="apple-form-group">
+                    <label for="connectionEnvironment">Ambiente</label>
+                    <select id="connectionEnvironment">
+                        <option value="production">Production</option>
+                        <option value="test">Test</option>
+                    </select>
+                </div>
+                <div class="apple-form-group">
+                    <label for="connectionCredentialRef">Referência de credencial</label>
+                    <input type="text" id="connectionCredentialRef" placeholder="Ex: vault://clivo/openai/prod">
+                </div>
+                <p style="font-size:12px; color:var(--text-tertiary); margin-bottom:14px; line-height:1.5;">
+                    Credenciais NUNCA são armazenadas no Clivo. Use apenas a referência ao secret manager.
+                </p>
+                <div class="apple-form-actions">
+                    <button type="submit" class="apple-btn apple-btn-primary" id="addConnectionSubmitBtn">Adicionar</button>
+                    <button type="button" class="apple-btn apple-btn-secondary" data-modal="addConnectionModal">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: CONFIRMAR EXCLUSÃO -->
+    <div class="apple-modal-overlay" id="confirmDeleteModal">
+        <div class="apple-modal apple-modal-sm">
+            <div class="apple-modal-header">
+                <h2>Confirmar exclusão</h2>
+                <button class="apple-modal-close" data-modal="confirmDeleteModal">
+                    <i class="lucide" data-lucide="x" style="width:18px; height:18px;"></i>
+                </button>
+            </div>
+            <div style="padding:4px 0 12px;">
+                <p style="color:var(--text-secondary); font-size:14px; line-height:1.6;">
+                    Tem certeza que deseja remover <strong id="deleteTargetName">este item</strong>?
+                </p>
+                <p style="color:var(--text-tertiary); font-size:12px; margin-top:4px;">
+                    Esta ação não pode ser desfeita.
+                </p>
+            </div>
+            <div class="apple-form-actions">
+                <button class="apple-btn apple-btn-danger" id="confirmDeleteBtn">Sim, remover</button>
+                <button class="apple-btn apple-btn-secondary" data-modal="confirmDeleteModal">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOAST CONTAINER -->
+    <div class="apple-toast-container" id="toastContainer"></div>
+
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="{% static 'js/console.js' %}"></script>
+
+</body>
+</html>

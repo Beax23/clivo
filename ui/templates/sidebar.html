@@ -1,0 +1,2047 @@
+{% load static %}
+{% comment %}
+=============================================================================
+SIDEBAR — Application Shell
+=============================================================================
+=============================================================================
+{% endcomment %}
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#FFFFFF">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Clivo">
+    <title>{% block title %}Mesa · Clivo{% endblock %}</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <link rel="stylesheet" href="{% static 'css/mesa.css' %}">
+    <link rel="stylesheet" href="{% static 'css/cliente.css' %}">
+
+    <meta name="csrf-token" content="{{ csrf_token }}">
+
+    <style>
+        :root {
+            --bg-page: #FFFFFF;
+            --bg-card: #FFFFFF;
+            --bg-hover: #F0F0F2;
+            --bg-secondary: #F7F7F9;
+            --border-color: #E9E9EC;
+            --border-light: #EFEFF1;
+
+            --text-primary: #101014;
+            --text-secondary: #6B6B76;
+            --text-tertiary: #9797A1;
+
+            --green: #17B26A;
+            --green-bg: #E6F8EF;
+            --red: #E5484D;
+            --red-bg: #FDECEC;
+            --amber: #D97706;
+            --amber-bg: #FEF3C7;
+            --blue: #4A6CF7;
+            --blue-bg: #EEF2FF;
+            --purple: #7C3AED;
+            --purple-bg: #F3E8FF;
+
+            --radius-sm: 6px;
+            --radius-md: 10px;
+            --radius-lg: 14px;
+            --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            --transition: 140ms ease-out;
+
+            --rail-w: 48px;
+            --panel-w: 250px;
+        }
+
+        [data-theme="dark"] {
+            --bg-page: #0A0A0A;
+            --bg-card: #0F0F0F;
+            --bg-hover: #1A1A1A;
+            --bg-secondary: #141414;
+            --border-color: #262626;
+            --border-light: #1F1F1F;
+
+            --text-primary: #F5F5F5;
+            --text-secondary: #A0A0A0;
+            --text-tertiary: #666666;
+
+            --green: #17B26A;
+            --green-bg: #0A1F14;
+            --red: #E5484D;
+            --red-bg: #2A1012;
+            --amber: #F59E0B;
+            --amber-bg: #2A1F0A;
+            --blue: #6B8AFB;
+            --blue-bg: #131A33;
+            --purple: #A78BFA;
+            --purple-bg: #1E1533;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        html, body { height: 100%; }
+
+        body {
+            font-family: var(--font-family);
+            background: var(--bg-page);
+            color: var(--text-primary);
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            min-height: 100vh;
+            min-height: 100dvh;
+            overflow: hidden;
+        }
+
+        a { color: inherit; text-decoration: none; }
+        button { font-family: var(--font-family); cursor: pointer; background: none; border: none; }
+
+        .hidden { display: none !important; }
+
+        .app-container {
+            display: flex;
+            height: 100vh;
+            height: 100dvh;
+            overflow: hidden;
+        }
+
+        .icon-rail {
+            width: var(--rail-w);
+            background: var(--bg-card);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 12px 0;
+            gap: 4px;
+            flex-shrink: 0;
+            position: relative;
+            z-index: 100;
+        }
+
+        .icon-rail .logo {
+            width: 28px;
+            height: 28px;
+            border-radius: var(--radius-sm);
+            background: var(--text-primary);
+            color: var(--bg-card);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+
+        .icon-rail .rail-btn,
+        .icon-rail .theme-toggle,
+        .icon-rail .logout-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-tertiary);
+            font-size: 18px;
+            transition: background-color var(--transition), color var(--transition);
+            position: relative;
+        }
+
+        .icon-rail .rail-btn:hover,
+        .icon-rail .theme-toggle:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+
+        .icon-rail .logout-btn:hover {
+            background: var(--red-bg);
+            color: var(--red);
+        }
+
+        .icon-rail .logout-btn.is-loading {
+            pointer-events: none;
+            color: var(--text-tertiary);
+        }
+
+        .icon-rail .rail-spacer { flex: 1; }
+
+        .icon-rail .rail-bottom {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            padding-bottom: 4px;
+        }
+
+        .icon-rail .rail-btn .tooltip,
+        .icon-rail .theme-toggle .tooltip,
+        .icon-rail .logout-btn .tooltip,
+        .icon-rail .rail-avatar .tooltip {
+            position: absolute;
+            left: calc(100% + 10px);
+            top: 50%;
+            transform: translateY(-50%);
+            background: var(--bg-card);
+            color: var(--text-primary);
+            padding: 4px 12px;
+            border-radius: var(--radius-sm);
+            font-size: 11px;
+            font-weight: 500;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+            z-index: 1000;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.08);
+        }
+
+        .icon-rail .rail-btn .tooltip::before,
+        .icon-rail .theme-toggle .tooltip::before,
+        .icon-rail .logout-btn .tooltip::before,
+        .icon-rail .rail-avatar .tooltip::before {
+            content: '';
+            position: absolute;
+            left: -6px;
+            top: 50%;
+            transform: translateY(-50%);
+            border-right: 6px solid var(--bg-card);
+            border-top: 6px solid transparent;
+            border-bottom: 6px solid transparent;
+        }
+
+        .icon-rail .rail-btn:hover .tooltip,
+        .icon-rail .theme-toggle:hover .tooltip,
+        .icon-rail .logout-btn:hover .tooltip,
+        .icon-rail .rail-avatar:hover .tooltip {
+            opacity: 1;
+        }
+
+        .icon-rail .rail-avatar {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--border-color);
+            cursor: pointer;
+            transition: opacity var(--transition);
+            flex-shrink: 0;
+            position: relative;
+        }
+
+        .icon-rail .rail-avatar:hover { opacity: 0.8; }
+
+        .icon-rail .rail-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .icon-rail .rail-avatar .fallback-text {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .logout-spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid var(--border-color);
+            border-top-color: var(--red);
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+            display: inline-block;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .sidebar {
+            width: var(--panel-w);
+            background: var(--bg-card);
+            border-right: 1px solid var(--border-color);
+            padding: 16px 12px;
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+            height: 100vh;
+            height: 100dvh;
+            z-index: 50;
+        }
+
+        .sidebar-inner {
+            background: var(--bg-secondary);
+            border-radius: var(--radius-lg);
+            padding: 12px 8px;
+            flex: 1 1 auto;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        .workspace-switch {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 10px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: background-color var(--transition);
+            margin-bottom: 16px;
+            user-select: none;
+            position: relative;
+            flex-shrink: 0;
+        }
+
+        .workspace-switch:hover { background: var(--bg-hover); }
+
+        .workspace-switch .ws-avatar {
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #F2A9E6, #B78CF2);
+            font-size: 10px;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .workspace-switch .ws-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .workspace-switch .ws-name {
+            flex: 1;
+            font-size: 12.5px;
+            font-weight: 600;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .workspace-switch i {
+            font-size: 10px;
+            color: var(--text-tertiary);
+            opacity: 0.6;
+            transition: transform var(--transition);
+        }
+
+        .workspace-switch.open i {
+            transform: rotate(180deg);
+        }
+
+        .ws-dropdown {
+            position: absolute;
+            top: 52px;
+            left: 8px;
+            right: 8px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            box-shadow: 0 12px 32px rgba(0,0,0,0.12);
+            padding: 6px;
+            display: none;
+            z-index: 200;
+        }
+
+        .ws-dropdown.open {
+            display: block;
+            animation: wsDropdownIn 0.15s ease-out;
+        }
+
+        @keyframes wsDropdownIn {
+            from { opacity: 0; transform: translateY(-4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .ws-dropdown .ws-dropdown-label {
+            font-size: 10px;
+            font-weight: 600;
+            color: var(--text-tertiary);
+            letter-spacing: 0.5px;
+            padding: 8px 10px 4px;
+            text-transform: uppercase;
+        }
+
+        .ws-dropdown .ws-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 10px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: background-color var(--transition);
+        }
+
+        .ws-dropdown .ws-item:hover,
+        .ws-dropdown .ws-item.is-current {
+            background: var(--bg-hover);
+        }
+
+        .ws-dropdown .ws-item .ws-item-avatar {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #F2A9E6, #B78CF2);
+            font-size: 10px;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .ws-dropdown .ws-item .ws-item-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .ws-dropdown .ws-item .ws-item-name {
+            font-size: 12.5px;
+            font-weight: 600;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .ws-dropdown .ws-item .ws-item-role {
+            font-size: 10.5px;
+            color: var(--text-tertiary);
+            margin-top: 1px;
+        }
+
+        .ws-dropdown .ws-item .ws-item-check {
+            color: var(--text-primary);
+            font-size: 12px;
+            flex-shrink: 0;
+        }
+
+        .ws-dropdown .ws-divider {
+            height: 1px;
+            background: var(--border-light);
+            margin: 6px 4px;
+        }
+
+        .ws-dropdown .ws-create {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 10px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            color: var(--text-secondary);
+            font-size: 12.5px;
+            font-weight: 500;
+            transition: background-color var(--transition), color var(--transition);
+        }
+
+        .ws-dropdown .ws-create:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+
+        .ws-dropdown .ws-create i {
+            font-size: 12px;
+            color: var(--text-tertiary);
+        }
+
+        .sidebar-nav {
+            flex: 1 1 auto;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            gap: 4px;
+            padding-bottom: 4px;
+        }
+
+        .sidebar-nav .nav-group { margin-bottom: 12px; }
+
+        .sidebar-nav .nav-label {
+            font-size: 10px;
+            font-weight: 600;
+            color: var(--text-tertiary);
+            letter-spacing: 0.5px;
+            padding: 4px 10px 8px;
+            text-transform: uppercase;
+        }
+
+        .sidebar-nav a {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 7px 10px;
+            border-radius: var(--radius-sm);
+            color: var(--text-secondary);
+            font-size: 13px;
+            font-weight: 500;
+            transition: background-color var(--transition), color var(--transition);
+            margin-bottom: 1px;
+            cursor: pointer;
+        }
+
+        .sidebar-nav a i {
+            width: 16px;
+            height: 16px;
+            opacity: 0.7;
+        }
+
+        .sidebar-nav a:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+
+        .sidebar-nav a.active {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        .sidebar-nav a.active i {
+            opacity: 1;
+            color: var(--text-primary);
+        }
+
+        .sidebar-plan {
+            flex-shrink: 0;
+            margin-top: 12px;
+            padding: 14px;
+            border-radius: var(--radius-md);
+            background: var(--bg-card);
+            border: 1px solid var(--border-light);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            cursor: pointer;
+            transition: border-color var(--transition);
+        }
+
+        .sidebar-plan[hidden] {
+            display: none !important;
+        }
+
+        .sidebar-plan:hover {
+            border-color: var(--border-color);
+        }
+
+        .sidebar-plan .plan-head {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .sidebar-plan .plan-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 9px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            flex-shrink: 0;
+        }
+
+        .sidebar-plan .plan-icon svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        .sidebar-plan .plan-meta {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .sidebar-plan .plan-label {
+            font-size: 9.5px;
+            font-weight: 600;
+            color: var(--text-tertiary);
+            letter-spacing: 0.4px;
+            text-transform: uppercase;
+        }
+
+        .sidebar-plan .plan-name {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text-primary);
+            letter-spacing: -0.1px;
+            margin-top: 1px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .sidebar-plan .plan-chevron {
+            color: var(--text-tertiary);
+            flex-shrink: 0;
+        }
+
+        .sidebar-plan .plan-chevron svg {
+            width: 14px;
+            height: 14px;
+        }
+
+        .sidebar-plan .plan-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-top: 8px;
+            border-top: 1px solid var(--border-light);
+            gap: 8px;
+        }
+
+        .sidebar-plan .plan-price {
+            font-size: 12px;
+            color: var(--text-secondary);
+            font-variant-numeric: tabular-nums;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .sidebar-plan .plan-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 10px;
+            font-weight: 600;
+            padding: 2px 7px;
+            border-radius: 999px;
+            background: var(--bg-secondary);
+            color: var(--text-secondary);
+            flex-shrink: 0;
+            letter-spacing: 0.2px;
+            border: 1px solid var(--border-light);
+        }
+
+        .sidebar-plan .plan-badge::before {
+            content: '';
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: var(--green);
+        }
+
+        .sidebar-plan .plan-badge.inactive::before {
+            background: var(--text-tertiary);
+        }
+
+        .loading-overlay {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            min-height: 100dvh;
+            font-size: 14px;
+            color: var(--text-tertiary);
+            gap: 10px;
+        }
+
+        .loading-spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid var(--border-color);
+            border-top-color: var(--text-primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        .soft-nav-progress {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: transparent;
+            z-index: 99999;
+            pointer-events: none;
+            overflow: hidden;
+            opacity: 0;
+            transition: opacity 0.15s;
+        }
+
+        .soft-nav-progress.active { opacity: 1; }
+
+        .soft-nav-progress::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            width: 30%;
+            background: var(--text-primary);
+            transform: translateX(-100%);
+            animation: softNavSlide 1s ease-in-out infinite;
+        }
+
+        @keyframes softNavSlide {
+            0%   { transform: translateX(-100%); }
+            100% { transform: translateX(400%); }
+        }
+
+        @keyframes pageEnter {
+            from { opacity: 0.85; transform: translateY(2px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        #mainContent.is-entering {
+            animation: pageEnter 120ms ease-out;
+        }
+
+        .toast-container {
+            position: fixed;
+            top: 16px;
+            right: 16px;
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-width: 340px;
+            width: 100%;
+        }
+
+        .toast {
+            padding: 10px 14px;
+            border-radius: var(--radius-md);
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.08);
+            font-size: 12.5px;
+            font-weight: 500;
+            color: var(--text-primary);
+            animation: slideInRight .2s ease-out forwards;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .toast.hiding { animation: slideOutRight .15s ease-out forwards; }
+        .toast-success .toast-icon { color: var(--green); }
+        .toast-error .toast-icon { color: var(--red); }
+        .toast-info .toast-icon { color: var(--text-primary); }
+        .toast-icon { font-size: 14px; flex-shrink: 0; }
+        .toast-content { flex: 1; }
+        .toast-close {
+            background: none;
+            border: none;
+            color: var(--text-tertiary);
+            cursor: pointer;
+            font-size: 12px;
+            padding: 4px;
+        }
+
+        @keyframes slideInRight {
+            from { opacity: 0; transform: translateX(24px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        @keyframes slideOutRight {
+            from { opacity: 1; transform: translateX(0); }
+            to { opacity: 0; transform: translateX(24px); }
+        }
+
+        .lucide {
+            display: inline-block;
+            width: 1em;
+            height: 1em;
+            stroke-width: 1.5;
+            stroke: currentColor;
+            fill: none;
+            vertical-align: middle;
+        }
+
+        .g-modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            z-index: 9999;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .g-modal-overlay.active { display: flex; }
+
+        .g-modal {
+            background: var(--bg-card);
+            border-radius: var(--radius-lg);
+            max-width: 480px;
+            width: 100%;
+            padding: 24px;
+            box-shadow: 0 24px 48px rgba(0,0,0,0.2);
+            border: 1px solid var(--border-color);
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .g-modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 18px;
+        }
+
+        .g-modal-header h2 {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin: 0;
+        }
+
+        .g-modal-close {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-tertiary);
+            transition: background-color var(--transition), color var(--transition);
+        }
+
+        .g-modal-close:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+
+        .g-modal-body {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+        }
+
+        .g-modal-body.hidden { display: none !important; }
+
+        .g-field {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            min-width: 0;
+        }
+
+        .g-field-full { grid-column: 1 / -1; }
+
+        .g-field label {
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .g-field input {
+            width: 100%;
+            height: 40px;
+            padding: 0 12px;
+            background: var(--bg-page);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            color: var(--text-primary);
+            font-size: 13.5px;
+            font-family: var(--font-family);
+            outline: none;
+            transition: border-color var(--transition);
+        }
+
+        .g-field input:focus {
+            border-color: var(--text-primary);
+        }
+
+        .g-modal-actions {
+            grid-column: 1 / -1;
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+            margin-top: 6px;
+        }
+
+        .g-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            height: 34px;
+            padding: 0 14px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 12.5px;
+            font-weight: 500;
+            font-family: var(--font-family);
+            cursor: pointer;
+            transition: background-color var(--transition), color var(--transition), opacity var(--transition);
+            white-space: nowrap;
+        }
+
+        .g-btn:hover:not(:disabled) {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+
+        .g-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .g-btn svg { width: 13px; height: 13px; }
+
+        .g-btn-primary {
+            background: var(--text-primary);
+            color: var(--bg-card);
+            border-color: var(--text-primary);
+        }
+
+        .g-btn-primary:hover:not(:disabled) {
+            opacity: 0.88;
+            background: var(--text-primary);
+            color: var(--bg-card);
+        }
+
+        .g-success-icon {
+            display: flex;
+            justify-content: center;
+            color: var(--text-primary);
+            margin-bottom: 6px;
+            grid-column: 1 / -1;
+        }
+
+        .g-success-icon svg { width: 42px; height: 42px; }
+
+        .g-success-title {
+            grid-column: 1 / -1;
+            text-align: center;
+            font-size: 17px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin: 0;
+        }
+
+        .g-success-sub {
+            grid-column: 1 / -1;
+            text-align: center;
+            font-size: 12.5px;
+            color: var(--text-tertiary);
+            margin: 4px 0 6px;
+            line-height: 1.55;
+        }
+
+        .g-code-block {
+            grid-column: 1 / -1;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 16px 18px;
+            background: var(--bg-secondary);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-color);
+            margin: 6px 0;
+        }
+
+        .g-code-block code {
+            flex: 1;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text-primary);
+            letter-spacing: 0.08em;
+            text-align: center;
+        }
+
+        .g-copy-btn {
+            width: 30px;
+            height: 30px;
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-secondary);
+            transition: background-color var(--transition);
+        }
+
+        .g-copy-btn:hover { background: var(--bg-hover); }
+        .g-copy-btn svg { width: 14px; height: 14px; }
+
+        .g-success-actions {
+            grid-column: 1 / -1;
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            margin-top: 8px;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar { display: none; }
+        }
+
+        @media (max-width: 480px) {
+            .icon-rail { width: 40px; padding: 10px 0; }
+            .icon-rail .rail-btn,
+            .icon-rail .theme-toggle,
+            .icon-rail .logout-btn { width: 28px; height: 28px; font-size: 15px; }
+            .icon-rail .rail-avatar { width: 24px; height: 24px; }
+
+            .icon-rail .rail-btn .tooltip,
+            .icon-rail .theme-toggle .tooltip,
+            .icon-rail .logout-btn .tooltip,
+            .icon-rail .rail-avatar .tooltip {
+                display: none;
+            }
+
+            .g-modal-body { grid-template-columns: 1fr; }
+        }
+    </style>
+
+    {% block page_css %}{% endblock %}
+</head>
+<body>
+
+    <div class="soft-nav-progress" id="softNavProgress"></div>
+
+    <div id="app">
+        <div id="loadingState" class="loading-overlay">
+            <div class="loading-spinner"></div>
+            Carregando...
+        </div>
+
+        <div id="appContent" class="app-container hidden">
+
+            <div class="icon-rail">
+                <div class="logo">C</div>
+
+                <button class="rail-btn" id="newBriefingBtn" title="Novo briefing">
+                    <i data-lucide="file-plus-2"></i>
+                    <span class="tooltip">Novo briefing</span>
+                </button>
+
+                <button class="rail-btn" id="newClientBtn" title="Novo cliente">
+                    <i data-lucide="user-plus"></i>
+                    <span class="tooltip">Novo cliente</span>
+                </button>
+
+                <button class="rail-btn" id="notificationsBtn" title="Notificações">
+                    <i data-lucide="bell"></i>
+                    <span class="tooltip">Atualizações</span>
+                </button>
+
+                <div class="rail-spacer"></div>
+
+                <div class="rail-bottom">
+                    <button class="logout-btn" id="logoutBtn" title="Sair">
+                        <i data-lucide="log-out" id="logoutIcon"></i>
+                        <span class="tooltip">Sair</span>
+                    </button>
+
+                    <button class="theme-toggle" id="themeToggle" title="Alternar tema">
+                        <span id="themeIconWrapper">
+                            <i data-lucide="sun"></i>
+                        </span>
+                        <span class="tooltip">Alterar tema</span>
+                    </button>
+
+                    <div class="rail-avatar" id="userAvatar" title="Conta">
+                        <img id="userAvatarImg" src="" alt="" style="display:none;">
+                        <span class="fallback-text" id="userAvatarFallback">?</span>
+                        <span class="tooltip">Meu perfil</span>
+                    </div>
+                </div>
+            </div>
+
+            <aside class="sidebar">
+                <div class="sidebar-inner">
+
+                    <div class="workspace-switch" id="workspaceSwitch">
+                        <div class="ws-avatar" id="wsAvatar">
+                            <img id="wsAvatarImg" src="" alt="" style="display:none;">
+                            <span id="wsAvatarText">C</span>
+                        </div>
+                        <div class="ws-name" id="wsName">Carregando...</div>
+                        <i data-lucide="chevron-down"></i>
+                    </div>
+
+                    <div class="ws-dropdown" id="wsDropdown">
+                        <div class="ws-dropdown-label">Workspaces</div>
+                        <div id="wsDropdownItems"></div>
+                        <div class="ws-divider"></div>
+                        <div class="ws-create" id="wsCreateBtn">
+                            <i data-lucide="plus"></i>
+                            <span>Criar workspace</span>
+                        </div>
+                    </div>
+
+                    <nav class="sidebar-nav">
+                        <div class="nav-group">
+                            <div class="nav-label">Trabalho</div>
+                            <a href="/mesa/" data-nav="mesa" id="navMesaLink" class="{% if active_nav == 'mesa' %}active{% endif %}">
+                                <i data-lucide="home"></i><span>Mesa</span>
+                            </a>
+                            <a href="/clientes/" data-nav="clientes" class="{% if active_nav == 'clientes' %}active{% endif %}">
+                                <i data-lucide="users"></i><span>Clientes</span>
+                            </a>
+                            <a href="/documents/" data-nav="documents" class="{% if active_nav == 'documents' %}active{% endif %}">
+                                <i data-lucide="files"></i><span>Arquivos</span>
+                            </a>
+                            <a href="/briefings/" data-nav="briefings" class="{% if active_nav == 'briefings' %}active{% endif %}">
+                                <i data-lucide="file-text"></i><span>Briefings</span>
+                            </a>
+                            <a href="/projetos/" data-nav="projetos" class="{% if active_nav == 'projetos' %}active{% endif %}">
+                                <i data-lucide="folder-kanban"></i><span>Projetos</span>
+                            </a>
+                        </div>
+
+                        <div class="nav-group">
+                            <div class="nav-label">Escritório</div>
+                            <a href="/financeiro/" data-nav="financeiro" class="{% if active_nav == 'financeiro' %}active{% endif %}">
+                                <i data-lucide="wallet"></i><span>Financeiro</span>
+                            </a>
+                            <a href="/propostas/" data-nav="propostas" class="{% if active_nav == 'propostas' %}active{% endif %}">
+                                <i data-lucide="file-check-2"></i><span>Propostas</span>
+                            </a>
+                            <a href="/referencias/" data-nav="referencias" class="{% if active_nav == 'referencias' %}active{% endif %}">
+                                <i data-lucide="image"></i><span>Referências</span>
+                            </a>
+                        </div>
+                    </nav>
+
+                    <div class="sidebar-plan" id="sidebarPlan">
+                        <div class="plan-head">
+                            <div class="plan-icon">
+                                <i data-lucide="sparkles"></i>
+                            </div>
+                            <div class="plan-meta">
+                                <div class="plan-label">Plano</div>
+                                <div class="plan-name" id="sidebarPlanName">—</div>
+                            </div>
+                            <div class="plan-chevron">
+                                <i data-lucide="chevron-right"></i>
+                            </div>
+                        </div>
+                        <div class="plan-row">
+                            <div class="plan-price" id="sidebarPlanPrice">—</div>
+                            <div class="plan-badge" id="sidebarPlanBadge">Ativo</div>
+                        </div>
+                    </div>
+
+                </div>
+            </aside>
+
+            <main class="main-content" id="mainContent" data-page="{% block page_name %}{% endblock %}">
+                {% block content %}{% endblock %}
+            </main>
+
+        </div>
+    </div>
+
+    <div class="toast-container" id="toastContainer"></div>
+
+    <div class="g-modal-overlay" id="gNewClientModal">
+        <div class="g-modal">
+            <div class="g-modal-header">
+                <h2 id="gNewClientTitle">Novo cliente</h2>
+                <button class="g-modal-close" data-g-close="gNewClientModal">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+
+            <form id="gNewClientForm" class="g-modal-body">
+                <div class="g-field g-field-full">
+                    <label for="gNewName">Nome</label>
+                    <input type="text" id="gNewName" placeholder="João & Maria" required maxlength="200">
+                </div>
+                <div class="g-field g-field-full">
+                    <label for="gNewEmail">Email</label>
+                    <input type="email" id="gNewEmail" placeholder="joao@exemplo.com" required maxlength="254">
+                </div>
+                <div class="g-field g-field-full">
+                    <label for="gNewPhone">Telefone <span style="color:var(--text-tertiary);font-weight:400;">(opcional)</span></label>
+                    <input type="text" id="gNewPhone" placeholder="(71) 99999-0000" maxlength="30">
+                </div>
+                <div class="g-modal-actions">
+                    <button type="submit" class="g-btn g-btn-primary" id="gNewSubmitBtn">
+                        <span>Criar cliente</span>
+                    </button>
+                    <button type="button" class="g-btn" data-g-close="gNewClientModal">Cancelar</button>
+                </div>
+            </form>
+
+            <div id="gNewClientSuccess" class="g-modal-body hidden">
+                <div class="g-success-icon">
+                    <i data-lucide="check-circle-2"></i>
+                </div>
+                <h3 class="g-success-title">Cliente criado</h3>
+                <p class="g-success-sub">Enviamos o código de acesso para o email do cliente.</p>
+
+                <div class="g-code-block">
+                    <code id="gNewCode">—</code>
+                    <button class="g-copy-btn" id="gCopyNewCodeBtn" title="Copiar">
+                        <i data-lucide="copy"></i>
+                    </button>
+                </div>
+
+                <div class="g-success-actions">
+                    <button class="g-btn" id="gSendCodeFromModalBtn">
+                        <i data-lucide="mail"></i>
+                        <span>Reenviar por email</span>
+                    </button>
+                    <button class="g-btn g-btn-primary" id="gOpenClientBtn">
+                        <span>Abrir cliente</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="{% static 'js/mesa.js' %}"></script>
+    <script src="{% static 'js/cliente.js' %}"></script>
+
+    <script>
+        (function() {
+            'use strict';
+
+            window.Clivo = window.Clivo || {
+                user: null,
+                workspace: null,
+                capabilities: [],
+                isOwner: false,
+                governanceKey: null,
+                currentPage: null,
+                cache: {
+                    clients: null,
+                },
+            };
+
+            window.clivoCurrentUser = window.clivoCurrentUser || null;
+            window.clivoCurrentWorkspace = window.clivoCurrentWorkspace || null;
+
+            window.ClivoPages = window.ClivoPages || {};
+
+            window.clivoGetCookie = function(name) {
+                let cookieValue = null;
+                if (document.cookie && document.cookie !== '') {
+                    const cookies = document.cookie.split(';');
+                    for (let i = 0; i < cookies.length; i++) {
+                        const cookie = cookies[i].trim();
+                        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                            break;
+                        }
+                    }
+                }
+                return cookieValue;
+            };
+
+            let toastTimeout = null;
+            window.clivoShowToast = function(message, type) {
+                type = type || 'info';
+                const container = document.getElementById('toastContainer');
+                if (!container) return;
+
+                while (container.firstChild) container.removeChild(container.firstChild);
+
+                const toast = document.createElement('div');
+                toast.className = 'toast toast-' + type;
+
+                const iconMap = {
+                    success: 'fa-check-circle',
+                    error: 'fa-exclamation-circle',
+                    info: 'fa-info-circle'
+                };
+
+                toast.innerHTML =
+                    '<span class="toast-icon"><i class="fas ' +
+                    (iconMap[type] || iconMap.info) +
+                    '"></i></span>' +
+                    '<span class="toast-content">' + message + '</span>' +
+                    '<button class="toast-close"><i class="fas fa-times"></i></button>';
+
+                container.appendChild(toast);
+
+                toast.querySelector('.toast-close').addEventListener('click', function() {
+                    toast.classList.add('hiding');
+                    setTimeout(function() { toast.remove(); }, 300);
+                });
+
+                clearTimeout(toastTimeout);
+                toastTimeout = setTimeout(function() {
+                    toast.classList.add('hiding');
+                    setTimeout(function() { toast.remove(); }, 300);
+                }, 4000);
+            };
+
+            window.clivoApi = async function(url, method, body) {
+                const isFormData = body instanceof FormData;
+
+                const options = {
+                    method: method || 'GET',
+                    credentials: 'include',
+                    headers: {
+                        'X-CSRFToken': window.clivoGetCookie('csrftoken')
+                    }
+                };
+
+                if (!isFormData) {
+                    options.headers['Content-Type'] = 'application/json';
+                }
+
+                if (body !== undefined && body !== null) {
+                    options.body = isFormData ? body : JSON.stringify(body);
+                }
+
+                const response = await fetch(url, options);
+                if (response.status === 204) return null;
+
+                let data = null;
+                try { data = await response.json(); } catch (e) {}
+
+                if (!response.ok) {
+                    const msg = (data && (data.error || data.detail ||
+                        (data.non_field_errors && data.non_field_errors[0])))
+                        || 'Erro na requisição';
+                    throw new Error(msg);
+                }
+                return data;
+            };
+
+            window.clivoRefreshIcons = function() {
+                if (typeof lucide === 'undefined') return;
+                if (typeof lucide.createIcons !== 'function') return;
+                lucide.createIcons();
+            };
+
+            let currentTheme = localStorage.getItem('clivo-theme') || 'light';
+            document.documentElement.setAttribute('data-theme', currentTheme);
+
+            function updateThemeIcon(theme) {
+                const wrapper = document.getElementById('themeIconWrapper');
+                if (!wrapper) return;
+                const iconName = theme === 'dark' ? 'moon' : 'sun';
+                wrapper.innerHTML = '<i data-lucide="' + iconName + '"></i>';
+                window.clivoRefreshIcons();
+            }
+            updateThemeIcon(currentTheme);
+
+            window.clivoToggleTheme = function() {
+                currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                document.documentElement.setAttribute('data-theme', currentTheme);
+                localStorage.setItem('clivo-theme', currentTheme);
+                updateThemeIcon(currentTheme);
+            };
+
+            window.clivoLogout = async function() {
+                const btn = document.getElementById('logoutBtn');
+                const icon = document.getElementById('logoutIcon');
+
+                if (btn) btn.classList.add('is-loading');
+                if (icon) icon.classList.add('hidden');
+                if (btn) {
+                    const spinner = document.createElement('span');
+                    spinner.className = 'logout-spinner';
+                    spinner.id = 'logoutSpinner';
+                    btn.appendChild(spinner);
+                }
+
+                try {
+                    const response = await fetch('/api/auth/logout/', {
+                        method: 'POST',
+                        credentials: 'include',
+                        headers: { 'X-CSRFToken': window.clivoGetCookie('csrftoken') }
+                    });
+                    if (response.ok) {
+                        window.location.href = '/login/';
+                        return;
+                    }
+                    window.clivoShowToast('Erro ao fazer logout', 'error');
+                    restoreLogoutButton();
+                } catch (e) {
+                    window.clivoShowToast('Erro ao fazer logout', 'error');
+                    restoreLogoutButton();
+                }
+            };
+
+            function restoreLogoutButton() {
+                const btn = document.getElementById('logoutBtn');
+                const icon = document.getElementById('logoutIcon');
+                const spinner = document.getElementById('logoutSpinner');
+                if (spinner) spinner.remove();
+                if (icon) icon.classList.remove('hidden');
+                if (btn) btn.classList.remove('is-loading');
+            }
+
+            let gLastCreatedId = null;
+
+            function gOpenNewClientModal() {
+                document.getElementById('gNewClientForm').reset();
+                document.getElementById('gNewClientForm').classList.remove('hidden');
+                document.getElementById('gNewClientSuccess').classList.add('hidden');
+                document.getElementById('gNewClientTitle').textContent = 'Novo cliente';
+                document.getElementById('gNewClientModal').classList.add('active');
+                setTimeout(function() {
+                    const el = document.getElementById('gNewName');
+                    if (el) el.focus();
+                }, 100);
+            }
+
+            function gSetupNewClientModal() {
+                const modal = document.getElementById('gNewClientModal');
+                const form = document.getElementById('gNewClientForm');
+                const submitBtn = document.getElementById('gNewSubmitBtn');
+                const successEl = document.getElementById('gNewClientSuccess');
+                const codeEl = document.getElementById('gNewCode');
+                const titleEl = document.getElementById('gNewClientTitle');
+                const copyBtn = document.getElementById('gCopyNewCodeBtn');
+                const sendCodeBtn = document.getElementById('gSendCodeFromModalBtn');
+                const openBtn = document.getElementById('gOpenClientBtn');
+
+                form.addEventListener('submit', async function(e) {
+                    e.preventDefault();
+                    const name = document.getElementById('gNewName').value.trim();
+                    const email = document.getElementById('gNewEmail').value.trim();
+                    const phone = document.getElementById('gNewPhone').value.trim();
+
+                    if (!name) { window.clivoShowToast('Informe o nome', 'error'); return; }
+                    if (!email) { window.clivoShowToast('Informe o email', 'error'); return; }
+
+                    submitBtn.disabled = true;
+                    const original = submitBtn.innerHTML;
+                    submitBtn.innerHTML = 'Criando…';
+
+                    try {
+                        const created = await window.clivoApi('/api/clients/', 'POST', {
+                            name: name, email: email, phone: phone,
+                        });
+                        gLastCreatedId = created.id;
+                        codeEl.textContent = created.public_code;
+                        titleEl.textContent = 'Cliente criado';
+                        form.classList.add('hidden');
+                        successEl.classList.remove('hidden');
+                        window.clivoRefreshIcons();
+                        window.clivoShowToast('Cliente criado e email enviado', 'success');
+
+                        window.Clivo.cache.clients = null;
+
+                        if (typeof window.clivoOnClientCreated === 'function') {
+                            window.clivoOnClientCreated(created);
+                        }
+                    } catch (err) {
+                        window.clivoShowToast(err.message || 'Erro ao criar', 'error');
+                    } finally {
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = original;
+                    }
+                });
+
+                copyBtn.addEventListener('click', function() {
+                    const code = codeEl.textContent || '';
+                    if (navigator.clipboard) navigator.clipboard.writeText(code);
+                    window.clivoShowToast('Código copiado', 'success');
+                });
+
+                sendCodeBtn.addEventListener('click', async function() {
+                    if (!gLastCreatedId) return;
+                    sendCodeBtn.disabled = true;
+                    const original = sendCodeBtn.innerHTML;
+                    sendCodeBtn.innerHTML = 'Enviando…';
+                    try {
+                        await window.clivoApi('/api/clients/' + gLastCreatedId + '/send-code/', 'POST');
+                        window.clivoShowToast('Código reenviado por email', 'success');
+                    } catch (err) {
+                        window.clivoShowToast(err.message || 'Erro ao enviar', 'error');
+                    } finally {
+                        sendCodeBtn.disabled = false;
+                        sendCodeBtn.innerHTML = original;
+                    }
+                });
+
+                openBtn.addEventListener('click', function() {
+                    if (!gLastCreatedId) return;
+                    modal.classList.remove('active');
+                    if (window.Clivo.currentPage === 'clientes') {
+                        window.location.hash = gLastCreatedId;
+                    } else {
+                        softNavigate('/clientes/', { afterMount: function() {
+                            window.location.hash = gLastCreatedId;
+                        }});
+                    }
+                });
+
+                modal.querySelectorAll('[data-g-close="gNewClientModal"]').forEach(function(el) {
+                    el.addEventListener('click', function() { modal.classList.remove('active'); });
+                });
+
+                modal.addEventListener('click', function(e) {
+                    if (e.target === modal) modal.classList.remove('active');
+                });
+            }
+
+            window.clivoOpenNewClientModal = gOpenNewClientModal;
+
+            function bindRail() {
+                const themeBtn = document.getElementById('themeToggle');
+                const logoutBtn = document.getElementById('logoutBtn');
+                const notifBtn = document.getElementById('notificationsBtn');
+                const newBriefingBtn = document.getElementById('newBriefingBtn');
+                const newClientBtn = document.getElementById('newClientBtn');
+
+                if (themeBtn) themeBtn.addEventListener('click', window.clivoToggleTheme);
+                if (logoutBtn) logoutBtn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    window.clivoLogout();
+                });
+                if (notifBtn) notifBtn.addEventListener('click', function() {
+                    window.clivoShowToast('Notificações em desenvolvimento', 'info');
+                });
+                if (newBriefingBtn) newBriefingBtn.addEventListener('click', function() {
+                    window.clivoShowToast('Briefings em desenvolvimento', 'info');
+                });
+                if (newClientBtn) newClientBtn.addEventListener('click', function() {
+                    gOpenNewClientModal();
+                });
+            }
+
+            const navProgress = document.getElementById('softNavProgress');
+            const pageCache = new Map();
+            const CACHE_TTL_MS = 60000;
+            let isNavigating = false;
+
+            function findLinkByPath(path) {
+                let found = null;
+                document.querySelectorAll('.sidebar-nav a[href]').forEach(function(a) {
+                    const href = a.getAttribute('href');
+                    if (!href || href === '#') return;
+                    if (href === path || href === path + '/') {
+                        found = a;
+                    } else if (a.dataset.nav === 'mesa' && path.indexOf('/mesa/') === 0) {
+                        found = a;
+                    } else if (a.dataset.nav === 'clientes' && path.indexOf('/clientes') === 0) {
+                        found = a;
+                    } else if (a.dataset.nav === 'documents' && path.indexOf('/documents') === 0) {
+                        found = a;
+                    } else if (a.dataset.nav === 'briefings' && path.indexOf('/briefings') === 0) {
+                        found = a;
+                    } else if (a.dataset.nav === 'projetos' && path.indexOf('/projetos') === 0) {
+                        found = a;
+                    } else if (a.dataset.nav === 'financeiro' && path.indexOf('/financeiro') === 0) {
+                        found = a;
+                    } else if (a.dataset.nav === 'propostas' && path.indexOf('/propostas') === 0) {
+                        found = a;
+                    } else if (a.dataset.nav === 'referencias' && path.indexOf('/referencias') === 0) {
+                        found = a;
+                    }
+                });
+                return found;
+            }
+
+            function setActiveNav(path) {
+                document.querySelectorAll('.sidebar-nav a').forEach(function(l) {
+                    l.classList.remove('active');
+                });
+                const link = findLinkByPath(path);
+                if (link) link.classList.add('active');
+            }
+
+            function extractMain(html) {
+                const tpl = document.createElement('template');
+                tpl.innerHTML = html;
+
+                const mainEl = tpl.content.querySelector('main#mainContent');
+                const titleEl = tpl.content.querySelector('title');
+
+                if (!mainEl) {
+                    return {
+                        mainHTML: '',
+                        mainPage: '',
+                        title: titleEl ? titleEl.textContent : document.title,
+                        timestamp: Date.now(),
+                    };
+                }
+
+                return {
+                    mainHTML: mainEl.innerHTML,
+                    mainPage: mainEl.dataset.page || '',
+                    title: titleEl ? titleEl.textContent : document.title,
+                    timestamp: Date.now(),
+                };
+            }
+
+            async function getPage(href) {
+                const cached = pageCache.get(href);
+                if (cached && (Date.now() - cached.timestamp) < CACHE_TTL_MS) {
+                    return cached;
+                }
+                const resp = await fetch(href, {
+                    credentials: 'include',
+                    headers: { 'X-Requested-With': 'soft-nav' }
+                });
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+
+                const finalUrl = resp.url || href;
+                const html = await resp.text();
+                const parsed = extractMain(html);
+                parsed.finalUrl = finalUrl;
+                pageCache.set(href, parsed);
+                return parsed;
+            }
+
+            function preloadPage(href) {
+                if (!href || href === '#') return;
+                if (pageCache.has(href)) return;
+                fetch(href, {
+                    credentials: 'include',
+                    headers: { 'X-Requested-With': 'soft-nav' }
+                })
+                    .then(function(r) {
+                        if (!r.ok) return '';
+                        const finalUrl = r.url || href;
+                        return r.text().then(function(html) {
+                            const parsed = extractMain(html);
+                            parsed.finalUrl = finalUrl;
+                            pageCache.set(href, parsed);
+                        });
+                    })
+                    .catch(function() {});
+            }
+
+            async function softNavigate(href, opts) {
+                opts = opts || {};
+                if (isNavigating) return;
+
+                isNavigating = true;
+                if (navProgress) navProgress.classList.add('active');
+
+                try {
+                    const page = await getPage(href);
+                    const curMain = document.getElementById('mainContent');
+
+                    if (!curMain || !page.mainHTML) {
+                        window.location.href = href;
+                        return;
+                    }
+
+                    const oldPage = window.Clivo.currentPage;
+                    const newPage = page.mainPage || null;
+
+                    if (oldPage && window.ClivoPages[oldPage] &&
+                        typeof window.ClivoPages[oldPage].unmount === 'function') {
+                        try { window.ClivoPages[oldPage].unmount(); }
+                        catch (e) { console.error('unmount ' + oldPage + ' falhou:', e); }
+                    }
+
+                    curMain.innerHTML = page.mainHTML;
+                    curMain.dataset.page = newPage || '';
+                    window.Clivo.currentPage = newPage;
+
+                    if (page.title) document.title = page.title;
+
+                    setActiveNav(page.finalUrl || href);
+
+                    if (!opts.replace) {
+                        const displayUrl = page.finalUrl || href;
+                        history.pushState({ soft: true, path: displayUrl }, '', displayUrl);
+                    }
+
+                    if (newPage && window.ClivoPages[newPage] &&
+                        typeof window.ClivoPages[newPage].mount === 'function') {
+                        try { window.ClivoPages[newPage].mount(); }
+                        catch (e) { console.error('mount ' + newPage + ' falhou:', e); }
+                    }
+
+                    if (typeof opts.afterMount === 'function') {
+                        try { opts.afterMount(); } catch (e) { console.error(e); }
+                    }
+
+                    requestAnimationFrame(function() {
+                        requestAnimationFrame(function() {
+                            window.clivoRefreshIcons();
+                            curMain.classList.add('is-entering');
+                            requestAnimationFrame(function() {
+                                curMain.classList.remove('is-entering');
+                            });
+                        });
+                    });
+
+                    requestAnimationFrame(function() {
+                        window.scrollTo(0, 0);
+                    });
+
+                } catch (e) {
+                    console.error('soft navigation falhou:', e);
+                    window.location.href = href;
+                } finally {
+                    if (navProgress) navProgress.classList.remove('active');
+                    isNavigating = false;
+                }
+            }
+
+            window.clivoSoftNavigate = softNavigate;
+
+            function bindSidebarNav() {
+                document.querySelectorAll('.sidebar-nav a').forEach(function(link) {
+                    const href = link.getAttribute('href');
+
+                    if (href && href !== '#') {
+                        link.addEventListener('mouseenter', function() {
+                            preloadPage(href);
+                        });
+                    }
+
+                    link.addEventListener('click', function(e) {
+                        const currentHref = link.getAttribute('href');
+
+                        if (!currentHref || currentHref === '#') {
+                            e.preventDefault();
+                            document.querySelectorAll('.sidebar-nav a').forEach(function(l) {
+                                l.classList.remove('active');
+                            });
+                            link.classList.add('active');
+                            window.clivoShowToast('Em desenvolvimento', 'info');
+                            return;
+                        }
+
+                        e.preventDefault();
+
+                        if (link.classList.contains('active') &&
+                            currentHref === window.location.pathname) {
+                            return;
+                        }
+
+                        softNavigate(currentHref);
+                    });
+                });
+            }
+
+            window.addEventListener('popstate', function() {
+                softNavigate(window.location.pathname, { replace: true });
+            });
+
+            const wsSwitch = document.getElementById('workspaceSwitch');
+            const wsDropdown = document.getElementById('wsDropdown');
+            const wsDropdownItems = document.getElementById('wsDropdownItems');
+            const wsCreateBtn = document.getElementById('wsCreateBtn');
+
+            function escapeHtml(s) {
+                if (s === null || s === undefined) return '';
+                return String(s)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+            }
+
+            function toggleWsDropdown(force) {
+                if (!wsDropdown || !wsSwitch) return;
+                const willOpen = (typeof force === 'boolean')
+                    ? force
+                    : !wsDropdown.classList.contains('open');
+
+                wsDropdown.classList.toggle('open', willOpen);
+                wsSwitch.classList.toggle('open', willOpen);
+
+                if (willOpen) loadWorkspaceSwitcher();
+            }
+
+            async function loadWorkspaceSwitcher() {
+                if (!wsDropdownItems) return;
+                try {
+                    const list = await window.clivoApi('/api/workspaces/my/');
+                    renderWsDropdownItems(list || []);
+                } catch (e) {
+                    wsDropdownItems.innerHTML =
+                        '<div style="padding:8px 10px; font-size:12px; color:var(--text-tertiary);">'
+                        + 'Erro ao carregar workspaces</div>';
+                }
+            }
+
+            function renderWsDropdownItems(list) {
+                if (!list.length) {
+                    wsDropdownItems.innerHTML =
+                        '<div style="padding:8px 10px; font-size:12px; color:var(--text-tertiary);">'
+                        + 'Nenhum workspace</div>';
+                    return;
+                }
+
+                let html = '';
+                list.forEach(function(ws) {
+                    const initial = (ws.name || 'W').charAt(0).toUpperCase();
+                    const role = ws.governance_name || ws.governance_key || '';
+                    html +=
+                        '<div class="ws-item' + (ws.is_current ? ' is-current' : '') + '" ' +
+                             'data-ws-public-id="' + escapeHtml(ws.public_id || '') + '">' +
+                            '<div class="ws-item-avatar">' + initial + '</div>' +
+                            '<div class="ws-item-info">' +
+                                '<div class="ws-item-name">' + escapeHtml(ws.name) + '</div>' +
+                                '<div class="ws-item-role">' + escapeHtml(role) + '</div>' +
+                            '</div>' +
+                            (ws.is_current
+                                ? '<i data-lucide="check" class="ws-item-check"></i>'
+                                : '') +
+                        '</div>';
+                });
+                wsDropdownItems.innerHTML = html;
+                window.clivoRefreshIcons();
+
+                wsDropdownItems.querySelectorAll('.ws-item').forEach(function(el) {
+                    el.addEventListener('click', function() {
+                        const publicId = this.dataset.wsPublicId;
+                        if (this.classList.contains('is-current')) {
+                            toggleWsDropdown(false);
+                            return;
+                        }
+                        if (!publicId) {
+                            window.location.href = '/workspaces/entrar/';
+                            return;
+                        }
+                        window.location.href = '/mesa/' + publicId + '/';
+                    });
+                });
+            }
+
+            function bindWorkspaceSwitch() {
+                if (wsSwitch) {
+                    wsSwitch.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        toggleWsDropdown();
+                    });
+                }
+
+                if (wsCreateBtn) {
+                    wsCreateBtn.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        toggleWsDropdown(false);
+                        window.location.href = '/workspaces/novo/';
+                    });
+                }
+
+                document.addEventListener('click', function(e) {
+                    if (!wsDropdown || !wsDropdown.classList.contains('open')) return;
+                    if (wsDropdown.contains(e.target) || (wsSwitch && wsSwitch.contains(e.target))) return;
+                    toggleWsDropdown(false);
+                });
+            }
+
+            function renderSidebarPlan(workspace) {
+                const card = document.getElementById('sidebarPlan');
+                const nameEl = document.getElementById('sidebarPlanName');
+                const priceEl = document.getElementById('sidebarPlanPrice');
+                const badgeEl = document.getElementById('sidebarPlanBadge');
+
+                if (!card) return;
+
+                const plan = workspace && workspace.plan;
+
+                card.hidden = false;
+
+                if (!plan) {
+                    if (nameEl) nameEl.textContent = 'Sem plano';
+                    if (priceEl) priceEl.textContent = '—';
+                    if (badgeEl) {
+                        badgeEl.classList.add('inactive');
+                        badgeEl.textContent = 'Inativo';
+                    }
+                    return;
+                }
+
+                if (nameEl) nameEl.textContent = plan.name || '—';
+
+                if (priceEl) {
+                    if (plan.price) {
+                        const cur = plan.currency || '';
+                        const periodLabel = (
+                            plan.billing_period === 'monthly' ? 'mês' :
+                            plan.billing_period === 'yearly' ? 'ano' :
+                            plan.billing_period === 'lifetime' ? 'vitalício' :
+                            plan.billing_period || ''
+                        );
+                        const period = periodLabel ? ('/' + periodLabel) : '';
+                        priceEl.textContent = cur + ' ' + plan.price + ' ' + period;
+                    } else {
+                        priceEl.textContent = 'Gratuito';
+                    }
+                }
+
+                if (badgeEl) {
+                    badgeEl.classList.remove('inactive');
+                    badgeEl.textContent = 'Ativo';
+                }
+            }
+
+            function rewriteMesaLink(workspace) {
+                if (!workspace || !workspace.public_id) return;
+                const link = document.getElementById('navMesaLink');
+                if (link) {
+                    link.setAttribute('href', '/mesa/' + workspace.public_id + '/');
+                }
+            }
+
+            async function loadUserAndWorkspace() {
+                try {
+                    const userResp = await fetch('/api/users/me/', {
+                        method: 'GET',
+                        credentials: 'include',
+                        headers: { 'X-CSRFToken': window.clivoGetCookie('csrftoken') }
+                    });
+                    if (userResp.ok) {
+                        const user = await userResp.json();
+                        window.Clivo.user = user;
+                        window.clivoCurrentUser = user;
+
+                        const fullName = user.full_name || user.email || 'Usuário';
+                        const initial = fullName.charAt(0).toUpperCase();
+                        const avatarUrl = user.avatar_url || user.avatar || null;
+
+                        const img = document.getElementById('userAvatarImg');
+                        const fallback = document.getElementById('userAvatarFallback');
+
+                        if (avatarUrl && img && fallback) {
+                            img.onerror = function() {
+                                img.onerror = null;
+                                img.style.display = 'none';
+                                fallback.style.display = 'block';
+                                fallback.textContent = initial;
+                            };
+                            img.src = avatarUrl;
+                            img.style.display = 'block';
+                            fallback.style.display = 'none';
+                        } else if (fallback) {
+                            fallback.style.display = 'block';
+                            fallback.textContent = initial;
+                        }
+                    }
+                } catch (e) {
+                    console.error('Falha ao carregar usuário:', e);
+                }
+
+                try {
+                    const wsResp = await fetch('/api/workspaces/current/', {
+                        method: 'GET',
+                        credentials: 'include',
+                        headers: { 'X-CSRFToken': window.clivoGetCookie('csrftoken') }
+                    });
+
+                    if (wsResp.ok) {
+                        const ws = await wsResp.json();
+                        window.Clivo.workspace = ws;
+                        window.clivoCurrentWorkspace = ws;
+
+                        const wsName = document.getElementById('wsName');
+                        const wsAvatarText = document.getElementById('wsAvatarText');
+                        const wsAvatarImg = document.getElementById('wsAvatarImg');
+
+                        if (wsName) wsName.textContent = ws.name || 'Workspace';
+                        if (wsAvatarText) {
+                            wsAvatarText.textContent = (ws.name || 'W').charAt(0).toUpperCase();
+                        }
+
+                        if (ws.avatar_url && wsAvatarImg && wsAvatarText) {
+                            wsAvatarImg.src = ws.avatar_url;
+                            wsAvatarImg.style.display = 'block';
+                            wsAvatarText.style.display = 'none';
+                        }
+
+                        renderSidebarPlan(ws);
+                        rewriteMesaLink(ws);
+                    } else if (wsResp.status === 404) {
+                        renderSidebarPlan(null);
+                    }
+                } catch (e) {
+                    console.error('Falha ao carregar workspace:', e);
+                    renderSidebarPlan(null);
+                }
+            }
+
+            async function shellBoot() {
+                const loadingState = document.getElementById('loadingState');
+                const appContent = document.getElementById('appContent');
+
+                try {
+                    const sessionResp = await fetch('/api/auth/session/', {
+                        method: 'GET',
+                        credentials: 'include'
+                    });
+                    if (!sessionResp.ok) {
+                        window.location.href = '/login/';
+                        return;
+                    }
+
+                    if (loadingState) loadingState.classList.add('hidden');
+                    if (appContent) appContent.classList.remove('hidden');
+
+                    window.clivoRefreshIcons();
+
+                    await loadUserAndWorkspace();
+
+                    setActiveNav(window.location.pathname);
+
+                    const curMain = document.getElementById('mainContent');
+                    const initialPage = curMain && curMain.dataset.page;
+                    window.Clivo.currentPage = initialPage || null;
+
+                    if (initialPage && window.ClivoPages[initialPage] &&
+                        typeof window.ClivoPages[initialPage].mount === 'function') {
+                        try { window.ClivoPages[initialPage].mount(); }
+                        catch (e) { console.error('mount inicial falhou:', e); }
+                    }
+
+                    requestAnimationFrame(function() {
+                        window.clivoRefreshIcons();
+                    });
+
+                    setTimeout(function() {
+                        preloadPage('/clientes/');
+                        preloadPage('/documents/');
+                        if (window.Clivo.workspace && window.Clivo.workspace.public_id) {
+                            preloadPage('/mesa/' + window.Clivo.workspace.public_id + '/');
+                        } else {
+                            preloadPage('/mesa/');
+                        }
+                    }, 800);
+
+                } catch (e) {
+                    console.error('Erro na inicialização:', e);
+                    if (loadingState) {
+                        loadingState.innerHTML =
+                            '<div style="text-align:center; padding:40px;">' +
+                            '<i class="fas fa-exclamation-triangle" style="font-size:32px; color:#E5484D; display:block; margin-bottom:12px;"></i>' +
+                            'Erro ao carregar.<br>' +
+                            '<button onclick="window.location.href=\'/login/\'" style="margin-top:12px; padding:8px 20px; border:1px solid #E9E9EC; border-radius:6px; background:white; cursor:pointer; font-family:inherit;">' +
+                            'Voltar ao login' +
+                            '</button>' +
+                            '</div>';
+                    }
+                }
+            }
+
+            document.addEventListener('DOMContentLoaded', function() {
+                bindRail();
+                bindSidebarNav();
+                bindWorkspaceSwitch();
+                gSetupNewClientModal();
+                shellBoot();
+            });
+
+        })();
+    </script>
+
+    {% block page_js %}{% endblock %}
+</body>
+</html>

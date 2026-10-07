@@ -1,0 +1,3659 @@
+﻿================================================================================
+LISTAGEM COMPLETA DO MÓDULO clients
+Clivo Platform - Refatoração Arquitetural
+Gerado em: 30/09/2026 11:15:45
+Total de arquivos: 38
+================================================================================
+
+
+================================================================================
+ARQUIVO 1 DE 38
+================================================================================
+📁 PASTA: apps\clients\__init__.py
+📄 ARQUIVO: __init__.py
+📏 TAMANHO: 2.17 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 65
+================================================================================
+
+"""
+Clients â€” identidade, contexto e relacionamento com o cliente.
+
+REGRA ARQUITETURAL
+------------------
+Clients responde por:
+
+    - identidade persistente do cliente
+    - contatos ligados ao cliente
+    - anotaÃ§Ãµes internas da equipe
+    - portal externo do cliente (acesso, sessÃ£o, convite, feedback)
+
+Clients NÃƒO responde por:
+
+    - timeline transversal  â†’ pertence ao domÃ­nio `timeline`
+    - tarefas genÃ©ricas     â†’ nÃ£o existe task manager na V1
+    - inteligÃªncia/IA       â†’ pertence a `intelligence`
+    - briefings             â†’ pertence a `briefings`
+    - projetos              â†’ pertence a `projects`
+    - documentos            â†’ pertence a `documents`
+    - propostas             â†’ pertence a `proposals`
+    - cÃ¡lculos financeiros  â†’ pertence a `finance`
+
+O QUE O CLIENT POSSUI
+---------------------
+
+    Client
+        â”œâ”€â”€ identidade (name, email, phone)
+        â”œâ”€â”€ public_code (identificaÃ§Ã£o pÃºblica â€” NÃƒO Ã© senha)
+        â”œâ”€â”€ context (JSONField â€” projeÃ§Ã£o publicada)
+        â””â”€â”€ status (active / inactive / suspended)
+
+    ClientContact          â†’ pessoas ligadas ao cliente
+    ClientNote             â†’ anotaÃ§Ã£o interna da equipe
+
+    ClientPortalAccess     â†’ observabilidade do Portal
+    ClientPortalSession    â†’ sessÃ£o temporÃ¡ria de autenticaÃ§Ã£o do Portal
+    ClientPortalInvitation â†’ registro de envio de acesso ao Portal
+    ClientPortalFeedback   â†’ feedback de experiÃªncia do Portal
+
+EVENTOS DO DOMÃNIO
+------------------
+
+    ClientEventEmitter
+
+Emite eventos de domÃ­nio via Signal Django. NÃƒO persiste timeline
+localmente. O armazenamento Ã© responsabilidade do domÃ­nio transversal
+`timeline`, que ainda serÃ¡ construÃ­do.
+
+REGRA DE EXCLUSÃƒO
+-----------------
+
+    DELETE Ã© DELETE. Sem soft delete.
+
+REGRA DE STATUS
+---------------
+
+    `status` Ã© estado comercial/relacional definido pelo arquiteto:
+        active / inactive / suspended
+
+    NÃƒO Ã© mecanismo de arquivamento. NÃƒO existe archive/unarchive.
+    `status` Ã© editÃ¡vel via capability `clients.client.update`.
+"""
+
+default_app_config = 'apps.clients.apps.ClientsConfig'
+
+
+
+================================================================================
+ARQUIVO 2 DE 38
+================================================================================
+📁 PASTA: apps\clients\admin.py
+📄 ARQUIVO: admin.py
+📏 TAMANHO: 2.27 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 70
+================================================================================
+
+from django.contrib import admin
+
+from apps.clients.models import (
+    Client,
+    ClientContact,
+    ClientNote,
+    ClientPortalAccess,
+    ClientPortalSession,
+    ClientPortalInvitation,
+    ClientPortalFeedback,
+)
+
+
+@admin.register(Client)
+class ClientAdmin(admin.ModelAdmin):
+    list_display = ['name', 'public_code', 'workspace', 'status', 'created_at']
+    list_filter = ['status', 'workspace']
+    search_fields = ['name', 'email', 'public_code']
+    readonly_fields = ['id', 'public_code', 'created_at', 'updated_at']
+    ordering = ['-created_at']
+
+
+@admin.register(ClientContact)
+class ClientContactAdmin(admin.ModelAdmin):
+    list_display = ['name', 'client', 'role']
+    list_filter = ['role']
+    search_fields = ['name', 'client__name']
+    autocomplete_fields = ['client']
+
+
+@admin.register(ClientNote)
+class ClientNoteAdmin(admin.ModelAdmin):
+    list_display = ['client', 'author', 'created_at', 'is_pinned']
+    list_filter = ['is_pinned']
+    search_fields = ['content', 'client__name']
+    autocomplete_fields = ['client', 'author']
+
+
+@admin.register(ClientPortalAccess)
+class ClientPortalAccessAdmin(admin.ModelAdmin):
+    list_display = ['client', 'accessed_at', 'ip_address']
+    readonly_fields = ['id', 'accessed_at']
+    search_fields = ['client__name']
+    autocomplete_fields = ['client']
+
+
+@admin.register(ClientPortalSession)
+class ClientPortalSessionAdmin(admin.ModelAdmin):
+    list_display = ['client', 'created_at', 'expires_at', 'revoked_at']
+    readonly_fields = ['id', 'token_hash', 'created_at']
+    search_fields = ['client__name']
+    autocomplete_fields = ['client']
+
+
+@admin.register(ClientPortalInvitation)
+class ClientPortalInvitationAdmin(admin.ModelAdmin):
+    list_display = ['client', 'email', 'status', 'sent_at']
+    list_filter = ['status']
+    search_fields = ['client__name', 'email']
+    readonly_fields = ['id', 'sent_at']
+    autocomplete_fields = ['client', 'session', 'sent_by']
+
+
+@admin.register(ClientPortalFeedback)
+class ClientPortalFeedbackAdmin(admin.ModelAdmin):
+    list_display = ['client', 'kind', 'rating', 'created_at']
+    list_filter = ['kind', 'rating']
+    search_fields = ['client__name', 'message']
+    readonly_fields = ['id', 'created_at']
+    autocomplete_fields = ['client']
+
+
+
+================================================================================
+ARQUIVO 3 DE 38
+================================================================================
+📁 PASTA: apps\clients\api\serializers\__init__.py
+📄 ARQUIVO: __init__.py
+📏 TAMANHO: 1.35 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 45
+================================================================================
+
+from apps.clients.api.serializers.client_serializers import (
+    ClientListSerializer,
+    ClientDetailSerializer,
+    ClientCreateSerializer,
+    ClientUpdateSerializer,
+    ClientContextUpdateSerializer,
+)
+from apps.clients.api.serializers.contact_serializers import (
+    ClientContactSerializer,
+    ClientContactCreateSerializer,
+    ClientContactUpdateSerializer,
+)
+from apps.clients.api.serializers.note_serializers import (
+    ClientNoteSerializer,
+    ClientNoteCreateSerializer,
+    ClientNoteUpdateSerializer,
+)
+from apps.clients.api.serializers.portal_serializers import (
+    PortalSessionSerializer,
+    PortalAccessSerializer,
+    PortalInvitationSerializer,
+    PortalFeedbackSerializer,
+    PortalFeedbackCreateSerializer,
+    PortalContextSerializer,
+)
+
+__all__ = [
+    'ClientListSerializer',
+    'ClientDetailSerializer',
+    'ClientCreateSerializer',
+    'ClientUpdateSerializer',
+    'ClientContextUpdateSerializer',
+    'ClientContactSerializer',
+    'ClientContactCreateSerializer',
+    'ClientContactUpdateSerializer',
+    'ClientNoteSerializer',
+    'ClientNoteCreateSerializer',
+    'ClientNoteUpdateSerializer',
+    'PortalSessionSerializer',
+    'PortalAccessSerializer',
+    'PortalInvitationSerializer',
+    'PortalFeedbackSerializer',
+    'PortalFeedbackCreateSerializer',
+    'PortalContextSerializer',
+]
+
+
+
+================================================================================
+ARQUIVO 4 DE 38
+================================================================================
+📁 PASTA: apps\clients\api\serializers\client_serializers.py
+📄 ARQUIVO: client_serializers.py
+📏 TAMANHO: 3.07 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 97
+================================================================================
+
+from rest_framework import serializers
+
+from apps.clients.models import Client
+
+
+class ClientListSerializer(serializers.ModelSerializer):
+    """
+    Leve â€” usado na listagem.
+
+    NÃƒO expÃµe `created_by`: quem criou Ã© informaÃ§Ã£o de detalhe/auditoria,
+    nÃ£o informaÃ§Ã£o primÃ¡ria para o arquiteto escolher um cliente.
+    """
+
+    status_display = serializers.CharField(
+        source='get_status_display', read_only=True
+    )
+
+    class Meta:
+        model = Client
+        fields = [
+            'id', 'public_code', 'name', 'email', 'phone',
+            'status', 'status_display',
+            'created_at', 'updated_at',
+        ]
+        read_only_fields = fields
+
+
+class ClientDetailSerializer(serializers.ModelSerializer):
+    """
+    Completo â€” usado na pÃ¡gina do cliente.
+
+    ExpÃµe quem criou o cliente (rastreabilidade de domÃ­nio).
+    `created_by` Ã© histÃ³rico: nunca editÃ¡vel.
+    """
+
+    created_by_name = serializers.CharField(
+        source='created_by.full_name', read_only=True, allow_null=True
+    )
+    created_by_email = serializers.EmailField(
+        source='created_by.email', read_only=True, allow_null=True
+    )
+    status_display = serializers.CharField(
+        source='get_status_display', read_only=True
+    )
+
+    class Meta:
+        model = Client
+        fields = [
+            'id', 'public_code', 'name', 'email', 'phone',
+            'context', 'status', 'status_display',
+            'created_by', 'created_by_name', 'created_by_email',
+            'created_at', 'updated_at',
+        ]
+        # IMPORTANTE: id, public_code, created_by e timestamps sÃ£o read-only.
+        # `status` Ã© editÃ¡vel via clients.client.update.
+        # `created_by` Ã© histÃ³rico â€” nunca editÃ¡vel.
+        read_only_fields = [
+            'id', 'public_code',
+            'created_by', 'created_by_name', 'created_by_email',
+            'created_at', 'updated_at',
+        ]
+
+
+class ClientCreateSerializer(serializers.Serializer):
+    """
+    CriaÃ§Ã£o de cliente.
+
+    NÃƒO aceita workspace, created_by nem public_code.
+    Esses vÃªm do contexto autenticado.
+
+    `status` nasce como `active` por padrÃ£o â€” nÃ£o Ã© aceito na criaÃ§Ã£o.
+    """
+
+    name = serializers.CharField(max_length=200)
+    email = serializers.EmailField(required=False, allow_blank=True)
+    phone = serializers.CharField(max_length=30, required=False, allow_blank=True)
+
+
+class ClientUpdateSerializer(serializers.Serializer):
+    """
+    AtualizaÃ§Ã£o descritiva â€” inclui `status`.
+
+    `context` muda via `context` action.
+    `created_by` Ã© histÃ³rico e imutÃ¡vel.
+    """
+
+    name = serializers.CharField(max_length=200, required=False)
+    email = serializers.EmailField(required=False, allow_blank=True)
+    phone = serializers.CharField(max_length=30, required=False, allow_blank=True)
+    status = serializers.ChoiceField(
+        choices=[c[0] for c in Client.STATUS_CHOICES],
+        required=False,
+    )
+
+
+class ClientContextUpdateSerializer(serializers.Serializer):
+    context = serializers.DictField()
+
+
+
+================================================================================
+ARQUIVO 5 DE 38
+================================================================================
+📁 PASTA: apps\clients\api\serializers\contact_serializers.py
+📄 ARQUIVO: contact_serializers.py
+📏 TAMANHO: 1.47 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 38
+================================================================================
+
+from rest_framework import serializers
+
+from apps.clients.models import ClientContact
+
+
+class ClientContactSerializer(serializers.ModelSerializer):
+    role_display = serializers.CharField(source='get_role_display', read_only=True)
+
+    class Meta:
+        model = ClientContact
+        fields = [
+            'id', 'client', 'name', 'role', 'role_display',
+            'email', 'phone', 'notes',
+            'created_at', 'updated_at',
+        ]
+        read_only_fields = ['id', 'client', 'created_at', 'updated_at']
+
+
+class ClientContactCreateSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=150)
+    role = serializers.ChoiceField(
+        choices=[c[0] for c in ClientContact.ROLE_CHOICES],
+        default=ClientContact.ROLE_OTHER,
+    )
+    email = serializers.EmailField(required=False, allow_blank=True)
+    phone = serializers.CharField(max_length=30, required=False, allow_blank=True)
+    notes = serializers.CharField(required=False, allow_blank=True)
+
+
+class ClientContactUpdateSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=150, required=False)
+    role = serializers.ChoiceField(
+        choices=[c[0] for c in ClientContact.ROLE_CHOICES],
+        required=False,
+    )
+    email = serializers.EmailField(required=False, allow_blank=True)
+    phone = serializers.CharField(max_length=30, required=False, allow_blank=True)
+    notes = serializers.CharField(required=False, allow_blank=True)
+
+
+
+================================================================================
+ARQUIVO 6 DE 38
+================================================================================
+📁 PASTA: apps\clients\api\serializers\note_serializers.py
+📄 ARQUIVO: note_serializers.py
+📏 TAMANHO: 1.22 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 42
+================================================================================
+
+from rest_framework import serializers
+
+from apps.clients.models import ClientNote
+
+
+class ClientNoteSerializer(serializers.ModelSerializer):
+    """
+    Serializer de leitura de nota.
+
+    `author` Ã© quem escreveu. ImutÃ¡vel apÃ³s criaÃ§Ã£o â€” `update_note`
+    nÃ£o aceita trocar autor.
+    """
+
+    author_email = serializers.EmailField(
+        source='author.email', read_only=True, allow_null=True
+    )
+    author_name = serializers.CharField(
+        source='author.full_name', read_only=True, allow_null=True
+    )
+
+    class Meta:
+        model = ClientNote
+        fields = [
+            'id', 'client',
+            'author', 'author_email', 'author_name',
+            'content', 'is_pinned',
+            'created_at', 'updated_at',
+        ]
+        read_only_fields = [
+            'id', 'client', 'author',
+            'created_at', 'updated_at',
+        ]
+
+
+class ClientNoteCreateSerializer(serializers.Serializer):
+    content = serializers.CharField()
+    is_pinned = serializers.BooleanField(required=False, default=False)
+
+
+class ClientNoteUpdateSerializer(serializers.Serializer):
+    content = serializers.CharField(required=False)
+    is_pinned = serializers.BooleanField(required=False)
+
+
+
+================================================================================
+ARQUIVO 7 DE 38
+================================================================================
+📁 PASTA: apps\clients\api\serializers\portal_serializers.py
+📄 ARQUIVO: portal_serializers.py
+📏 TAMANHO: 2.31 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 80
+================================================================================
+
+from rest_framework import serializers
+
+from apps.clients.models import (
+    ClientPortalSession,
+    ClientPortalAccess,
+    ClientPortalInvitation,
+    ClientPortalFeedback,
+)
+
+
+class PortalSessionSerializer(serializers.ModelSerializer):
+    """
+    NUNCA expÃµe token_hash.
+    """
+
+    class Meta:
+        model = ClientPortalSession
+        fields = [
+            'id', 'client',
+            'created_at', 'expires_at',
+            'last_used_at', 'revoked_at',
+        ]
+        read_only_fields = fields
+
+
+class PortalAccessSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ClientPortalAccess
+        fields = ['id', 'client', 'session', 'ip_address', 'user_agent', 'accessed_at']
+        read_only_fields = fields
+
+
+class PortalInvitationSerializer(serializers.ModelSerializer):
+    sent_by_email = serializers.EmailField(
+        source='sent_by.email', read_only=True, allow_null=True
+    )
+
+    class Meta:
+        model = ClientPortalInvitation
+        fields = [
+            'id', 'client', 'session', 'email',
+            'sent_by', 'sent_by_email',
+            'status', 'error_message', 'sent_at',
+        ]
+        read_only_fields = fields
+
+
+class PortalFeedbackSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ClientPortalFeedback
+        fields = [
+            'id', 'client', 'kind', 'rating', 'message', 'page', 'created_at',
+        ]
+        read_only_fields = fields
+
+
+class PortalFeedbackCreateSerializer(serializers.Serializer):
+    kind = serializers.ChoiceField(
+        choices=[c[0] for c in ClientPortalFeedback.KIND_CHOICES],
+    )
+    rating = serializers.ChoiceField(
+        choices=[c[0] for c in ClientPortalFeedback.RATING_CHOICES],
+        required=False,
+        allow_blank=True,
+    )
+    message = serializers.CharField(required=False, allow_blank=True)
+    page = serializers.CharField(required=False, allow_blank=True)
+
+
+class PortalContextSerializer(serializers.Serializer):
+    """
+    Contexto pÃºblico do cliente â€” o que o Portal expÃµe.
+
+    NÃƒO expÃµe dados internos (notas internas, tarefas, timeline).
+    Apenas o que o arquiteto publicou via `Client.context`.
+    """
+
+    public_code = serializers.CharField()
+    name = serializers.CharField()
+    context = serializers.DictField()
+
+
+
+================================================================================
+ARQUIVO 8 DE 38
+================================================================================
+📁 PASTA: apps\clients\api\views\__init__.py
+📄 ARQUIVO: __init__.py
+📏 TAMANHO: 0.19 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 7
+================================================================================
+
+from apps.clients.api.views.client_views import ClientViewSet
+from apps.clients.api.views.portal_views import ClientPortalViewSet
+
+__all__ = [
+    'ClientViewSet',
+    'ClientPortalViewSet',
+]
+
+
+
+================================================================================
+ARQUIVO 9 DE 38
+================================================================================
+📁 PASTA: apps\clients\api\views\client_views.py
+📄 ARQUIVO: client_views.py
+📏 TAMANHO: 21.99 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 599
+================================================================================
+
+"""
+ClientViewSet â€” CRUD completo + actions de negÃ³cio.
+
+Regras:
+    - Views finas.
+    - Regra de negÃ³cio nos Services.
+    - Tenant isolation em todos os endpoints.
+    - Capabilities aplicadas via `_require_capability`.
+    - Sem archive/unarchive: cliente Ã© criado, editado ou excluÃ­do.
+    - `status` Ã© editÃ¡vel via `clients.client.update`.
+    - Sem timeline local. Eventos vÃ£o para `ClientEventEmitter`.
+"""
+
+import logging
+
+from django.conf import settings
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+
+from apps.clients.models import (
+    Client,
+    ClientNote,
+    ClientContact,
+)
+from apps.clients.api.serializers import (
+    ClientListSerializer,
+    ClientDetailSerializer,
+    ClientCreateSerializer,
+    ClientUpdateSerializer,
+    ClientContextUpdateSerializer,
+    ClientContactSerializer,
+    ClientContactCreateSerializer,
+    ClientContactUpdateSerializer,
+    ClientNoteSerializer,
+    ClientNoteCreateSerializer,
+    ClientNoteUpdateSerializer,
+    PortalSessionSerializer,
+    PortalInvitationSerializer,
+    PortalFeedbackSerializer,
+)
+from apps.clients.services import (
+    ClientService,
+    ContactService,
+    NoteService,
+    PortalService,
+    PortalInvitationService,
+)
+from apps.clients.exceptions import (
+    ClientDuplicateEmailError,
+    ClientNotFoundError,
+    ContactNotFoundError,
+    NoteNotFoundError,
+    PortalEmailMissingError,
+)
+from apps.workspaces.queries import WorkspaceQueries
+from apps.workspaces.models import WorkspaceMembership
+from apps.console.models import ConsoleGovernanceCapability
+
+logger = logging.getLogger('clients')
+
+
+class ClientViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet de Client.
+
+    Resolve automaticamente o Workspace ativo da sessÃ£o e aplica
+    tenant isolation + capability.
+    """
+
+    permission_classes = [IsAuthenticated]
+    lookup_field = 'id'
+
+    # ------------------------------------------------------------------
+    # CONTEXTO
+    # ------------------------------------------------------------------
+
+    def _current_workspace(self):
+        workspace_id = self.request.session.get('current_workspace_id')
+        if not workspace_id:
+            return None
+        return WorkspaceQueries.get_for_user(workspace_id, self.request.user)
+
+    def _require_capability(self, workspace, capability_code):
+        membership = WorkspaceMembership.objects.filter(
+            workspace=workspace,
+            user=self.request.user,
+        ).select_related('governance').first()
+
+        if membership is None:
+            return Response(
+                {'error': 'VocÃª nÃ£o Ã© membro deste Workspace'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if membership.governance.key == 'proprietario':
+            return None
+
+        has = ConsoleGovernanceCapability.objects.filter(
+            governance=membership.governance,
+            capability__code=capability_code,
+            capability__is_active=True,
+        ).exists()
+
+        if not has:
+            return Response(
+                {'error': f'Sua governanÃ§a nÃ£o permite esta aÃ§Ã£o ({capability_code}).'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        return None
+
+    # ------------------------------------------------------------------
+    # QUERYSET
+    # ------------------------------------------------------------------
+
+    def get_queryset(self):
+        workspace = self._current_workspace()
+        if workspace is None:
+            return Client.objects.none()
+        return Client.objects.filter(workspace=workspace).order_by('-created_at')
+
+    def _get_client_or_404(self, client_id):
+        workspace = self._current_workspace()
+        if workspace is None:
+            return None
+        return Client.objects.filter(id=client_id, workspace=workspace).first()
+
+    # ------------------------------------------------------------------
+    # SERIALIZER
+    # ------------------------------------------------------------------
+
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return ClientCreateSerializer
+        if self.action in ('update', 'partial_update'):
+            return ClientUpdateSerializer
+        if self.action == 'list':
+            return ClientListSerializer
+        return ClientDetailSerializer
+
+    # ------------------------------------------------------------------
+    # CRUD
+    # ------------------------------------------------------------------
+
+    def list(self, request, *args, **kwargs):
+        workspace = self._current_workspace()
+        if workspace is None:
+            return Response({'error': 'Nenhum workspace ativo'}, status=400)
+
+        err = self._require_capability(workspace, 'clients.client.view')
+        if err is not None:
+            return err
+
+        qs = self.get_queryset()
+        serializer = ClientListSerializer(qs, many=True)
+        return Response(serializer.data)
+
+    def create(self, request, *args, **kwargs):
+        workspace = self._current_workspace()
+        if workspace is None:
+            return Response({'error': 'Nenhum workspace ativo'}, status=400)
+
+        err = self._require_capability(workspace, 'clients.client.create')
+        if err is not None:
+            return err
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            client = ClientService.create_client(
+                workspace=workspace,
+                name=serializer.validated_data['name'],
+                created_by=request.user,
+                email=serializer.validated_data.get('email', ''),
+                phone=serializer.validated_data.get('phone', ''),
+                request=request,
+            )
+        except ClientDuplicateEmailError as e:
+            return Response({'error': str(e)}, status=status.HTTP_409_CONFLICT)
+
+        # Envio automÃ¡tico do cÃ³digo de acesso por email.
+        # NÃ£o bloqueia a criaÃ§Ã£o se o envio falhar.
+        if client.email:
+            try:
+                from apps.accounts.services.email import EmailService
+
+                frontend_url = getattr(
+                    settings, 'FRONTEND_URL', 'http://localhost:9000'
+                ).rstrip('/')
+                portal_url = f"{frontend_url}/portal/{client.public_code}/"
+
+                EmailService.send_client_code_email(
+                    client=client,
+                    workspace=workspace,
+                    portal_url=portal_url,
+                )
+            except Exception:
+                logger.exception(
+                    "Falha ao enviar cÃ³digo de acesso para client_id=%s email=%s",
+                    client.id,
+                    client.email,
+                )
+
+        return Response(
+            ClientDetailSerializer(client).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    def retrieve(self, request, *args, **kwargs):
+        client = self._get_client_or_404(kwargs.get('id'))
+        if client is None:
+            return Response({'error': 'Cliente nÃ£o encontrado'}, status=404)
+
+        err = self._require_capability(client.workspace, 'clients.client.view')
+        if err is not None:
+            return err
+
+        return Response(ClientDetailSerializer(client).data)
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        client = self._get_client_or_404(kwargs.get('id'))
+        if client is None:
+            return Response({'error': 'Cliente nÃ£o encontrado'}, status=404)
+
+        err = self._require_capability(client.workspace, 'clients.client.update')
+        if err is not None:
+            return err
+
+        serializer = self.get_serializer(data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            client = ClientService.update_client(
+                client=client,
+                actor=request.user,
+                name=serializer.validated_data.get('name'),
+                email=serializer.validated_data.get('email'),
+                phone=serializer.validated_data.get('phone'),
+                status=serializer.validated_data.get('status'),
+                request=request,
+            )
+        except ClientDuplicateEmailError as e:
+            return Response({'error': str(e)}, status=status.HTTP_409_CONFLICT)
+        except ValueError as e:
+            return Response({'error': str(e)}, status=400)
+
+        return Response(ClientDetailSerializer(client).data)
+
+    def destroy(self, request, *args, **kwargs):
+        client = self._get_client_or_404(kwargs.get('id'))
+        if client is None:
+            return Response({'error': 'Cliente nÃ£o encontrado'}, status=404)
+
+        err = self._require_capability(client.workspace, 'clients.client.delete')
+        if err is not None:
+            return err
+
+        ClientService.delete_client(client, actor=request.user, request=request)
+        return Response(
+            {'detail': 'Cliente excluÃ­do com sucesso'},
+            status=status.HTTP_204_NO_CONTENT,
+        )
+
+    # ------------------------------------------------------------------
+    # ACTION: context
+    # ------------------------------------------------------------------
+
+    @action(detail=True, methods=['patch'], url_path='context')
+    def update_context(self, request, id=None):
+        client = self._get_client_or_404(id)
+        if client is None:
+            return Response({'error': 'Cliente nÃ£o encontrado'}, status=404)
+
+        err = self._require_capability(client.workspace, 'clients.client.update')
+        if err is not None:
+            return err
+
+        serializer = ClientContextUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        client = ClientService.update_context(
+            client=client,
+            context=serializer.validated_data['context'],
+            actor=request.user,
+            request=request,
+        )
+        return Response(ClientDetailSerializer(client).data)
+
+    # ==================================================================
+    # CONTACTS
+    # ==================================================================
+
+    @action(detail=True, methods=['get', 'post'], url_path='contacts')
+    def contacts(self, request, id=None):
+        client = self._get_client_or_404(id)
+        if client is None:
+            return Response({'error': 'Cliente nÃ£o encontrado'}, status=404)
+
+        if request.method == 'GET':
+            err = self._require_capability(client.workspace, 'clients.client.view')
+            if err is not None:
+                return err
+            contacts = ContactService.list_for_client(client)
+            return Response(ClientContactSerializer(contacts, many=True).data)
+
+        err = self._require_capability(client.workspace, 'clients.contact.manage')
+        if err is not None:
+            return err
+
+        serializer = ClientContactCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        contact = ContactService.create_contact(
+            client=client,
+            name=serializer.validated_data['name'],
+            role=serializer.validated_data.get('role', 'other'),
+            email=serializer.validated_data.get('email', ''),
+            phone=serializer.validated_data.get('phone', ''),
+            notes=serializer.validated_data.get('notes', ''),
+        )
+        return Response(
+            ClientContactSerializer(contact).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(
+        detail=True,
+        methods=['get', 'patch', 'delete'],
+        url_path=r'contacts/(?P<contact_id>[^/.]+)',
+    )
+    def contact_detail(self, request, id=None, contact_id=None):
+        client = self._get_client_or_404(id)
+        if client is None:
+            return Response({'error': 'Cliente nÃ£o encontrado'}, status=404)
+
+        try:
+            contact = ContactService.get_for_client(client, contact_id)
+        except ContactNotFoundError as e:
+            return Response({'error': str(e)}, status=404)
+
+        if request.method == 'GET':
+            err = self._require_capability(client.workspace, 'clients.client.view')
+            if err is not None:
+                return err
+            return Response(ClientContactSerializer(contact).data)
+
+        err = self._require_capability(client.workspace, 'clients.contact.manage')
+        if err is not None:
+            return err
+
+        if request.method == 'PATCH':
+            serializer = ClientContactUpdateSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            contact = ContactService.update_contact(
+                contact=contact,
+                name=serializer.validated_data.get('name'),
+                role=serializer.validated_data.get('role'),
+                email=serializer.validated_data.get('email'),
+                phone=serializer.validated_data.get('phone'),
+                notes=serializer.validated_data.get('notes'),
+            )
+            return Response(ClientContactSerializer(contact).data)
+
+        ContactService.delete_contact(contact)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    # ==================================================================
+    # NOTES
+    # ==================================================================
+
+    @action(detail=True, methods=['get', 'post'], url_path='notes')
+    def notes(self, request, id=None):
+        client = self._get_client_or_404(id)
+        if client is None:
+            return Response({'error': 'Cliente nÃ£o encontrado'}, status=404)
+
+        if request.method == 'GET':
+            err = self._require_capability(client.workspace, 'clients.client.view')
+            if err is not None:
+                return err
+            notes = NoteService.list_for_client(client)
+            return Response(ClientNoteSerializer(notes, many=True).data)
+
+        err = self._require_capability(client.workspace, 'clients.note.create')
+        if err is not None:
+            return err
+
+        serializer = ClientNoteCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        note = NoteService.create_note(
+            client=client,
+            author=request.user,
+            content=serializer.validated_data['content'],
+            is_pinned=serializer.validated_data.get('is_pinned', False),
+            request=request,
+        )
+        return Response(
+            ClientNoteSerializer(note).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(
+        detail=True,
+        methods=['get', 'patch', 'delete'],
+        url_path=r'notes/(?P<note_id>[^/.]+)',
+    )
+    def note_detail(self, request, id=None, note_id=None):
+        client = self._get_client_or_404(id)
+        if client is None:
+            return Response({'error': 'Cliente nÃ£o encontrado'}, status=404)
+
+        try:
+            note = NoteService.get_for_client(client, note_id)
+        except NoteNotFoundError as e:
+            return Response({'error': str(e)}, status=404)
+
+        if request.method == 'GET':
+            err = self._require_capability(client.workspace, 'clients.client.view')
+            if err is not None:
+                return err
+            return Response(ClientNoteSerializer(note).data)
+
+        if request.method == 'PATCH':
+            err = self._require_capability(client.workspace, 'clients.note.update')
+            if err is not None:
+                return err
+            serializer = ClientNoteUpdateSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            note = NoteService.update_note(
+                note=note,
+                actor=request.user,
+                content=serializer.validated_data.get('content'),
+                is_pinned=serializer.validated_data.get('is_pinned'),
+                request=request,
+            )
+            return Response(ClientNoteSerializer(note).data)
+
+        err = self._require_capability(client.workspace, 'clients.note.delete')
+        if err is not None:
+            return err
+        NoteService.delete_note(note, actor=request.user, request=request)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    # ==================================================================
+    # PORTAL
+    # ==================================================================
+
+    @action(detail=True, methods=['get'], url_path='portal/sessions')
+    def portal_sessions(self, request, id=None):
+        client = self._get_client_or_404(id)
+        if client is None:
+            return Response({'error': 'Cliente nÃ£o encontrado'}, status=404)
+
+        err = self._require_capability(client.workspace, 'clients.portal.view')
+        if err is not None:
+            return err
+
+        sessions = PortalService.list_active_sessions(client)
+        return Response(PortalSessionSerializer(sessions, many=True).data)
+
+    @action(detail=True, methods=['get'], url_path='portal/invitations')
+    def portal_invitations(self, request, id=None):
+        client = self._get_client_or_404(id)
+        if client is None:
+            return Response({'error': 'Cliente nÃ£o encontrado'}, status=404)
+
+        err = self._require_capability(client.workspace, 'clients.portal.view')
+        if err is not None:
+            return err
+
+        from apps.clients.models import ClientPortalInvitation
+        invitations = (
+            ClientPortalInvitation.objects
+            .filter(client=client)
+            .select_related('sent_by')
+            .order_by('-sent_at')
+        )
+        return Response(PortalInvitationSerializer(invitations, many=True).data)
+
+    @action(
+        detail=True,
+        methods=['post'],
+        url_path='portal/send-access',
+    )
+    def portal_send_access(self, request, id=None):
+        client = self._get_client_or_404(id)
+        if client is None:
+            return Response({'error': 'Cliente nÃ£o encontrado'}, status=404)
+
+        err = self._require_capability(client.workspace, 'clients.portal.share')
+        if err is not None:
+            return err
+
+        try:
+            invitation = PortalInvitationService.send_access(
+                client=client,
+                actor=request.user,
+                request=request,
+            )
+        except PortalEmailMissingError as e:
+            return Response({'error': str(e)}, status=400)
+        except Exception:
+            return Response(
+                {'error': 'Falha ao enviar acesso'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        return Response(
+            PortalInvitationSerializer(invitation).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(
+        detail=True,
+        methods=['post'],
+        url_path=r'portal/sessions/(?P<session_id>[^/.]+)/revoke',
+    )
+    def portal_revoke_session(self, request, id=None, session_id=None):
+        client = self._get_client_or_404(id)
+        if client is None:
+            return Response({'error': 'Cliente nÃ£o encontrado'}, status=404)
+
+        err = self._require_capability(client.workspace, 'clients.portal.share')
+        if err is not None:
+            return err
+
+        session = PortalService.get_session_or_none(session_id)
+        if session is None or session.client_id != client.id:
+            return Response({'error': 'SessÃ£o nÃ£o encontrada'}, status=404)
+
+        PortalService.revoke_session(session)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    # ==================================================================
+    # FEEDBACK
+    # ==================================================================
+
+    @action(detail=True, methods=['get'], url_path='feedback')
+    def list_feedback(self, request, id=None):
+        client = self._get_client_or_404(id)
+        if client is None:
+            return Response({'error': 'Cliente nÃ£o encontrado'}, status=404)
+
+        err = self._require_capability(client.workspace, 'clients.portal.view')
+        if err is not None:
+            return err
+
+        feedbacks = PortalService.list_feedbacks(client)
+        return Response(PortalFeedbackSerializer(feedbacks, many=True).data)
+
+    # ==================================================================
+    # SEND CODE
+    # ==================================================================
+
+    @action(
+        detail=True,
+        methods=['post'],
+        url_path='send-code',
+    )
+    def send_code(self, request, id=None):
+        """
+        Envia (ou reenvia) o cÃ³digo do cliente por email.
+        """
+        client = self._get_client_or_404(id)
+        if client is None:
+            return Response({'error': 'Cliente nÃ£o encontrado'}, status=404)
+
+        err = self._require_capability(client.workspace, 'clients.portal.share')
+        if err is not None:
+            return err
+
+        if not client.email:
+            return Response(
+                {'error': 'O cliente nÃ£o possui email cadastrado.'},
+                status=400,
+            )
+
+        from apps.accounts.services.email import EmailService
+
+        frontend_url = getattr(
+            settings, 'FRONTEND_URL', 'http://localhost:9000'
+        ).rstrip('/')
+        portal_url = f"{frontend_url}/portal/{client.public_code}/"
+
+        try:
+            EmailService.send_client_code_email(
+                client=client,
+                workspace=client.workspace,
+                portal_url=portal_url,
+            )
+        except Exception:
+            return Response(
+                {'error': 'Falha ao enviar o cÃ³digo'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        return Response({'detail': 'CÃ³digo enviado com sucesso'})
+
+
+
+================================================================================
+ARQUIVO 10 DE 38
+================================================================================
+📁 PASTA: apps\clients\api\views\portal_views.py
+📄 ARQUIVO: portal_views.py
+📏 TAMANHO: 3.9 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 109
+================================================================================
+
+"""
+ClientPortalViewSet â€” endpoints consumidos pelo PRÃ“PRIO cliente.
+
+AutenticaÃ§Ã£o:
+    ClientPortalSession (via middleware), NÃƒO Workspace login.
+
+Capabilities:
+    NÃƒO usa capability de arquiteto. O token do Portal Ã© a autorizaÃ§Ã£o.
+    O middleware jÃ¡ validou a sessÃ£o; a view sÃ³ confia em
+    `request.portal_client`.
+"""
+
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+
+from apps.clients.permissions import IsPortalSessionAuthenticated
+from apps.clients.api.serializers.portal_serializers import (
+    PortalContextSerializer,
+    PortalFeedbackSerializer,
+    PortalFeedbackCreateSerializer,
+)
+from apps.clients.services import PortalService
+
+
+class ClientPortalViewSet(viewsets.ViewSet):
+    """
+    Endpoints do Portal do Cliente.
+
+    Todas as rotas exigem `request.portal_session` vÃ¡lido
+    (populado pelo ClientPortalMiddleware).
+    """
+
+    permission_classes = [IsPortalSessionAuthenticated]
+
+    # ------------------------------------------------------------------
+    # CONTEXTO
+    # ------------------------------------------------------------------
+
+    @action(detail=False, methods=['get'], url_path='me')
+    def me(self, request):
+        """Retorna o contexto pÃºblico do cliente."""
+        client = request.portal_client
+        data = {
+            'public_code': client.public_code,
+            'name': client.name,
+            'context': client.context or {},
+        }
+        return Response(PortalContextSerializer(data).data)
+
+    # ------------------------------------------------------------------
+    # FEEDBACK
+    # ------------------------------------------------------------------
+
+    @action(detail=False, methods=['post'], url_path='feedback')
+    def submit_feedback(self, request):
+        """
+        Cliente envia feedback de experiÃªncia do Portal.
+
+        AutenticaÃ§Ã£o: ClientPortalSession.
+        NÃƒO exige capability de arquiteto.
+        """
+        client = request.portal_client
+
+        serializer = PortalFeedbackCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        feedback = PortalService.submit_feedback(
+            client=client,
+            kind=serializer.validated_data['kind'],
+            rating=serializer.validated_data.get('rating', ''),
+            message=serializer.validated_data.get('message', ''),
+            page=serializer.validated_data.get('page', ''),
+            request=request,
+        )
+
+        return Response(
+            PortalFeedbackSerializer(feedback).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    # ------------------------------------------------------------------
+    # CONFIRMAÃ‡ÃƒO / EDIÃ‡ÃƒO DE CONTEXTO
+    # ------------------------------------------------------------------
+
+    @action(detail=False, methods=['post'], url_path='context/confirm')
+    def context_confirm(self, request):
+        """Cliente confirma que o contexto publicado estÃ¡ correto."""
+        client = request.portal_client
+        from apps.clients.events import ClientEventEmitter
+        ClientEventEmitter.portal_context_confirmed(
+            client=client, request=request,
+        )
+        return Response({'detail': 'Contexto confirmado'})
+
+    @action(detail=False, methods=['post'], url_path='context/edit')
+    def context_edit(self, request):
+        """
+        Cliente propÃµe uma correÃ§Ã£o ao contexto publicado.
+
+        V1: registra apenas o evento (a correÃ§Ã£o real pertence a
+        Intelligence). NÃ£o sobrescreve `Client.context` diretamente.
+        """
+        client = request.portal_client
+        from apps.clients.events import ClientEventEmitter
+        ClientEventEmitter.portal_context_edited(
+            client=client, request=request,
+        )
+        return Response({'detail': 'CorreÃ§Ã£o registrada'})
+
+
+
+================================================================================
+ARQUIVO 11 DE 38
+================================================================================
+📁 PASTA: apps\clients\apps.py
+📄 ARQUIVO: apps.py
+📏 TAMANHO: 0.31 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 11
+================================================================================
+
+from django.apps import AppConfig
+from django.utils.translation import gettext_lazy as _
+
+
+class ClientsConfig(AppConfig):
+    default_auto_field = 'django.db.models.BigAutoField'
+    name = 'apps.clients'
+    verbose_name = _('Clientes')
+
+    def ready(self):
+        import apps.clients.signals  # noqa: F401
+
+
+
+================================================================================
+ARQUIVO 12 DE 38
+================================================================================
+📁 PASTA: apps\clients\capabilities.py
+📄 ARQUIVO: capabilities.py
+📏 TAMANHO: 2.88 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 91
+================================================================================
+
+"""
+Capabilities declaradas pelo mÃ³dulo clients.
+
+REGRA: capability nasce no app que executa a aÃ§Ã£o.
+O Console descobre, cataloga e permite que GovernanÃ§as selecionem.
+
+Formato: <app>.<resource>.<action> â€” o primeiro segmento DEVE ser
+o label do AppConfig ('clients').
+"""
+
+CAPABILITIES = [
+    # ==================================================================
+    # CLIENT
+    # ==================================================================
+    {
+        'code': 'clients.client.view',
+        'name': 'Ver clientes',
+        'description': (
+            'Permite listar e visualizar clientes do workspace, '
+            'incluindo seu contexto consolidado.'
+        ),
+    },
+    {
+        'code': 'clients.client.create',
+        'name': 'Criar cliente',
+        'description': 'Permite cadastrar novos clientes no workspace.',
+    },
+    {
+        'code': 'clients.client.update',
+        'name': 'Editar cliente',
+        'description': (
+            'Permite alterar dados cadastrais, status e contexto do cliente.'
+        ),
+    },
+    {
+        'code': 'clients.client.delete',
+        'name': 'Excluir cliente',
+        'description': (
+            'Permite excluir clientes do workspace. AÃ§Ã£o irreversÃ­vel.'
+        ),
+    },
+
+    # ==================================================================
+    # CONTACTS
+    # ==================================================================
+    {
+        'code': 'clients.contact.manage',
+        'name': 'Gerenciar contatos',
+        'description': (
+            'Permite criar, editar e remover contatos de um cliente.'
+        ),
+    },
+
+    # ==================================================================
+    # NOTES
+    # ==================================================================
+    {
+        'code': 'clients.note.create',
+        'name': 'Adicionar nota',
+        'description': 'Permite adicionar anotaÃ§Ãµes a um cliente.',
+    },
+    {
+        'code': 'clients.note.update',
+        'name': 'Editar nota',
+        'description': 'Permite editar anotaÃ§Ãµes de um cliente.',
+    },
+    {
+        'code': 'clients.note.delete',
+        'name': 'Excluir nota',
+        'description': 'Permite excluir anotaÃ§Ãµes de um cliente.',
+    },
+
+    # ==================================================================
+    # PORTAL
+    # ==================================================================
+    {
+        'code': 'clients.portal.view',
+        'name': 'Ver Portal do cliente',
+        'description': (
+            'Permite visualizar o estado do Portal do cliente, '
+            'incluindo sessÃµes e histÃ³rico de acesso.'
+        ),
+    },
+    {
+        'code': 'clients.portal.share',
+        'name': 'Compartilhar acesso via Portal',
+        'description': (
+            'Permite enviar/reenviar o acesso do cliente ao Portal.'
+        ),
+    },
+]
+
+
+
+================================================================================
+ARQUIVO 13 DE 38
+================================================================================
+📁 PASTA: apps\clients\events\__init__.py
+📄 ARQUIVO: __init__.py
+📏 TAMANHO: 0.1 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 3
+================================================================================
+
+from apps.clients.events.client_events import ClientEventEmitter
+
+__all__ = ['ClientEventEmitter']
+
+
+
+================================================================================
+ARQUIVO 14 DE 38
+================================================================================
+📁 PASTA: apps\clients\events\client_events.py
+📄 ARQUIVO: client_events.py
+📏 TAMANHO: 5.71 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 188
+================================================================================
+
+"""
+Emissor de eventos de domÃ­nio do mÃ³dulo clients.
+
+REGRA ARQUITETURAL
+------------------
+O domÃ­nio de origem SABE quais eventos produz.
+A timeline transversal SABE como os persiste.
+
+Este emitter:
+
+    - publica um Signal Django (`client_event`)
+    - NÃƒO persiste timeline local
+    - NÃƒO conhece a implementaÃ§Ã£o da timeline transversal
+
+Consumidores futuros (timeline, notificaÃ§Ãµes, intelligence) se
+conectam a `apps.clients.events.client_event`.
+
+Eventos representam fatos ocorridos, nÃ£o estado calculado.
+
+    CORRETO:   client.created
+    INCORRETO: client.is_healthy
+
+    CORRETO:   portal.opened
+    INCORRETO: client.needs_attention
+"""
+
+from django.dispatch import Signal
+from django.utils import timezone
+
+
+# Signal genÃ©rico do mÃ³dulo
+client_event = Signal()
+
+
+class ClientEventEmitter:
+    """
+    Ponto Ãºnico de emissÃ£o de eventos do domÃ­nio clients.
+
+    Cada mÃ©todo corresponde a um fato relevante do domÃ­nio.
+    """
+
+    # ------------------------------------------------------------------
+    # CLIENT
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def client_created(client, actor=None, request=None):
+        ClientEventEmitter._emit(
+            client=client,
+            actor=actor,
+            signal_name='client.created',
+            payload={'public_code': client.public_code},
+            request=request,
+        )
+
+    @staticmethod
+    def client_updated(client, changes: dict, actor=None, request=None):
+        ClientEventEmitter._emit(
+            client=client,
+            actor=actor,
+            signal_name='client.updated',
+            payload={'changes': list(changes.keys())},
+            request=request,
+        )
+
+    @staticmethod
+    def client_deleted(client_id, client_name, actor=None, request=None):
+        client_event.send(
+            sender=ClientEventEmitter,
+            signal_name='client.deleted',
+            client_id=str(client_id),
+            client_name=client_name,
+            actor_email=actor.email if actor else '',
+            occurred_at=timezone.now(),
+        )
+
+    # ------------------------------------------------------------------
+    # NOTE
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def note_created(client, note, actor=None, request=None):
+        ClientEventEmitter._emit(
+            client=client,
+            actor=actor,
+            signal_name='note.created',
+            payload={'note_id': str(note.id)},
+            request=request,
+        )
+
+    @staticmethod
+    def note_updated(client, note, actor=None, request=None):
+        ClientEventEmitter._emit(
+            client=client,
+            actor=actor,
+            signal_name='note.updated',
+            payload={'note_id': str(note.id)},
+            request=request,
+        )
+
+    @staticmethod
+    def note_deleted(client, note_id, actor=None, request=None):
+        ClientEventEmitter._emit(
+            client=client,
+            actor=actor,
+            signal_name='note.deleted',
+            payload={'note_id': str(note_id)},
+            request=request,
+        )
+
+    # ------------------------------------------------------------------
+    # PORTAL
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def portal_invitation_sent(client, actor=None, request=None):
+        ClientEventEmitter._emit(
+            client=client,
+            actor=actor,
+            signal_name='portal.invitation_sent',
+            payload={'note': 'Acesso ao Portal enviado por email'},
+            request=request,
+        )
+
+    @staticmethod
+    def portal_opened(client, actor=None, request=None):
+        ClientEventEmitter._emit(
+            client=client,
+            actor=actor,
+            signal_name='portal.opened',
+            payload={},
+            request=request,
+        )
+
+    @staticmethod
+    def portal_context_confirmed(client, actor=None, request=None):
+        ClientEventEmitter._emit(
+            client=client,
+            actor=actor,
+            signal_name='portal.context_confirmed',
+            payload={},
+            request=request,
+        )
+
+    @staticmethod
+    def portal_context_edited(client, actor=None, request=None):
+        ClientEventEmitter._emit(
+            client=client,
+            actor=actor,
+            signal_name='portal.context_edited',
+            payload={},
+            request=request,
+        )
+
+    @staticmethod
+    def portal_feedback_received(client, feedback, actor=None, request=None):
+        ClientEventEmitter._emit(
+            client=client,
+            actor=actor,
+            signal_name='portal.feedback_received',
+            payload={
+                'note': f'Feedback recebido ({feedback.kind})',
+                'feedback_id': str(feedback.id),
+            },
+            request=request,
+        )
+
+    # ------------------------------------------------------------------
+    # INTERNO
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _emit(client, actor, signal_name: str, payload: dict, request=None):
+        """
+        Publica o evento via Signal Django.
+
+        NÃƒO persiste nada localmente. A timeline transversal Ã©
+        responsÃ¡vel por consumir e armazenar.
+        """
+        client_event.send(
+            sender=ClientEventEmitter,
+            signal_name=signal_name,
+            client_id=str(client.id),
+            client_name=client.name,
+            actor_email=actor.email if actor and actor.is_authenticated else '',
+            occurred_at=timezone.now(),
+            **payload,
+        )
+
+
+
+================================================================================
+ARQUIVO 15 DE 38
+================================================================================
+📁 PASTA: apps\clients\exceptions\__init__.py
+📄 ARQUIVO: __init__.py
+📏 TAMANHO: 0.61 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 25
+================================================================================
+
+from apps.clients.exceptions.client_exceptions import (
+    ClientError,
+    ClientNotFoundError,
+    ClientDuplicateEmailError,
+    ClientPublicCodeError,
+    ContactNotFoundError,
+    NoteNotFoundError,
+    PortalAccessError,
+    PortalEmailMissingError,
+    PortalSessionError,
+    PortalSessionExpiredError,
+)
+
+__all__ = [
+    'ClientError',
+    'ClientNotFoundError',
+    'ClientDuplicateEmailError',
+    'ClientPublicCodeError',
+    'ContactNotFoundError',
+    'NoteNotFoundError',
+    'PortalAccessError',
+    'PortalEmailMissingError',
+    'PortalSessionError',
+    'PortalSessionExpiredError',
+]
+
+
+
+================================================================================
+ARQUIVO 16 DE 38
+================================================================================
+📁 PASTA: apps\clients\exceptions\client_exceptions.py
+📄 ARQUIVO: client_exceptions.py
+📏 TAMANHO: 0.78 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 53
+================================================================================
+
+"""
+ExceÃ§Ãµes do mÃ³dulo clients.
+"""
+
+
+class ClientError(Exception):
+    """Base do mÃ³dulo clients."""
+    pass
+
+
+# ---- Client ----
+
+class ClientNotFoundError(ClientError):
+    pass
+
+
+class ClientDuplicateEmailError(ClientError):
+    pass
+
+
+class ClientPublicCodeError(ClientError):
+    pass
+
+
+# ---- Contact ----
+
+class ContactNotFoundError(ClientError):
+    pass
+
+
+# ---- Note ----
+
+class NoteNotFoundError(ClientError):
+    pass
+
+
+# ---- Portal ----
+
+class PortalAccessError(ClientError):
+    pass
+
+
+class PortalEmailMissingError(PortalAccessError):
+    """Cliente nÃ£o possui email vÃ¡lido para receber acesso."""
+    pass
+
+
+class PortalSessionError(PortalAccessError):
+    pass
+
+
+class PortalSessionExpiredError(PortalAccessError):
+    pass
+
+
+
+================================================================================
+ARQUIVO 17 DE 38
+================================================================================
+📁 PASTA: apps\clients\middleware.py
+📄 ARQUIVO: middleware.py
+📏 TAMANHO: 1.3 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 44
+================================================================================
+
+"""
+ClientPortalMiddleware â€” resolve a sessÃ£o do Portal do Cliente.
+
+O cliente autentica no Portal via link com token. ApÃ³s o primeiro
+acesso, guardamos um cookie `clivo_portal` com o token cru.
+
+Este middleware:
+    1. LÃª o cookie `clivo_portal`
+    2. Resolve ClientPortalSession pelo hash
+    3. Valida expiraÃ§Ã£o
+    4. Popula `request.portal_session` e `request.portal_client`
+
+NÃ£o cria sessÃ£o. NÃ£o autentica. Apenas resolve o contexto.
+"""
+
+import logging
+
+from apps.clients.models import ClientPortalSession
+
+logger = logging.getLogger('clients')
+
+PORTAL_COOKIE_NAME = 'clivo_portal'
+
+
+class ClientPortalMiddleware:
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        request.portal_session = None
+        request.portal_client = None
+
+        raw = request.COOKIES.get(PORTAL_COOKIE_NAME)
+        if raw:
+            try:
+                session = ClientPortalSession.find_by_raw_token(raw)
+                if session and session.is_valid():
+                    request.portal_session = session
+                    request.portal_client = session.client
+            except Exception:
+                logger.exception("Falha ao resolver sessÃ£o do Portal")
+
+        return self.get_response(request)
+
+
+
+================================================================================
+ARQUIVO 18 DE 38
+================================================================================
+📁 PASTA: apps\clients\models\__init__.py
+📄 ARQUIVO: __init__.py
+📏 TAMANHO: 0.6 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 17
+================================================================================
+
+from apps.clients.models.client import Client
+from apps.clients.models.contact import ClientContact
+from apps.clients.models.note import ClientNote
+from apps.clients.models.portal_access import ClientPortalAccess
+from apps.clients.models.portal_session import ClientPortalSession
+from apps.clients.models.portal_invitation import ClientPortalInvitation
+from apps.clients.models.portal_feedback import ClientPortalFeedback
+
+__all__ = [
+    'Client',
+    'ClientContact',
+    'ClientNote',
+    'ClientPortalAccess',
+    'ClientPortalSession',
+    'ClientPortalInvitation',
+    'ClientPortalFeedback',
+]
+
+
+
+================================================================================
+ARQUIVO 19 DE 38
+================================================================================
+📁 PASTA: apps\clients\models\client.py
+📄 ARQUIVO: client.py
+📏 TAMANHO: 3.38 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 124
+================================================================================
+
+"""
+Modelo Client.
+
+Client Ã© o contexto vivo do relacionamento entre o Workspace e um cliente.
+
+NÃƒO Ã© um cadastro. NÃƒO Ã© CRM. NÃƒO Ã© dono de briefings/intelligence.
+Ã‰ a Ã¢ncora de identidade, Portal, notas, tarefas e timeline.
+"""
+
+import uuid
+from django.db import models
+from django.utils.translation import gettext_lazy as _
+
+
+class Client(models.Model):
+
+    STATUS_ACTIVE = 'active'
+    STATUS_INACTIVE = 'inactive'
+    STATUS_SUSPENDED = 'suspended'
+
+    STATUS_CHOICES = [
+        (STATUS_ACTIVE, 'Ativo'),
+        (STATUS_INACTIVE, 'Inativo'),
+        (STATUS_SUSPENDED, 'Suspenso'),
+    ]
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
+
+    workspace = models.ForeignKey(
+        'workspaces.Workspace',
+        on_delete=models.CASCADE,
+        related_name='clients',
+        help_text=_('Workspace ao qual o cliente pertence'),
+    )
+
+    public_code = models.CharField(
+        max_length=20,
+        unique=True,
+        db_index=True,
+        editable=False,
+        help_text=_('CÃ³digo pÃºblico (ex: CLI-X7K92P). ImutÃ¡vel. NÃƒO Ã© senha.'),
+    )
+
+    name = models.CharField(
+        max_length=200,
+        help_text=_('Nome principal (ex: "JoÃ£o & Maria")'),
+    )
+
+    email = models.EmailField(
+        blank=True,
+        help_text=_('Email principal de contato'),
+    )
+
+    phone = models.CharField(
+        max_length=30,
+        blank=True,
+    )
+
+    context = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text=_(
+            'Contexto publicado/projeÃ§Ã£o. NÃƒO Ã© fonte de verdade â€” '
+            'Ã© o que o arquiteto decidiu publicar sobre o cliente.'
+        ),
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_ACTIVE,
+        db_index=True,
+        help_text=_('Estado comercial/relacional do cliente.'),
+    )
+
+    created_by = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_clients',
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'client'
+        verbose_name = _('Cliente')
+        verbose_name_plural = _('Clientes')
+        constraints = [
+            models.UniqueConstraint(
+                fields=['workspace', 'email'],
+                condition=models.Q(email__gt=''),
+                name='unique_client_email_per_workspace',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['workspace', 'status']),
+            models.Index(fields=['public_code']),
+            models.Index(fields=['name']),
+            models.Index(fields=['created_at']),
+        ]
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.name} ({self.public_code})"
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+
+        if not self.name or not self.name.strip():
+            raise ValidationError({'name': _('O nome Ã© obrigatÃ³rio')})
+
+        if not self.public_code:
+            raise ValidationError({'public_code': _('O public_code Ã© obrigatÃ³rio')})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+
+
+================================================================================
+ARQUIVO 20 DE 38
+================================================================================
+📁 PASTA: apps\clients\models\contact.py
+📄 ARQUIVO: contact.py
+📏 TAMANHO: 1.76 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 73
+================================================================================
+
+"""
+Modelo ClientContact.
+
+Pessoas associadas ao cliente.
+"""
+
+import uuid
+from django.db import models
+from django.utils.translation import gettext_lazy as _
+
+from apps.clients.models.client import Client
+
+
+class ClientContact(models.Model):
+
+    ROLE_PRIMARY = 'primary'
+    ROLE_SPOUSE = 'spouse'
+    ROLE_CHILD = 'child'
+    ROLE_FAMILY = 'family'
+    ROLE_BUSINESS = 'business'
+    ROLE_OTHER = 'other'
+
+    ROLE_CHOICES = [
+        (ROLE_PRIMARY, 'Titular'),
+        (ROLE_SPOUSE, 'CÃ´njuge'),
+        (ROLE_CHILD, 'Filho(a)'),
+        (ROLE_FAMILY, 'Familiar'),
+        (ROLE_BUSINESS, 'Profissional'),
+        (ROLE_OTHER, 'Outro'),
+    ]
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
+
+    client = models.ForeignKey(
+        Client,
+        on_delete=models.CASCADE,
+        related_name='contacts',
+    )
+
+    name = models.CharField(max_length=150)
+
+    role = models.CharField(
+        max_length=20,
+        choices=ROLE_CHOICES,
+        default=ROLE_OTHER,
+    )
+
+    email = models.EmailField(blank=True)
+    phone = models.CharField(max_length=30, blank=True)
+
+    notes = models.TextField(
+        blank=True,
+        help_text=_('AnotaÃ§Ãµes especÃ­ficas sobre este contato'),
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'client_contact'
+        verbose_name = _('Contato do Cliente')
+        verbose_name_plural = _('Contatos do Cliente')
+        indexes = [
+            models.Index(fields=['client', 'role']),
+        ]
+        ordering = ['role', 'name']
+
+    def __str__(self):
+        return f"{self.name} ({self.get_role_display()})"
+
+
+
+================================================================================
+ARQUIVO 21 DE 38
+================================================================================
+📁 PASTA: apps\clients\models\note.py
+📄 ARQUIVO: note.py
+📏 TAMANHO: 1.48 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 58
+================================================================================
+
+"""
+Modelo ClientNote.
+
+AnotaÃ§Ã£o interna da equipe sobre o cliente.
+"""
+
+import uuid
+from django.db import models
+from django.utils.translation import gettext_lazy as _
+
+from apps.clients.models.client import Client
+
+
+class ClientNote(models.Model):
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
+
+    client = models.ForeignKey(
+        Client,
+        on_delete=models.CASCADE,
+        related_name='notes',
+    )
+
+    author = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='client_notes',
+    )
+
+    content = models.TextField()
+
+    is_pinned = models.BooleanField(
+        default=False,
+        help_text=_('Se a anotaÃ§Ã£o deve aparecer em destaque'),
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'client_note'
+        verbose_name = _('AnotaÃ§Ã£o do Cliente')
+        verbose_name_plural = _('AnotaÃ§Ãµes do Cliente')
+        indexes = [
+            models.Index(fields=['client', '-created_at']),
+            models.Index(fields=['author']),
+            models.Index(fields=['is_pinned']),
+        ]
+        ordering = ['-is_pinned', '-created_at']
+
+    def __str__(self):
+        author = self.author.email if self.author else 'sistema'
+        return f"Nota de {author} sobre {self.client.name}"
+
+
+
+================================================================================
+ARQUIVO 22 DE 38
+================================================================================
+📁 PASTA: apps\clients\models\portal_access.py
+📄 ARQUIVO: portal_access.py
+📏 TAMANHO: 1.31 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 51
+================================================================================
+
+"""
+Modelo ClientPortalAccess.
+
+Observabilidade do uso do Portal â€” registra cada acesso bem-sucedido.
+"""
+
+import uuid
+from django.db import models
+from django.utils.translation import gettext_lazy as _
+
+from apps.clients.models.client import Client
+
+
+class ClientPortalAccess(models.Model):
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
+
+    client = models.ForeignKey(
+        Client,
+        on_delete=models.CASCADE,
+        related_name='portal_accesses',
+    )
+
+    session = models.ForeignKey(
+        'clients.ClientPortalSession',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='accesses',
+    )
+
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.CharField(max_length=255, blank=True)
+
+    accessed_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        db_table = 'client_portal_access'
+        verbose_name = _('Acesso ao Portal')
+        verbose_name_plural = _('Acessos ao Portal')
+        indexes = [
+            models.Index(fields=['client', '-accessed_at']),
+        ]
+        ordering = ['-accessed_at']
+
+    def __str__(self):
+        return f"{self.client.name} @ {self.accessed_at}"
+
+
+
+================================================================================
+ARQUIVO 23 DE 38
+================================================================================
+📁 PASTA: apps\clients\models\portal_feedback.py
+📄 ARQUIVO: portal_feedback.py
+📏 TAMANHO: 2.29 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 95
+================================================================================
+
+"""
+Modelo ClientPortalFeedback.
+
+Feedback de EXPERIÃŠNCIA do cliente sobre o Portal.
+
+IMPORTANTE:
+    Este modelo NÃƒO armazena feedback sobre conteÃºdo interpretado
+    (briefing, intelligence). Isso pertence a `intelligence`.
+
+    Aqui Ã© apenas:
+        - "Foi fÃ¡cil responder?"
+        - "Algo nÃ£o funcionou?"
+        - "Como foi sua experiÃªncia?"
+
+Escopo: experiÃªncia do Portal.
+"""
+
+import uuid
+from django.db import models
+from django.utils.translation import gettext_lazy as _
+
+from apps.clients.models.client import Client
+
+
+class ClientPortalFeedback(models.Model):
+
+    KIND_EXPERIENCE = 'experience'
+    KIND_ISSUE = 'issue'
+    KIND_SUGGESTION = 'suggestion'
+
+    KIND_CHOICES = [
+        (KIND_EXPERIENCE, 'ExperiÃªncia'),
+        (KIND_ISSUE, 'Problema'),
+        (KIND_SUGGESTION, 'SugestÃ£o'),
+    ]
+
+    RATING_POOR = 'poor'
+    RATING_OK = 'ok'
+    RATING_GREAT = 'great'
+
+    RATING_CHOICES = [
+        (RATING_POOR, 'Ruim'),
+        (RATING_OK, 'Ok'),
+        (RATING_GREAT, 'Ã“timo'),
+    ]
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
+
+    client = models.ForeignKey(
+        Client,
+        on_delete=models.CASCADE,
+        related_name='portal_feedbacks',
+    )
+
+    kind = models.CharField(
+        max_length=20,
+        choices=KIND_CHOICES,
+        default=KIND_EXPERIENCE,
+    )
+
+    rating = models.CharField(
+        max_length=10,
+        choices=RATING_CHOICES,
+        blank=True,
+    )
+
+    message = models.TextField(
+        blank=True,
+        help_text=_('ComentÃ¡rio livre do cliente'),
+    )
+
+    page = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text=_('PÃ¡gina do Portal onde o feedback foi enviado'),
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        db_table = 'client_portal_feedback'
+        verbose_name = _('Feedback do Portal')
+        verbose_name_plural = _('Feedbacks do Portal')
+        indexes = [
+            models.Index(fields=['client', '-created_at']),
+            models.Index(fields=['kind']),
+        ]
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Feedback {self.kind} â€” {self.client.name}"
+
+
+
+================================================================================
+ARQUIVO 24 DE 38
+================================================================================
+📁 PASTA: apps\clients\models\portal_invitation.py
+📄 ARQUIVO: portal_invitation.py
+📏 TAMANHO: 2.18 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 87
+================================================================================
+
+"""
+Modelo ClientPortalInvitation.
+
+Registro do envio de acesso do Portal por email.
+
+Guarda evidÃªncia de que um email foi enviado, para quem, quando
+e por qual usuÃ¡rio. O token cru NUNCA Ã© armazenado.
+
+Ciclo:
+    1. Cria `pending`.
+    2. Tenta envio.
+    3. Sucesso  â†’ `sent`.
+       Falha    â†’ `failed` (e a sessÃ£o associada Ã© revogada).
+"""
+
+import uuid
+from django.db import models
+from django.utils.translation import gettext_lazy as _
+
+from apps.clients.models.client import Client
+
+
+class ClientPortalInvitation(models.Model):
+
+    STATUS_PENDING = 'pending'
+    STATUS_SENT = 'sent'
+    STATUS_FAILED = 'failed'
+
+    STATUS_CHOICES = [
+        (STATUS_PENDING, 'Pendente'),
+        (STATUS_SENT, 'Enviado'),
+        (STATUS_FAILED, 'Falhou'),
+    ]
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
+
+    client = models.ForeignKey(
+        Client,
+        on_delete=models.CASCADE,
+        related_name='portal_invitations',
+    )
+
+    session = models.ForeignKey(
+        'clients.ClientPortalSession',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='invitations',
+    )
+
+    email = models.EmailField(
+        help_text=_('Email para o qual o acesso foi enviado'),
+    )
+
+    sent_by = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='sent_client_portal_invitations',
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING,
+    )
+
+    error_message = models.TextField(blank=True)
+
+    sent_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        db_table = 'client_portal_invitation'
+        verbose_name = _('Convite de Portal')
+        verbose_name_plural = _('Convites de Portal')
+        indexes = [
+            models.Index(fields=['client', '-sent_at']),
+            models.Index(fields=['status']),
+        ]
+        ordering = ['-sent_at']
+
+    def __str__(self):
+        return f"Convite {self.client.name} â†’ {self.email} ({self.status})"
+
+
+
+================================================================================
+ARQUIVO 25 DE 38
+================================================================================
+📁 PASTA: apps\clients\models\portal_session.py
+📄 ARQUIVO: portal_session.py
+📏 TAMANHO: 3.63 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 123
+================================================================================
+
+"""
+Modelo ClientPortalSession.
+
+SessÃ£o temporÃ¡ria de autenticaÃ§Ã£o do Portal.
+
+REGRA:
+    public_code identifica o cliente.
+    public_code NÃƒO autentica.
+    A autenticaÃ§Ã£o do Portal Ã© feita por um token temporÃ¡rio,
+    armazenado HASHED neste modelo.
+
+Fluxo:
+    1. Arquiteto envia acesso por email.
+    2. ClientPortalInvitationService gera token (raw, nÃ£o armazenado).
+    3. Armazena apenas hash(token) com expiraÃ§Ã£o.
+    4. Email contÃ©m link com token.
+    5. Cliente abre link, backend valida hash + expiraÃ§Ã£o.
+    6. Cria ClientPortalSession (cookie) e ClientPortalAccess (log).
+"""
+
+import hashlib
+import secrets
+import uuid
+from datetime import timedelta
+
+from django.db import models
+from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
+
+from apps.clients.models.client import Client
+
+
+def _generate_raw_token() -> str:
+    return secrets.token_urlsafe(32)
+
+
+def _hash_token(raw: str) -> str:
+    return hashlib.sha256(raw.encode('utf-8')).hexdigest()
+
+
+class ClientPortalSession(models.Model):
+
+    DEFAULT_TTL_MINUTES = 30
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
+
+    client = models.ForeignKey(
+        Client,
+        on_delete=models.CASCADE,
+        related_name='portal_sessions',
+    )
+
+    token_hash = models.CharField(
+        max_length=64,
+        unique=True,
+        db_index=True,
+        help_text=_('SHA-256 do token de sessÃ£o. O token cru NUNCA Ã© armazenado.'),
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(db_index=True)
+    last_used_at = models.DateTimeField(null=True, blank=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'client_portal_session'
+        verbose_name = _('SessÃ£o de Portal')
+        verbose_name_plural = _('SessÃµes de Portal')
+        indexes = [
+            models.Index(fields=['client', '-created_at']),
+            models.Index(fields=['expires_at']),
+        ]
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"SessÃ£o {self.client.name} â€” expira {self.expires_at}"
+
+    # ------------------------------------------------------------------
+    # API
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def issue(cls, client: Client, ttl_minutes: int | None = None) -> tuple['ClientPortalSession', str]:
+        """
+        Cria uma sessÃ£o e retorna (instÃ¢ncia, token_cru).
+
+        O token_cru sÃ³ Ã© retornado UMA vez. Nunca Ã© recuperÃ¡vel depois.
+        """
+        ttl = ttl_minutes or cls.DEFAULT_TTL_MINUTES
+        raw = _generate_raw_token()
+        session = cls.objects.create(
+            client=client,
+            token_hash=_hash_token(raw),
+            expires_at=timezone.now() + timedelta(minutes=ttl),
+        )
+        return session, raw
+
+    def is_valid(self) -> bool:
+        if self.revoked_at:
+            return False
+        return timezone.now() < self.expires_at
+
+    def touch(self):
+        self.last_used_at = timezone.now()
+        self.save(update_fields=['last_used_at'])
+
+    def revoke(self):
+        self.revoked_at = timezone.now()
+        self.save(update_fields=['revoked_at'])
+
+    @classmethod
+    def find_by_raw_token(cls, raw: str) -> 'ClientPortalSession | None':
+        if not raw:
+            return None
+        h = _hash_token(raw)
+        try:
+            return cls.objects.select_related('client').get(token_hash=h)
+        except cls.DoesNotExist:
+            return None
+
+
+
+================================================================================
+ARQUIVO 26 DE 38
+================================================================================
+📁 PASTA: apps\clients\permissions.py
+📄 ARQUIVO: permissions.py
+📏 TAMANHO: 2.99 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 100
+================================================================================
+
+"""
+PermissÃµes do mÃ³dulo clients.
+
+SEPARAÃ‡ÃƒO:
+    1. TENANT ISOLATION â€” recurso pertence ao Workspace do usuÃ¡rio
+    2. AUTHORIZATION    â€” Governance possui a capability necessÃ¡ria
+
+Nunca fazer Client.objects.get(id=...) e considerar isso autorizaÃ§Ã£o.
+"""
+
+from rest_framework.permissions import BasePermission
+
+from apps.workspaces.models import WorkspaceMembership
+from apps.console.models import ConsoleGovernanceCapability
+
+
+def _workspace_of(obj):
+    """Extrai o Workspace de um objeto do domÃ­nio clients."""
+    from apps.clients.models import Client
+
+    if obj is None:
+        return None
+    if hasattr(obj, 'workspace'):
+        return obj.workspace
+    if hasattr(obj, 'client'):
+        return getattr(obj.client, 'workspace', None)
+    if isinstance(obj, Client):
+        return obj.workspace
+    return None
+
+
+class IsClientWorkspaceMember(BasePermission):
+    """Garante apenas tenant isolation."""
+
+    def has_object_permission(self, request, view, obj):
+        workspace = _workspace_of(obj)
+        if workspace is None:
+            return False
+        return WorkspaceMembership.objects.filter(
+            workspace=workspace,
+            user=request.user,
+        ).exists()
+
+
+class RequireClientCapability(BasePermission):
+    """
+    Combina tenant isolation + capability.
+
+    Uso:
+        class MinhaView(APIView):
+            permission_classes = [IsAuthenticated, RequireClientCapability]
+            required_capability = 'clients.client.update'
+    """
+
+    def has_permission(self, request, view):
+        return bool(request.user and request.user.is_authenticated)
+
+    def has_object_permission(self, request, view, obj):
+        code = getattr(view, 'required_capability', None)
+        if not code:
+            return True
+
+        workspace = _workspace_of(obj)
+        if workspace is None:
+            return False
+
+        membership = WorkspaceMembership.objects.filter(
+            workspace=workspace,
+            user=request.user,
+        ).select_related('governance').first()
+
+        if membership is None:
+            return False
+
+        if membership.governance.key == 'proprietario':
+            return True
+
+        return ConsoleGovernanceCapability.objects.filter(
+            governance=membership.governance,
+            capability__code=code,
+            capability__is_active=True,
+        ).exists()
+
+
+class IsPortalSessionAuthenticated(BasePermission):
+    """
+    Autoriza requisiÃ§Ãµes do Portal do Cliente.
+
+    O cliente NÃƒO tem login de Workspace. Ele Ã© autenticado pela
+    ClientPortalSession (cookie/header setado apÃ³s abrir o link do email).
+
+    Esta permission verifica que `request.portal_session` existe e Ã©
+    vÃ¡lida. O middleware `ClientPortalMiddleware` a popula.
+    """
+
+    def has_permission(self, request, view):
+        session = getattr(request, 'portal_session', None)
+        if session is None:
+            return False
+        return session.is_valid()
+
+
+
+================================================================================
+ARQUIVO 27 DE 38
+================================================================================
+📁 PASTA: apps\clients\queries\__init__.py
+📄 ARQUIVO: __init__.py
+📏 TAMANHO: 0.1 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 5
+================================================================================
+
+from apps.clients.queries.client_queries import ClientQueries
+
+__all__ = [
+    'ClientQueries',
+]
+
+
+
+================================================================================
+ARQUIVO 28 DE 38
+================================================================================
+📁 PASTA: apps\clients\queries\client_queries.py
+📄 ARQUIVO: client_queries.py
+📏 TAMANHO: 1.28 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 50
+================================================================================
+
+"""
+Queries otimizadas para Client.
+"""
+
+from apps.clients.models import Client
+
+
+class ClientQueries:
+
+    @staticmethod
+    def list_for_workspace(workspace):
+        """
+        Lista TODOS os clientes do workspace, sem filtro de status.
+        """
+        return (
+            Client.objects
+            .filter(workspace=workspace)
+            .order_by('-created_at')
+        )
+
+    @staticmethod
+    def get_with_relations(client_id):
+        return (
+            Client.objects
+            .select_related('workspace', 'created_by')
+            .filter(id=client_id)
+            .first()
+        )
+
+    @staticmethod
+    def get_by_public_code(code: str):
+        return (
+            Client.objects
+            .select_related('workspace')
+            .filter(public_code=code)
+            .first()
+        )
+
+    @staticmethod
+    def count_for_workspace(workspace) -> int:
+        """Conta TODOS os clientes do workspace."""
+        return Client.objects.filter(workspace=workspace).count()
+
+    @staticmethod
+    def count_active_for_workspace(workspace) -> int:
+        """Conta apenas clientes ativos do workspace."""
+        return Client.objects.filter(
+            workspace=workspace,
+            status=Client.STATUS_ACTIVE,
+        ).count()
+
+
+
+================================================================================
+ARQUIVO 29 DE 38
+================================================================================
+📁 PASTA: apps\clients\services\__init__.py
+📄 ARQUIVO: __init__.py
+📏 TAMANHO: 0.65 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 21
+================================================================================
+
+from apps.clients.services.public_code import (
+    generate_unique_public_code,
+    normalize_public_code,
+)
+from apps.clients.services.client_service import ClientService
+from apps.clients.services.contact_service import ContactService
+from apps.clients.services.note_service import NoteService
+from apps.clients.services.portal_service import PortalService
+from apps.clients.services.portal_invitation_service import (
+    PortalInvitationService,
+)
+
+__all__ = [
+    'generate_unique_public_code',
+    'normalize_public_code',
+    'ClientService',
+    'ContactService',
+    'NoteService',
+    'PortalService',
+    'PortalInvitationService',
+]
+
+
+
+================================================================================
+ARQUIVO 30 DE 38
+================================================================================
+📁 PASTA: apps\clients\services\client_service.py
+📄 ARQUIVO: client_service.py
+📏 TAMANHO: 5.88 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 191
+================================================================================
+
+"""
+ClientService â€” ciclo de vida do Client.
+"""
+
+from typing import Optional
+
+from django.db import transaction
+
+from apps.clients.models import Client
+from apps.clients.services.public_code import generate_unique_public_code
+from apps.clients.exceptions import (
+    ClientDuplicateEmailError,
+    ClientNotFoundError,
+)
+from apps.clients.events import ClientEventEmitter
+
+
+class ClientService:
+
+    # ------------------------------------------------------------------
+    # CRIAÃ‡ÃƒO
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    @transaction.atomic
+    def create_client(
+        workspace,
+        name: str,
+        created_by,
+        email: str = '',
+        phone: str = '',
+        request=None,
+    ) -> Client:
+        name = (name or '').strip()
+        if not name:
+            raise ValueError('O nome do cliente Ã© obrigatÃ³rio')
+
+        email = (email or '').strip().lower()
+
+        if email and Client.objects.filter(
+            workspace=workspace,
+            email__iexact=email,
+        ).exists():
+            raise ClientDuplicateEmailError(
+                'JÃ¡ existe um cliente com este email neste workspace'
+            )
+
+        client = Client.objects.create(
+            workspace=workspace,
+            public_code=generate_unique_public_code(),
+            name=name,
+            email=email,
+            phone=(phone or '').strip(),
+            created_by=created_by,
+        )
+
+        ClientEventEmitter.client_created(
+            client=client, actor=created_by, request=request,
+        )
+        return client
+
+    # ------------------------------------------------------------------
+    # LEITURA
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def get_by_id(client_id) -> Optional[Client]:
+        try:
+            return Client.objects.select_related('workspace').get(id=client_id)
+        except (Client.DoesNotExist, ValueError):
+            return None
+
+    @staticmethod
+    def get_by_public_code(code: str) -> Optional[Client]:
+        try:
+            return Client.objects.select_related('workspace').get(
+                public_code=code
+            )
+        except Client.DoesNotExist:
+            return None
+
+    @staticmethod
+    def list_for_workspace(workspace):
+        """
+        Lista TODOS os clientes do workspace.
+
+        NÃ£o filtra por status. Filtros por status sÃ£o responsabilidade
+        da camada de apresentaÃ§Ã£o/frontend.
+        """
+        return (
+            Client.objects
+            .filter(workspace=workspace)
+            .order_by('-created_at')
+        )
+
+    # ------------------------------------------------------------------
+    # ATUALIZAÃ‡ÃƒO
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    @transaction.atomic
+    def update_client(
+        client: Client,
+        actor,
+        name: Optional[str] = None,
+        email: Optional[str] = None,
+        phone: Optional[str] = None,
+        status: Optional[str] = None,
+        request=None,
+    ) -> Client:
+        changes = {}
+
+        if name is not None:
+            name = name.strip()
+            if not name:
+                raise ValueError('O nome do cliente Ã© obrigatÃ³rio')
+            if client.name != name:
+                client.name = name
+                changes['name'] = True
+
+        if email is not None:
+            email = (email or '').strip().lower()
+            if email and email != client.email:
+                if Client.objects.filter(
+                    workspace=client.workspace,
+                    email__iexact=email,
+                ).exclude(pk=client.pk).exists():
+                    raise ClientDuplicateEmailError(
+                        'JÃ¡ existe um cliente com este email neste workspace'
+                    )
+                client.email = email
+                changes['email'] = True
+
+        if phone is not None:
+            phone = (phone or '').strip()
+            if client.phone != phone:
+                client.phone = phone
+                changes['phone'] = True
+
+        if status is not None:
+            if status not in dict(Client.STATUS_CHOICES):
+                raise ValueError(f'Status invÃ¡lido: {status}')
+            if client.status != status:
+                client.status = status
+                changes['status'] = True
+
+        if changes:
+            client.save(update_fields=list(changes.keys()) + ['updated_at'])
+            ClientEventEmitter.client_updated(
+                client=client,
+                changes=changes,
+                actor=actor,
+                request=request,
+            )
+
+        return client
+
+    @staticmethod
+    @transaction.atomic
+    def update_context(client: Client, context: dict, actor=None, request=None) -> Client:
+        client.context = context or {}
+        client.save(update_fields=['context', 'updated_at'])
+        ClientEventEmitter.client_updated(
+            client=client,
+            changes={'context': True},
+            actor=actor,
+            request=request,
+        )
+        return client
+
+    # ------------------------------------------------------------------
+    # EXCLUSÃƒO â€” DELETE REAL
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    @transaction.atomic
+    def delete_client(client: Client, actor=None, request=None) -> None:
+        """
+        Exclui o cliente. CASCADE cuida das relaÃ§Ãµes.
+
+        NÃƒO existe soft delete. NÃƒO existe restore.
+        """
+        client_id = client.id
+        client_name = client.name
+        client.delete()
+        ClientEventEmitter.client_deleted(
+            client_id=client_id,
+            client_name=client_name,
+            actor=actor,
+            request=request,
+        )
+
+
+
+================================================================================
+ARQUIVO 31 DE 38
+================================================================================
+📁 PASTA: apps\clients\services\contact_service.py
+📄 ARQUIVO: contact_service.py
+📏 TAMANHO: 2.53 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 89
+================================================================================
+
+"""
+ContactService â€” CRUD de contatos do cliente.
+"""
+
+from typing import List, Optional
+
+from apps.clients.models import Client, ClientContact
+from apps.clients.exceptions import ContactNotFoundError
+
+
+class ContactService:
+
+    @staticmethod
+    def list_for_client(client: Client) -> List[ClientContact]:
+        return list(
+            ClientContact.objects.filter(client=client).order_by('role', 'name')
+        )
+
+    @staticmethod
+    def get_for_client(client: Client, contact_id) -> ClientContact:
+        try:
+            return ClientContact.objects.get(id=contact_id, client=client)
+        except (ClientContact.DoesNotExist, ValueError):
+            raise ContactNotFoundError('Contato nÃ£o encontrado')
+
+    @staticmethod
+    def create_contact(
+        client: Client,
+        name: str,
+        role: str = 'other',
+        email: str = '',
+        phone: str = '',
+        notes: str = '',
+    ) -> ClientContact:
+        name = (name or '').strip()
+        if not name:
+            raise ValueError('O nome do contato Ã© obrigatÃ³rio')
+
+        return ClientContact.objects.create(
+            client=client,
+            name=name,
+            role=role,
+            email=(email or '').strip().lower(),
+            phone=(phone or '').strip(),
+            notes=(notes or '').strip(),
+        )
+
+    @staticmethod
+    def update_contact(
+        contact: ClientContact,
+        name: Optional[str] = None,
+        role: Optional[str] = None,
+        email: Optional[str] = None,
+        phone: Optional[str] = None,
+        notes: Optional[str] = None,
+    ) -> ClientContact:
+        fields = []
+
+        if name is not None:
+            name = name.strip()
+            if not name:
+                raise ValueError('O nome do contato Ã© obrigatÃ³rio')
+            contact.name = name
+            fields.append('name')
+
+        if role is not None:
+            contact.role = role
+            fields.append('role')
+
+        if email is not None:
+            contact.email = (email or '').strip().lower()
+            fields.append('email')
+
+        if phone is not None:
+            contact.phone = (phone or '').strip()
+            fields.append('phone')
+
+        if notes is not None:
+            contact.notes = (notes or '').strip()
+            fields.append('notes')
+
+        if fields:
+            contact.save(update_fields=fields + ['updated_at'])
+
+        return contact
+
+    @staticmethod
+    def delete_contact(contact: ClientContact) -> None:
+        contact.delete()
+
+
+
+================================================================================
+ARQUIVO 32 DE 38
+================================================================================
+📁 PASTA: apps\clients\services\note_service.py
+📄 ARQUIVO: note_service.py
+📏 TAMANHO: 2.57 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 89
+================================================================================
+
+"""
+NoteService â€” CRUD de anotaÃ§Ãµes.
+"""
+
+from typing import List, Optional
+
+from apps.clients.models import Client, ClientNote
+from apps.clients.exceptions import NoteNotFoundError
+from apps.clients.events import ClientEventEmitter
+
+
+class NoteService:
+
+    @staticmethod
+    def list_for_client(client: Client) -> List[ClientNote]:
+        return list(
+            ClientNote.objects
+            .filter(client=client)
+            .select_related('author')
+            .order_by('-is_pinned', '-created_at')
+        )
+
+    @staticmethod
+    def get_for_client(client: Client, note_id) -> ClientNote:
+        try:
+            return ClientNote.objects.get(id=note_id, client=client)
+        except (ClientNote.DoesNotExist, ValueError):
+            raise NoteNotFoundError('Nota nÃ£o encontrada')
+
+    @staticmethod
+    def create_note(
+        client: Client,
+        author,
+        content: str,
+        is_pinned: bool = False,
+        request=None,
+    ) -> ClientNote:
+        content = (content or '').strip()
+        if not content:
+            raise ValueError('O conteÃºdo da anotaÃ§Ã£o Ã© obrigatÃ³rio')
+
+        note = ClientNote.objects.create(
+            client=client,
+            author=author,
+            content=content,
+            is_pinned=is_pinned,
+        )
+        ClientEventEmitter.note_created(
+            client=client, note=note, actor=author, request=request,
+        )
+        return note
+
+    @staticmethod
+    def update_note(
+        note: ClientNote,
+        actor,
+        content: Optional[str] = None,
+        is_pinned: Optional[bool] = None,
+        request=None,
+    ) -> ClientNote:
+        fields = []
+
+        if content is not None:
+            content = content.strip()
+            if not content:
+                raise ValueError('O conteÃºdo da anotaÃ§Ã£o Ã© obrigatÃ³rio')
+            note.content = content
+            fields.append('content')
+
+        if is_pinned is not None:
+            note.is_pinned = is_pinned
+            fields.append('is_pinned')
+
+        if fields:
+            note.save(update_fields=fields + ['updated_at'])
+            ClientEventEmitter.note_updated(
+                client=note.client, note=note, actor=actor, request=request,
+            )
+
+        return note
+
+    @staticmethod
+    def delete_note(note: ClientNote, actor=None, request=None) -> None:
+        client = note.client
+        note_id = note.id
+        note.delete()
+        ClientEventEmitter.note_deleted(
+            client=client, note_id=note_id, actor=actor, request=request,
+        )
+
+
+
+================================================================================
+ARQUIVO 33 DE 38
+================================================================================
+📁 PASTA: apps\clients\services\portal_invitation_service.py
+📄 ARQUIVO: portal_invitation_service.py
+📏 TAMANHO: 5.79 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 172
+================================================================================
+
+"""
+PortalInvitationService â€” envia o acesso do Portal por email.
+
+REGRAS:
+    - NÃ£o usa SMTP diretamente. Delega ao `EmailService.send()`.
+    - Reenvio REVOGA todas as sessÃµes anteriores do cliente.
+      SÃ³ o Ãºltimo link enviado permanece vÃ¡lido.
+    - A invitation nasce como `pending`, vira `sent` ou `failed`.
+    - NUNCA retorna o token cru na resposta da API.
+    - NUNCA vaza detalhes de infraestrutura em erro 500.
+"""
+
+from typing import Optional
+import logging
+
+from django.conf import settings
+from django.utils import timezone
+
+from apps.clients.models import (
+    Client,
+    ClientPortalInvitation,
+    ClientPortalSession,
+)
+from apps.clients.exceptions import PortalEmailMissingError
+from apps.clients.events import ClientEventEmitter
+from apps.accounts.services.email import EmailService
+
+logger = logging.getLogger('clients')
+
+
+class PortalInvitationService:
+
+    DEFAULT_SESSION_TTL_MINUTES = 30
+
+    @staticmethod
+    def send_access(
+        client: Client,
+        actor,
+        request=None,
+        ttl_minutes: Optional[int] = None,
+    ) -> ClientPortalInvitation:
+        """
+        Gera uma sessÃ£o temporÃ¡ria e envia o link por email.
+
+        Passos:
+            1. Valida email do cliente
+            2. Revoga TODAS as sessÃµes ativas anteriores do cliente
+               (reenvio invalida links antigos)
+            3. Cria nova ClientPortalSession (token cru sÃ³ em memÃ³ria)
+            4. Cria ClientPortalInvitation como `pending`
+            5. Envia email via EmailService.send()
+            6. Marca invitation como `sent` ou `failed`
+
+        Se o envio falhar:
+            - invitation fica `failed`
+            - a sessÃ£o recÃ©m-criada Ã© REVOGADA
+            - a exceÃ§Ã£o Ã© propagada (view trata sem vazar detalhe)
+        """
+        if not client.email:
+            raise PortalEmailMissingError(
+                'O cliente nÃ£o possui email cadastrado.'
+            )
+
+        # 1. Revoga sessÃµes anteriores â€” reenvio invalida links antigos
+        PortalInvitationService._revoke_all_active_sessions(client)
+
+        # 2. Nova sessÃ£o
+        session, raw_token = ClientPortalSession.issue(
+            client=client,
+            ttl_minutes=ttl_minutes or PortalInvitationService.DEFAULT_SESSION_TTL_MINUTES,
+        )
+
+        # 3. Invitation como pending
+        invitation = ClientPortalInvitation.objects.create(
+            client=client,
+            session=session,
+            email=client.email,
+            sent_by=actor if actor and actor.is_authenticated else None,
+            status=ClientPortalInvitation.STATUS_PENDING,
+        )
+
+        # 4. Envio
+        try:
+            PortalInvitationService._send_email(
+                client=client,
+                raw_token=raw_token,
+                expires_at=session.expires_at,
+            )
+        except Exception as exc:
+            # Falha: revoga a sessÃ£o e marca invitation como failed
+            invitation.status = ClientPortalInvitation.STATUS_FAILED
+            invitation.error_message = str(exc)
+            invitation.save(update_fields=['status', 'error_message'])
+
+            session.revoke()
+
+            logger.exception(
+                "Falha ao enviar acesso do Portal para client_id=%s email=%s",
+                client.id,
+                client.email,
+            )
+            raise
+
+        # 5. Sucesso
+        invitation.status = ClientPortalInvitation.STATUS_SENT
+        invitation.save(update_fields=['status'])
+
+        ClientEventEmitter.portal_invitation_sent(
+            client=client, actor=actor, request=request,
+        )
+        return invitation
+
+    # ------------------------------------------------------------------
+    # REVOGAÃ‡ÃƒO
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _revoke_all_active_sessions(client: Client) -> int:
+        """
+        Revoga todas as sessÃµes ativas (nÃ£o revogadas e ainda nÃ£o expiradas).
+
+        Retorna quantas foram revogadas.
+        """
+        now = timezone.now()
+        qs = ClientPortalSession.objects.filter(
+            client=client,
+            revoked_at__isnull=True,
+            expires_at__gt=now,
+        )
+        count = qs.count()
+        if count:
+            qs.update(revoked_at=now)
+        return count
+
+    # ------------------------------------------------------------------
+    # EMAIL
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _send_email(client: Client, raw_token: str, expires_at):
+        """
+        Envia o email via EmailService (infra compartilhada).
+
+        NÃƒO importa `django.core.mail` diretamente.
+        """
+        frontend_url = getattr(
+            settings, 'FRONTEND_URL', 'http://localhost:9000'
+        ).rstrip('/')
+        portal_url = f"{frontend_url}/portal/{client.public_code}/?t={raw_token}"
+
+        subject = f'Seu acesso ao espaÃ§o do {client.name} â€” Clivo'
+        text_body = (
+            f'OlÃ¡,\n\n'
+            f'VocÃª recebeu acesso ao espaÃ§o de {client.name} no Clivo.\n\n'
+            f'Abra o link abaixo para entrar:\n{portal_url}\n\n'
+            f'Este link expira em {expires_at.strftime("%d/%m/%Y %H:%M")}.\n\n'
+            f'Equipe Clivo'
+        )
+        html_body = (
+            f'<p>OlÃ¡,</p>'
+            f'<p>VocÃª recebeu acesso ao espaÃ§o de <strong>{client.name}</strong> no Clivo.</p>'
+            f'<p><a href="{portal_url}">Abrir meu espaÃ§o</a></p>'
+            f'<p>Este link expira em {expires_at.strftime("%d/%m/%Y %H:%M")}.</p>'
+            f'<p>Equipe Clivo</p>'
+        )
+
+        EmailService.send(
+            to=client.email,
+            subject=subject,
+            text=text_body,
+            html=html_body,
+        )
+
+
+
+================================================================================
+ARQUIVO 34 DE 38
+================================================================================
+📁 PASTA: apps\clients\services\portal_service.py
+📄 ARQUIVO: portal_service.py
+📏 TAMANHO: 3.72 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 120
+================================================================================
+
+"""
+PortalService â€” acesso operacional do Portal do Cliente.
+
+ResponsÃ¡vel por:
+    - autenticar via token (sessÃ£o)
+    - registrar acesso
+    - revogar sessÃµes
+    - emitir eventos
+
+NÃƒO envia email. Isso Ã© PortalInvitationService.
+"""
+
+from typing import List, Optional
+
+from django.utils import timezone
+
+from apps.clients.models import (
+    Client,
+    ClientPortalAccess,
+    ClientPortalSession,
+    ClientPortalFeedback,
+)
+from apps.clients.exceptions import (
+    PortalSessionError,
+    PortalSessionExpiredError,
+)
+from apps.clients.events import ClientEventEmitter
+
+
+class PortalService:
+
+    # ------------------------------------------------------------------
+    # AUTENTICAÃ‡ÃƒO
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def open_session_with_token(raw_token: str, request) -> ClientPortalSession:
+        """
+        Valida o token cru e cria/retorna a sessÃ£o, registrando o acesso.
+        """
+        session = ClientPortalSession.find_by_raw_token(raw_token)
+        if session is None:
+            raise PortalSessionError('Token invÃ¡lido')
+
+        if not session.is_valid():
+            raise PortalSessionExpiredError('SessÃ£o expirada ou revogada')
+
+        session.touch()
+        PortalService._register_access(session, request)
+        ClientEventEmitter.portal_opened(
+            client=session.client, request=request,
+        )
+        return session
+
+    @staticmethod
+    def revoke_session(session: ClientPortalSession) -> None:
+        session.revoke()
+
+    @staticmethod
+    def list_active_sessions(client: Client) -> List[ClientPortalSession]:
+        return list(
+            ClientPortalSession.objects
+            .filter(client=client, revoked_at__isnull=True)
+            .order_by('-created_at')
+        )
+
+    @staticmethod
+    def get_session_or_none(session_id) -> Optional[ClientPortalSession]:
+        try:
+            return ClientPortalSession.objects.select_related('client').get(
+                id=session_id
+            )
+        except (ClientPortalSession.DoesNotExist, ValueError):
+            return None
+
+    # ------------------------------------------------------------------
+    # FEEDBACK DO PORTAL
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def submit_feedback(
+        client: Client,
+        kind: str,
+        message: str = '',
+        rating: str = '',
+        page: str = '',
+        request=None,
+    ) -> ClientPortalFeedback:
+        feedback = ClientPortalFeedback.objects.create(
+            client=client,
+            kind=kind,
+            message=(message or '').strip(),
+            rating=rating or '',
+            page=(page or '').strip(),
+        )
+        ClientEventEmitter.portal_feedback_received(
+            client=client, feedback=feedback, request=request,
+        )
+        return feedback
+
+    @staticmethod
+    def list_feedbacks(client: Client) -> List[ClientPortalFeedback]:
+        return list(
+            ClientPortalFeedback.objects
+            .filter(client=client)
+            .order_by('-created_at')
+        )
+
+    # ------------------------------------------------------------------
+    # INTERNO
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _register_access(session: ClientPortalSession, request) -> ClientPortalAccess:
+        return ClientPortalAccess.objects.create(
+            client=session.client,
+            session=session,
+            ip_address=request.META.get('REMOTE_ADDR') if request else None,
+            user_agent=(request.META.get('HTTP_USER_AGENT', '')[:255] if request else ''),
+        )
+
+
+
+================================================================================
+ARQUIVO 35 DE 38
+================================================================================
+📁 PASTA: apps\clients\services\public_code.py
+📄 ARQUIVO: public_code.py
+📏 TAMANHO: 1.05 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 42
+================================================================================
+
+"""
+Gerador do public_code do Client.
+
+Formato: CLI-XXXXXX (6 chars do alfabeto sem ambÃ­guos).
+Humano-friendly: legÃ­vel em voz alta, sem 0/O, 1/l/I.
+"""
+
+import re
+import secrets
+
+from apps.clients.models import Client
+
+
+_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+_PREFIX = 'CLI-'
+_CODE_LENGTH = 6
+_MAX_ATTEMPTS = 20
+
+
+def _generate_raw_code() -> str:
+    chars = ''.join(secrets.choice(_ALPHABET) for _ in range(_CODE_LENGTH))
+    return f'{_PREFIX}{chars}'
+
+
+def generate_unique_public_code() -> str:
+    for _ in range(_MAX_ATTEMPTS):
+        code = _generate_raw_code()
+        if not Client.objects.filter(public_code=code).exists():
+            return code
+    raise RuntimeError(
+        'NÃ£o foi possÃ­vel gerar um public_code Ãºnico apÃ³s '
+        f'{_MAX_ATTEMPTS} tentativas.'
+    )
+
+
+def normalize_public_code(raw: str) -> str:
+    if not raw:
+        return ''
+    raw = raw.strip().upper()
+    if not raw.startswith(_PREFIX):
+        raw = _PREFIX + re.sub(r'[^A-Z0-9]', '', raw)[:_CODE_LENGTH]
+    return raw
+
+
+
+================================================================================
+ARQUIVO 36 DE 38
+================================================================================
+📁 PASTA: apps\clients\signals.py
+📄 ARQUIVO: signals.py
+📏 TAMANHO: 0.5 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 17
+================================================================================
+
+"""
+Signals do mÃ³dulo clients.
+
+V1: nenhum signal ativo por padrÃ£o.
+O mÃ³dulo emite eventos via `ClientEventEmitter` (django.dispatch.Signal).
+Consumidores futuros (Intelligence, Notifications, JARVIS) podem se
+conectar a `apps.clients.events.client_event`.
+"""
+
+# Exemplo de conexÃ£o futura (comentado):
+#
+# from apps.clients.events import client_event
+# from django.dispatch import receiver
+#
+# @receiver(client_event)
+# def on_client_event(sender, signal_name, client_id, **kwargs):
+#     ...
+
+
+
+================================================================================
+ARQUIVO 37 DE 38
+================================================================================
+📁 PASTA: apps\clients\urls.py
+📄 ARQUIVO: urls.py
+📏 TAMANHO: 0.67 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 24
+================================================================================
+
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+
+from apps.clients.api.views import ClientViewSet, ClientPortalViewSet
+from apps.clients.views import ClientesView
+
+router = DefaultRouter()
+router.register(r'clients', ClientViewSet, basename='client')
+
+portal_router = DefaultRouter()
+portal_router.register(r'portal', ClientPortalViewSet, basename='portal')
+
+urlpatterns = [
+    # ===== PÃGINAS HTML =====
+    path(
+        'clientes/',
+        ClientesView.as_view(),
+        name='clientes-page',
+    ),
+
+    # ===== APIs =====
+    path('api/', include(router.urls)),
+    path('api/', include(portal_router.urls)),
+]
+
+
+
+================================================================================
+ARQUIVO 38 DE 38
+================================================================================
+📁 PASTA: apps\clients\views.py
+📄 ARQUIVO: views.py
+📏 TAMANHO: 0.83 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 34
+================================================================================
+
+"""
+Views HTML do mÃ³dulo clients.
+"""
+
+from django.shortcuts import render, redirect
+from django.views import View
+
+
+class ClientesView(View):
+    """
+    PÃ¡gina HTML de clientes.
+
+    Exige login. O sidebar resolve a sessÃ£o no client-side,
+    mas a view garante que o HTML sÃ³ Ã© servido para autenticados.
+    """
+
+    def get(self, request):
+        if not request.user.is_authenticated:
+            return redirect('/login/')
+        return render(request, 'cliente.html')
+
+
+class ClientPortalEntryView(View):
+    """
+    Entry point HTML do Portal do Cliente.
+
+    Recebe o public_code no path e o token via query string.
+    V1: placeholder.
+    """
+
+    def get(self, request, public_code):
+        return render(request, 'portal/entry.html', {
+            'public_code': public_code,
+        }, status=200)
+
+
+
+================================================================================
+FIM DA LISTAGEM
+================================================================================
+Total de arquivos: 38
+Total de linhas: 3149
+Tamanho total: 0.28 MB
+Arquivo gerado em: 30/09/2026 11:15:46
+================================================================================

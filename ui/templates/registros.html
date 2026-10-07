@@ -1,0 +1,287 @@
+{% extends "sidebar.html" %}
+{% load static %}
+
+{% block title %}Registros · Clivo{% endblock %}
+{% block page_name %}registros{% endblock %}
+
+{% block page_css %}
+<link rel="stylesheet" href="{% static 'css/registros.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="rn-page" id="rnPage">
+
+    <!-- HEADER DA PÁGINA -->
+    <header class="rn-header">
+        <div class="rn-header-left">
+            <h1>Registros</h1>
+            <p class="rn-header-sub">Revise conversas, áudios e decisões do projeto.</p>
+        </div>
+
+        <div class="rn-header-right">
+            <button class="rn-btn-google" id="rnCalendarBtn">
+                <svg viewBox="0 0 48 48" width="14" height="14" aria-hidden="true">
+                    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                </svg>
+                <span>Google Calendar</span>
+            </button>
+            <button class="btn-minimal btn-minimal-primary" id="rnAddAudioBtnHeader">
+                <i data-lucide="plus"></i>
+                <span>Adicionar</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- GRID: LISTA | MESA -->
+    <div class="rn-grid">
+
+        <!-- COLUNA 1 — LISTA -->
+        <aside class="rn-col rn-col-list" id="rnColList">
+
+            <div class="rn-col-filters">
+                <div class="rn-search">
+                    <i data-lucide="search"></i>
+                    <input type="text" id="rnSearchInput" placeholder="Buscar...">
+                </div>
+
+                <div class="rn-filter-row">
+                    <div class="rn-filter">
+                        <label for="rnPeriodFilter" class="visually-hidden">Período</label>
+                        <select id="rnPeriodFilter">
+                            <option value="all">Período</option>
+                            <option value="today">Hoje</option>
+                            <option value="week">7 dias</option>
+                            <option value="month">30 dias</option>
+                        </select>
+                    </div>
+                    <div class="rn-filter">
+                        <label for="rnReviewFilter" class="visually-hidden">Estado</label>
+                        <select id="rnReviewFilter">
+                            <option value="">Estado</option>
+                            <option value="to_review">Para revisar</option>
+                            <option value="transcribed">Transcritas</option>
+                            <option value="reviewed">Revisadas</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="rn-list" id="rnList"></div>
+        </aside>
+
+        <!-- COLUNA 2 — MESA -->
+        <main class="rn-col rn-col-review" id="rnColReview">
+
+            <div class="rn-empty-state" id="rnReviewEmpty">
+                <i data-lucide="file-audio"></i>
+                <p>Selecione uma reunião</p>
+                <span>Escolha uma reunião à esquerda para começar a revisão.</span>
+            </div>
+
+            <div class="rn-review hidden" id="rnReview">
+
+                <button class="rn-back" id="rnBackBtn">
+                    <i data-lucide="arrow-left"></i>
+                    <span>Voltar</span>
+                </button>
+
+                <!-- HEADER da reunião -->
+                <header class="rn-review-head">
+
+                    <!-- Linha 1: título + meta + status/ação -->
+                    <div class="rn-review-head-top">
+                        <div class="rn-review-head-main">
+                            <h2 id="rnMeetingTitle">—</h2>
+                            <div class="rn-review-head-meta">
+                                <span class="rn-meta-item" id="rnMeetingDate">—</span>
+                                <span class="rn-meta-sep">·</span>
+                                <span class="rn-meta-item" id="rnMeetingDuration">—</span>
+                            </div>
+                        </div>
+
+                        <div class="rn-review-head-actions">
+                            <span class="rn-status-badge completed" id="rnMeetingStatus">Concluída</span>
+                            <button class="rn-icon-btn" id="rnHeaderAddBtn" title="Adicionar">
+                                <i data-lucide="plus"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Linha 2: KPIs -->
+                    <div class="rn-kpis">
+                        <span class="rn-kpi">
+                            <i data-lucide="mic"></i>
+                            <span class="rn-kpi-value" id="rnKpiAudios">0</span>
+                            <span class="rn-kpi-label">áudios</span>
+                        </span>
+                        <span class="rn-kpi">
+                            <i data-lucide="sticky-note"></i>
+                            <span class="rn-kpi-value" id="rnKpiNotes">0</span>
+                            <span class="rn-kpi-label">notas</span>
+                        </span>
+                        <span class="rn-kpi">
+                            <i data-lucide="file"></i>
+                            <span class="rn-kpi-value" id="rnKpiFiles">0</span>
+                            <span class="rn-kpi-label">arquivos</span>
+                        </span>
+                    </div>
+
+                </header>
+
+                <!-- Corpo em 2 colunas -->
+                <div class="rn-review-body">
+
+                    <!-- ESQUERDA: áudio + transcrição -->
+                    <div class="rn-review-main">
+
+                        <!-- PLAYER DE ÁUDIO -->
+                        <div class="rn-audio-card" id="rnAudioCard">
+                            <div class="rn-audio-bar hidden" id="rnAudioPlayer">
+                                <button class="rn-audio-play" id="rnAudioPlayBtn" title="Ouvir áudio">
+                                    <i data-lucide="play"></i>
+                                </button>
+                                <div class="rn-audio-info">
+                                    <div class="rn-audio-name-row">
+                                        <span class="rn-audio-name" id="rnAudioFile">—</span>
+                                        <button class="rn-audio-list-toggle" id="rnAudioListToggle" title="Ver áudios">
+                                            <span id="rnAudioCount">1</span>
+                                            <i data-lucide="chevron-down"></i>
+                                        </button>
+                                    </div>
+                                    <div class="rn-audio-track">
+                                        <div class="rn-audio-progress" id="rnAudioProgress"></div>
+                                    </div>
+                                    <div class="rn-audio-times">
+                                        <span class="rn-audio-time" id="rnAudioTime">00:00</span>
+                                        <span class="rn-audio-duration" id="rnAudioDuration">—</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="rn-audio-list hidden" id="rnAudioList">
+                                <ul id="rnAudioListItems"></ul>
+                            </div>
+
+                            <div class="rn-empty-inline" id="rnAudioEmpty">
+                                <p>Nenhum áudio adicionado ainda.</p>
+                            </div>
+                        </div>
+
+                        <!-- TRANSCRIÇÃO -->
+                        <section class="rn-section rn-section-flush" id="rnSectionTranscript">
+                            <header class="rn-section-head">
+                                <h3>Transcrição</h3>
+                            </header>
+                            <div class="rn-section-body rn-section-body-tall" id="rnTranscriptBody">
+                                <div class="rn-empty-inline">
+                                    <p>Sem transcrição ainda.</p>
+                                </div>
+                            </div>
+                        </section>
+
+                    </div>
+
+                    <!-- DIREITA: Anotações -->
+                    <aside class="rn-review-aside" id="rnReviewAside">
+                        <section class="rn-widget" id="rnWidgetNotes">
+                            <header class="rn-widget-head">
+                                <h4>Anotações</h4>
+                                <button class="rn-widget-add" id="rnAddNoteBtn" title="Adicionar">
+                                    <i data-lucide="plus"></i>
+                                </button>
+                            </header>
+                            <ul class="rn-notes" id="rnNotesList">
+                                <li class="rn-empty-inline"><p>Nenhuma anotação.</p></li>
+                            </ul>
+                            <form class="rn-widget-form" id="rnNoteForm">
+                                <input type="text" id="rnNoteInput" placeholder="Nova anotação...">
+                                <button type="submit" class="btn-minimal" id="rnNoteSubmitBtn" disabled>
+                                    <span>Adicionar</span>
+                                </button>
+                            </form>
+                        </section>
+                    </aside>
+
+                </div>
+
+            </div>
+        </main>
+
+    </div>
+
+</div>
+
+<!-- MODAL: NOVA / EDITAR REUNIÃO -->
+<div class="cl-modal-overlay" id="rnMeetingModal">
+    <div class="cl-modal">
+        <div class="cl-modal-header">
+            <h2 id="rnMeetingModalTitle">Nova reunião</h2>
+            <button class="cl-modal-close" data-close="rnMeetingModal">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+
+        <form id="rnMeetingForm" class="cl-modal-body">
+            <input type="hidden" id="rnMeetingId" value="">
+
+            <div class="cl-field cl-field-full">
+                <label for="rnMeetingTitleInput">Título</label>
+                <input type="text" id="rnMeetingTitleInput" placeholder="Reunião de alinhamento" maxlength="200" required>
+            </div>
+
+            <div class="cl-field cl-field-full">
+                <label for="rnMeetingClientInput">Cliente</label>
+                <select id="rnMeetingClientInput">
+                    <option value="">Sem cliente vinculado</option>
+                </select>
+            </div>
+
+            <div class="cl-field">
+                <label for="rnMeetingStatusInput">Status</label>
+                <select id="rnMeetingStatusInput">
+                    <option value="scheduled">Agendada</option>
+                    <option value="completed">Realizada</option>
+                    <option value="cancelled">Cancelada</option>
+                </select>
+            </div>
+
+            <div class="cl-field">
+                <label for="rnMeetingDurationInput">Duração (min)</label>
+                <input type="number" id="rnMeetingDurationInput" min="0" placeholder="60">
+            </div>
+
+            <div class="cl-field">
+                <label for="rnMeetingDateInput">Data</label>
+                <input type="date" id="rnMeetingDateInput" required>
+            </div>
+
+            <div class="cl-field">
+                <label for="rnMeetingTimeInput">Horário</label>
+                <input type="time" id="rnMeetingTimeInput" required>
+            </div>
+
+            <div class="cl-field cl-field-full">
+                <label for="rnMeetingParticipantsInput">Participantes</label>
+                <input type="text" id="rnMeetingParticipantsInput" placeholder="Maria, João, Ana" maxlength="500">
+            </div>
+
+            <div class="cl-modal-actions">
+                <button type="submit" class="btn-minimal btn-minimal-primary" id="rnMeetingSubmitBtn">
+                    Salvar
+                </button>
+                <button type="button" class="btn-minimal" data-close="rnMeetingModal">
+                    Cancelar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block page_js %}
+<script src="{% static 'js/registros.js' %}"></script>
+{% endblock %}

@@ -1,0 +1,358 @@
+{% extends "sidebar.html" %}
+{% load static %}
+
+{% block title %}Clientes · Clivo{% endblock %}
+{% block page_name %}clientes{% endblock %}
+
+{% block content %}
+<div class="cl-page" id="clPage">
+
+    <!-- ============ COLUNA ESQUERDA: CARDS ============ -->
+    <aside class="cl-col-list" id="clColList">
+
+        <div class="cl-col-header">
+            <h2 id="clGreeting">Clientes</h2>
+            <p class="cl-col-subtitle" id="clListSubtitle"></p>
+        </div>
+
+        <div class="cl-search">
+            <i data-lucide="search"></i>
+            <input type="text" id="clSearchInput" placeholder="Buscar por nome ou email">
+        </div>
+
+        <div class="cl-filter">
+            <label for="clStatusFilter" class="visually-hidden">Filtrar por status</label>
+            <select id="clStatusFilter">
+                <option value="">Todos os status</option>
+                <option value="active">Ativos</option>
+                <option value="inactive">Inativos</option>
+                <option value="suspended">Suspensos</option>
+            </select>
+        </div>
+
+        <div class="cl-cards" id="clList"></div>
+    </aside>
+
+    <!-- ============ COLUNA DIREITA: DETALHE ============ -->
+    <section class="cl-col-detail" id="clDetailPane">
+
+        <div class="cl-detail-empty" id="clDetailEmpty">
+            <i data-lucide="user"></i>
+            <p>Selecione um cliente</p>
+            <span>Os detalhes aparecerão aqui</span>
+        </div>
+
+        <div class="cl-detail-content hidden" id="clDetailContent">
+
+            <header class="cl-detail-head">
+                <div class="cl-detail-head-left">
+                    <div class="cl-detail-avatar" id="clDetailAvatar">?</div>
+                    <div class="cl-detail-head-info">
+                        <h1 id="clDetailName">
+                            <span>—</span>
+                            <span class="cl-status-badge active" id="clDetailBadge">Ativo</span>
+                        </h1>
+                        <div class="cl-detail-meta">
+                            <span class="cl-code" id="clDetailCode">—</span>
+                            <span class="cl-meta-dot">·</span>
+                            <span id="clDetailCreatedAt">—</span>
+                            <span class="cl-meta-dot">·</span>
+                            <span id="clDetailCreatedBy">—</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="cl-detail-actions">
+                    <button class="btn-minimal" id="clSendCodeBtn" title="Enviar código por email">
+                        <i data-lucide="mail"></i>
+                        <span>Enviar código</span>
+                    </button>
+                </div>
+            </header>
+
+            <div class="cl-tabs" id="clDetailTabs">
+                <button class="active" data-tab="geral">Geral</button>
+                <button data-tab="relacionamento">Notas e tarefas</button>
+                <button data-tab="contatos">Contatos</button>
+                <button data-tab="timeline">Timeline</button>
+                <button data-tab="config">Configurações</button>
+            </div>
+
+            <!-- ==================== GERAL ==================== -->
+            <div class="cl-tab-content active" id="tabGeral">
+                <div class="cl-geral-grid">
+
+                    <!-- Linha 1 · Esquerda: Perfil (com código dentro) -->
+                    <section class="cl-panel cl-panel-profile">
+                        <header class="cl-panel-head">
+                            <h3>Perfil do cliente</h3>
+                        </header>
+                        <div class="cl-panel-body">
+                            <div class="cl-panel-view" id="clViewProfile">
+                                <p class="cl-panel-empty">Sem informações ainda.</p>
+                            </div>
+
+                            <div class="cl-code-block">
+                                <span class="cl-code-label">Código do cliente</span>
+                                <div class="cl-code-display">
+                                    <code id="clCodeDisplay">—</code>
+                                    <button class="cl-copy-btn" id="clCopyCodeBtn" title="Copiar">
+                                        <i data-lucide="copy"></i>
+                                    </button>
+                                </div>
+                                <p class="cl-hint">O código é imutável e identifica este cliente no Portal.</p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Linha 1 · Direita: Conhecimento -->
+                    <section class="cl-panel cl-panel-knowledge">
+                        <header class="cl-panel-head">
+                            <h3>Conhecimento consolidado</h3>
+                        </header>
+                        <div class="cl-panel-body">
+                            <div class="cl-panel-view" id="clViewKnowledge">
+                                <p class="cl-panel-empty">Sem informações ainda.</p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Linha 2 · Esquerda: Desejos -->
+                    <section class="cl-panel cl-panel-wishes">
+                        <header class="cl-panel-head">
+                            <h3>Desejos e prioridades</h3>
+                        </header>
+                        <div class="cl-panel-body">
+                            <div class="cl-panel-view" id="clViewWishes">
+                                <p class="cl-panel-empty">Sem informações ainda.</p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Linha 2 · Direita: Itens que não gosta -->
+                    <section class="cl-panel cl-panel-dislikes">
+                        <header class="cl-panel-head">
+                            <h3>Itens que não gosta</h3>
+                        </header>
+                        <div class="cl-panel-body">
+                            <div class="cl-panel-view" id="clViewDislikes">
+                                <p class="cl-panel-empty">Sem informações ainda.</p>
+                            </div>
+                        </div>
+                    </section>
+
+                </div>
+            </div>
+
+            <!-- ==================== NOTAS E TAREFAS ==================== -->
+            <div class="cl-tab-content" id="tabRelacionamento">
+                <div class="cl-rel-layout">
+
+                    <section class="cl-rel-col">
+                        <header class="cl-rel-header">
+                            <div class="cl-rel-title">
+                                <h3>Notas</h3>
+                                <span class="cl-rel-count" id="clNotesCount">0</span>
+                            </div>
+                            <button class="btn-minimal btn-minimal-primary" id="clAddNoteBtn">
+                                <i data-lucide="plus"></i>
+                                <span>Nova nota</span>
+                            </button>
+                        </header>
+                        <div class="cl-list-container cl-rel-list" id="clNotesList">
+                            <div class="cl-empty"><p>Carregando…</p></div>
+                        </div>
+                    </section>
+
+                    <section class="cl-rel-col">
+                        <header class="cl-rel-header">
+                            <div class="cl-rel-title">
+                                <h3>Tarefas</h3>
+                                <span class="cl-rel-count" id="clTasksCount">0</span>
+                            </div>
+                            <button class="btn-minimal btn-minimal-primary" id="clAddTaskBtn">
+                                <i data-lucide="plus"></i>
+                                <span>Nova tarefa</span>
+                            </button>
+                        </header>
+                        <div class="cl-list-container cl-rel-list" id="clTasksList">
+                            <div class="cl-empty"><p>Carregando…</p></div>
+                        </div>
+                    </section>
+
+                </div>
+            </div>
+
+            <!-- ==================== CONTATOS ==================== -->
+            <div class="cl-tab-content" id="tabContatos">
+                <div class="cl-section-header">
+                    <h3>Contatos</h3>
+                    <button class="btn-minimal btn-minimal-primary" id="clAddContactBtn">
+                        <i data-lucide="plus"></i>
+                        <span>Adicionar</span>
+                    </button>
+                </div>
+                <div class="cl-list-container" id="clContactsList">
+                    <div class="cl-empty"><p>Carregando…</p></div>
+                </div>
+            </div>
+
+            <!-- ==================== TIMELINE ==================== -->
+            <div class="cl-tab-content" id="tabTimeline">
+                <div class="cl-section-header">
+                    <h3>Atividade</h3>
+                </div>
+                <div class="cl-timeline" id="clTimeline">
+                    <div class="cl-empty"><p>Carregando…</p></div>
+                </div>
+            </div>
+
+            <!-- ==================== CONFIGURAÇÕES ==================== -->
+            <div class="cl-tab-content" id="tabConfig">
+                <div class="cl-config-layout">
+
+                    <section class="cl-panel">
+                        <header class="cl-panel-head">
+                            <h3>Identidade</h3>
+                        </header>
+                        <div class="cl-panel-body">
+                            <div class="cl-form-grid">
+                                <div class="cl-field cl-field-full">
+                                    <label for="clFieldName">Nome</label>
+                                    <input type="text" id="clFieldName" maxlength="200">
+                                </div>
+                                <div class="cl-field">
+                                    <label for="clFieldEmail">Email</label>
+                                    <input type="email" id="clFieldEmail" maxlength="254">
+                                </div>
+                                <div class="cl-field">
+                                    <label for="clFieldPhone">Telefone</label>
+                                    <input type="text" id="clFieldPhone" maxlength="30">
+                                </div>
+                                <div class="cl-field cl-field-full">
+                                    <label for="clFieldStatus">Status</label>
+                                    <select id="clFieldStatus">
+                                        <option value="active">Ativo</option>
+                                        <option value="inactive">Inativo</option>
+                                        <option value="suspended">Suspenso</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="cl-panel-edit-actions">
+                                <button class="btn-minimal btn-minimal-primary" id="clSaveIdentityBtn">
+                                    <i data-lucide="check"></i>
+                                    <span>Salvar</span>
+                                </button>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="cl-panel cl-panel-danger">
+                        <header class="cl-panel-head">
+                            <h3>Zona de atenção</h3>
+                        </header>
+                        <div class="cl-panel-body">
+                            <p class="cl-danger-text">
+                                Excluir um cliente é uma ação permanente. Todos os dados
+                                relacionados (notas, tarefas, contatos e sessões do Portal)
+                                serão removidos. Não há como desfazer.
+                            </p>
+                            <div class="cl-panel-edit-actions">
+                                <button class="btn-minimal btn-minimal-danger" id="clDeleteBtn">
+                                    <i data-lucide="trash-2"></i>
+                                    <span>Excluir cliente</span>
+                                </button>
+                            </div>
+                        </div>
+                    </section>
+
+                </div>
+            </div>
+
+        </div>
+    </section>
+</div>
+
+<div class="cl-modal-overlay" id="clNewNoteModal">
+    <div class="cl-modal cl-modal-sm">
+        <div class="cl-modal-header">
+            <h2 id="clNoteModalTitle">Nova nota</h2>
+            <button class="cl-modal-close" data-close="clNewNoteModal">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+        <div class="cl-modal-body">
+            <div class="cl-field cl-field-full">
+                <label for="clNoteContent">Conteúdo</label>
+                <textarea id="clNoteContent" rows="5" placeholder="Escreva sua anotação…"></textarea>
+            </div>
+            <label class="cl-checkbox">
+                <input type="checkbox" id="clNotePinned">
+                <span>Fixar no topo</span>
+            </label>
+        </div>
+        <div class="cl-modal-actions">
+            <button class="btn-minimal btn-minimal-primary" id="clSaveNoteBtn">Salvar</button>
+            <button class="btn-minimal" data-close="clNewNoteModal">Cancelar</button>
+        </div>
+    </div>
+</div>
+
+<div class="cl-modal-overlay" id="clNewTaskModal">
+    <div class="cl-modal">
+        <div class="cl-modal-header">
+            <h2 id="clTaskModalTitle">Nova tarefa</h2>
+            <button class="cl-modal-close" data-close="clNewTaskModal">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+        <div class="cl-modal-body">
+            <div class="cl-field cl-field-full">
+                <label for="clTaskTitle">Título</label>
+                <input type="text" id="clTaskTitle" maxlength="200" placeholder="Enviar referências">
+            </div>
+            <div class="cl-field cl-field-full">
+                <label for="clTaskDescription">Descrição <span class="cl-optional">(opcional)</span></label>
+                <textarea id="clTaskDescription" rows="3"></textarea>
+            </div>
+            <div class="cl-field">
+                <label for="clTaskPriority">Prioridade</label>
+                <select id="clTaskPriority">
+                    <option value="low">Baixa</option>
+                    <option value="normal" selected>Normal</option>
+                    <option value="high">Alta</option>
+                </select>
+            </div>
+            <div class="cl-field">
+                <label for="clTaskDueAt">Prazo <span class="cl-optional">(opcional)</span></label>
+                <input type="date" id="clTaskDueAt">
+            </div>
+        </div>
+        <div class="cl-modal-actions">
+            <button class="btn-minimal btn-minimal-primary" id="clSaveTaskBtn">Salvar</button>
+            <button class="btn-minimal" data-close="clNewTaskModal">Cancelar</button>
+        </div>
+    </div>
+</div>
+
+<div class="cl-modal-overlay" id="clDeleteModal">
+    <div class="cl-modal cl-modal-sm">
+        <div class="cl-modal-header">
+            <h2>Excluir cliente</h2>
+            <button class="cl-modal-close" data-close="clDeleteModal">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+        <div class="cl-modal-body" style="display:block;">
+            <p>Esta ação não pode ser desfeita. Todos os dados do cliente serão removidos permanentemente.</p>
+            <div class="cl-field cl-field-full" style="margin-top:14px;">
+                <label>Digite <strong id="clDeleteWord"></strong> para confirmar</label>
+                <input type="text" id="clDeleteInput" autocomplete="off" placeholder="Nome do cliente">
+            </div>
+        </div>
+        <div class="cl-modal-actions">
+            <button class="btn-minimal btn-minimal-danger" id="clDeleteConfirmBtn" disabled>Excluir</button>
+            <button class="btn-minimal" data-close="clDeleteModal">Cancelar</button>
+        </div>
+    </div>
+</div>
+{% endblock %}

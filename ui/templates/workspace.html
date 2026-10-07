@@ -1,0 +1,193 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#FFFFFF">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Clivo">
+    <title>Clivo</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <meta name="csrf-token" content="{{ csrf_token }}">
+
+    <link rel="stylesheet" href="{% static 'css/workspace.css' %}">
+
+    <style>
+        body.loading .workspace-container {
+            opacity: 0;
+        }
+        body.loaded .workspace-container {
+            opacity: 1;
+            transition: opacity 0.3s ease;
+        }
+    </style>
+</head>
+<body class="loading">
+
+    <!-- TOAST SYSTEM -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- ============================================
+         CONTEÚDO PRINCIPAL — SPLIT SCREEN
+         ============================================ -->
+    <div class="workspace-page">
+        <div class="workspace-container">
+
+            <!-- ===== LADO ESQUERDO ===== -->
+            <div class="workspace-card-wrapper">
+
+                <!-- TOPBAR: logo à esquerda, voltar à direita -->
+                <div class="workspace-topbar" id="workspaceTopbar">
+
+                    <!-- Barra de progresso indeterminada -->
+                    <div class="workspace-progress" aria-hidden="true">
+                        <div class="workspace-progress-bar"></div>
+                    </div>
+
+                    <div class="workspace-logo">
+                        <span class="workspace-logo-text">Clivo</span>
+                    </div>
+
+                    <!--
+                        Botão de voltar.
+                        Faz logout (encerra a sessão) e só então navega para /login/.
+                        Durante o logout, a barra de progresso no topo do header
+                        fica visível e animada.
+                    -->
+                    <button
+                        type="button"
+                        class="workspace-back"
+                        id="backToLogin"
+                        aria-label="Sair e voltar para o login"
+                    >
+                        <i class="fas fa-arrow-left"></i>
+                        <span class="workspace-back-label">Voltar</span>
+                    </button>
+                </div>
+
+                <!-- CARD CENTRALIZADO -->
+                <div class="workspace-card-center">
+                    <div class="workspace-card">
+
+                        <!-- ETAPA -->
+                        <div class="workspace-step">
+                            <span class="workspace-step-dot"></span>
+                            <span class="workspace-step-label">Etapa 1</span>
+                        </div>
+
+                        <!-- HEADER -->
+                        <div class="workspace-header">
+                            <h1 class="workspace-title">
+                                Vamos começar pelo<br>seu escritório
+                            </h1>
+                            <p class="workspace-subtitle">
+                                É aqui que seu trabalho vai acontecer.
+                            </p>
+                        </div>
+
+                        <!-- FORM -->
+                        <form id="workspaceForm" class="workspace-form" novalidate>
+                            {% csrf_token %}
+
+                            <div class="form-group">
+                                <label for="name">Nome do escritório</label>
+                                <input
+                                    type="text"
+                                    id="name"
+                                    name="name"
+                                    placeholder="Studio Almeida"
+                                    autocomplete="organization"
+                                    required
+                                    maxlength="150"
+                                >
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group form-group-city">
+                                    <label for="city">Cidade</label>
+                                    <input
+                                        type="text"
+                                        id="city"
+                                        name="city"
+                                        placeholder="Salvador"
+                                        autocomplete="address-level2"
+                                        maxlength="100"
+                                    >
+                                </div>
+                                <div class="form-group form-group-state">
+                                    <label for="state">UF</label>
+                                    <input
+                                        type="text"
+                                        id="state"
+                                        name="state"
+                                        placeholder="BA"
+                                        autocomplete="address-level1"
+                                        maxlength="2"
+                                        class="input-uf"
+                                    >
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="cnpj">
+                                    CNPJ
+                                    <span class="label-optional">(opcional)</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    id="cnpj"
+                                    name="cnpj"
+                                    placeholder="00.000.000/0000-00"
+                                    autocomplete="off"
+                                    maxlength="18"
+                                >
+                            </div>
+
+                            <button type="submit" class="btn btn-primary btn-full" id="submitBtn">
+                                <span class="btn-text">Criar meu espaço</span>
+                                <i class="fas fa-arrow-right btn-arrow"></i>
+                            </button>
+                        </form>
+
+                    </div>
+                </div>
+
+                <!-- Rodapé -->
+                <div class="workspace-footer">
+                    <p>Você poderá alterar essas informações depois.</p>
+                </div>
+            </div>
+
+            <!-- ===== LADO DIREITO — MURAL ===== -->
+            <div class="workspace-mural">
+                <div class="workspace-mural-inner">
+                    <div class="mural-content">
+                        <h2>Clivo</h2>
+                        <p>
+                            Do briefing à entrega das chaves,<br>
+                            reunido em um só lugar.
+                        </p>
+                        <div class="mural-features">
+                            <span>CRM</span>
+                            <span>Projetos</span>
+                            <span>Tarefas</span>
+                            <span>IA</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script src="{% static 'js/workspace.js' %}"></script>
+
+</body>
+</html>

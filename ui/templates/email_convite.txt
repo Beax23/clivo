@@ -1,0 +1,13 @@
+{{ site_name }}
+
+{% if inviter_name %}{{ inviter_name }} te convidou{% else %}Você foi convidado{% endif %} para participar do workspace "{{ workspace.name }}" como {{ governance.name }}.
+
+Aceite o convite neste link:
+{{ invite_url }}
+
+Este convite expira em {{ expires_at|date:"d/m/Y" }}.
+
+Se você não esperava este email, pode ignorá-lo com segurança.
+
+—
+{{ site_name }} · Do briefing à entrega das chaves, reunido em um só lugar.

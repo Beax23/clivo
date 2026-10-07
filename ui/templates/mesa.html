@@ -1,0 +1,271 @@
+{% extends "sidebar.html" %}
+{% load static %}
+
+{% block title %}Mesa · Clivo{% endblock %}
+{% block page_name %}mesa{% endblock %}
+
+{% block content %}
+<div class="main-inner">
+
+    <div class="page-header">
+        <h1 id="pageGreeting">Início</h1>
+        <span class="header-date" id="todayDate"></span>
+    </div>
+
+    <div class="view-tabs" id="viewTabs">
+        <button class="active" data-tab="escritorio">Escritório</button>
+        <button data-tab="workspace" id="tabWorkspaceBtn">Workspace</button>
+    </div>
+
+    <div class="tab-content active" id="tabEscritorio">
+        <div class="mesa-empty">
+            <i class="lucide" data-lucide="inbox"></i>
+            <p>Seus dados aparecerão aqui</p>
+            <span>Nenhum projeto ou tarefa disponível</span>
+        </div>
+    </div>
+
+    <div class="tab-content" id="tabWorkspace">
+
+        <div class="sub-tabs" id="subTabs">
+            <button class="active" data-subtab="geral">Geral</button>
+            <button data-subtab="equipe">Equipe</button>
+        </div>
+
+        <!-- SUB-ABA GERAL -->
+        <div class="subtab-content active" id="subtabGeral">
+            <div class="ws-page" id="wsPage">
+
+                <div class="ws-notice hidden" id="wsReadOnlyNotice">
+                    <i class="lucide" data-lucide="lock"></i>
+                    <div>
+                        <strong>Modo somente leitura</strong>
+                        <span>Sua governança não permite editar este workspace. Você pode visualizar os dados, mas não alterá-los.</span>
+                    </div>
+                </div>
+
+                <div class="ws-cards-grid">
+
+                    <section class="ws-card ws-card-identity" id="wsIdentityCard">
+                        <header class="ws-card-header">
+                            <h3>Identidade</h3>
+                            <p>Como o escritório aparece na plataforma</p>
+                        </header>
+
+                        <div class="ws-card-body">
+                            <div class="ws-field ws-field-full">
+                                <label for="wsFieldName">Nome do escritório</label>
+                                <input type="text" id="wsFieldName" placeholder="Studio Exemplo" maxlength="150">
+                            </div>
+
+                            <div class="ws-field">
+                                <label for="wsFieldCity">Cidade</label>
+                                <input type="text" id="wsFieldCity" placeholder="Salvador" maxlength="100">
+                            </div>
+
+                            <div class="ws-field">
+                                <label for="wsFieldState">UF</label>
+                                <input type="text" id="wsFieldState" placeholder="BA" maxlength="2" class="input-uf">
+                            </div>
+
+                            <div class="ws-field ws-field-full">
+                                <label for="wsFieldCnpj">
+                                    CNPJ <span class="label-optional">(opcional)</span>
+                                </label>
+                                <input type="text" id="wsFieldCnpj" placeholder="00.000.000/0000-00" maxlength="18">
+                            </div>
+                        </div>
+
+                        <footer class="ws-card-footer">
+                            <button
+                                class="btn-minimal"
+                                id="wsSaveBtn"
+                                data-capability="workspaces.workspace.update"
+                            >
+                                <i class="lucide" data-lucide="check"></i>
+                                <span>Salvar</span>
+                            </button>
+                        </footer>
+                    </section>
+
+                    <section
+                        class="ws-card ws-card-danger"
+                        id="wsDangerCard"
+                        data-capability="workspaces.workspace.delete"
+                    >
+                        <header class="ws-card-header">
+                            <h3>Zona de atenção</h3>
+                            <p>Esta ação é permanente e remove o workspace e todos os seus dados.</p>
+                        </header>
+
+                        <footer class="ws-card-footer">
+                            <button
+                                class="btn-minimal btn-minimal-danger"
+                                id="wsDeleteBtn"
+                                data-capability="workspaces.workspace.delete"
+                            >
+                                <i class="lucide" data-lucide="trash-2"></i>
+                                <span>Excluir</span>
+                            </button>
+                        </footer>
+                    </section>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- SUB-ABA EQUIPE -->
+        <div class="subtab-content" id="subtabEquipe">
+            <div class="team-layout">
+
+                <section class="team-column team-column-members" id="membersColumn">
+                    <header class="team-column-header">
+                        <div class="team-column-title">
+                            <h3>Membros</h3>
+                            <span class="team-column-count" id="teamMembersCount">0</span>
+                        </div>
+                        <button
+                            class="btn-minimal"
+                            id="teamAddBtn"
+                            data-capability="workspaces.member.invite"
+                        >
+                            <i class="lucide" data-lucide="plus"></i>
+                            <span>Convidar</span>
+                        </button>
+                    </header>
+
+                    <div class="team-column-body">
+                        <div class="team-list" id="teamList">
+                            <div class="mesa-empty" style="padding:40px 20px;">
+                                <p>Carregando equipe...</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <aside class="team-column team-column-governances" id="governancesColumn">
+                    <header class="team-column-header">
+                        <div class="team-column-title">
+                            <h3>Governanças</h3>
+                            <span class="team-column-count" id="governancesCount">0</span>
+                        </div>
+                        <div class="team-filter">
+                            <label for="teamGovernanceFilter" class="visually-hidden">Filtrar</label>
+                            <select id="teamGovernanceFilter">
+                                <option value="">Todas</option>
+                            </select>
+                        </div>
+                    </header>
+                    <div class="team-column-body">
+                        <div class="governance-list" id="governanceList">
+                            <div class="mesa-empty" style="padding:30px 20px;">
+                                <p>Carregando governanças...</p>
+                            </div>
+                        </div>
+                    </div>
+                </aside>
+
+            </div>
+        </div>
+
+    </div>
+
+</div>
+
+<!-- ============== MODAIS ============== -->
+
+<div class="modal-overlay" id="addMemberModal">
+    <div class="modal">
+        <div class="modal-header">
+            <h2>Convidar para o workspace</h2>
+            <button class="modal-close" data-modal="addMemberModal">
+                <i class="lucide" data-lucide="x"></i>
+            </button>
+        </div>
+        <form id="addMemberForm">
+            <div class="modal-group">
+                <label for="memberEmail">Email</label>
+                <input type="email" id="memberEmail" placeholder="email@clivo.com" required>
+            </div>
+            <div class="modal-group">
+                <label for="memberGovernance">Governança</label>
+                <select id="memberGovernance"></select>
+            </div>
+            <p class="modal-hint">
+                Enviaremos um email com o link de acesso. A pessoa se cadastra
+                pelo Google ou email/senha e entra automaticamente no workspace.
+            </p>
+            <div class="modal-actions">
+                <button type="submit" class="btn-minimal btn-minimal-primary" id="addMemberSubmitBtn">
+                    Enviar convite
+                </button>
+                <button type="button" class="btn-minimal" data-modal="addMemberModal">Cancelar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="modal-overlay" id="editMemberModal">
+    <div class="modal">
+        <div class="modal-header">
+            <h2 id="editMemberTitle">Alterar governança</h2>
+            <button class="modal-close" data-modal="editMemberModal">
+                <i class="lucide" data-lucide="x"></i>
+            </button>
+        </div>
+        <div class="modal-body">
+            <p class="modal-member-name" id="editMemberName"></p>
+            <p class="modal-member-email" id="editMemberEmail"></p>
+            <div class="modal-group">
+                <label for="editMemberGovernance">Governança</label>
+                <select id="editMemberGovernance"></select>
+            </div>
+        </div>
+        <div class="modal-actions">
+            <button class="btn-minimal btn-minimal-primary" id="editMemberSaveBtn">Salvar</button>
+            <button class="btn-minimal" data-modal="editMemberModal">Cancelar</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="removeMemberModal">
+    <div class="modal modal-sm">
+        <div class="modal-header">
+            <h2 id="removeMemberTitle">Remover</h2>
+            <button class="modal-close" data-modal="removeMemberModal">
+                <i class="lucide" data-lucide="x"></i>
+            </button>
+        </div>
+        <div class="modal-body">
+            <p id="removeMemberText">Tem certeza?</p>
+            <p class="modal-hint">O último proprietário não pode ser removido.</p>
+        </div>
+        <div class="modal-actions">
+            <button class="btn-minimal btn-minimal-danger" id="removeMemberConfirmBtn">Remover</button>
+            <button class="btn-minimal" data-modal="removeMemberModal">Cancelar</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="deleteWorkspaceModal">
+    <div class="modal modal-sm">
+        <div class="modal-header">
+            <h2>Excluir workspace</h2>
+            <button class="modal-close" data-modal="deleteWorkspaceModal">
+                <i class="lucide" data-lucide="x"></i>
+            </button>
+        </div>
+        <div class="modal-body">
+            <p>Esta ação não pode ser desfeita. Todos os dados do workspace serão removidos.</p>
+            <div class="modal-group">
+                <label>Digite <strong id="deleteConfirmWord"></strong> para confirmar</label>
+                <input type="text" id="deleteConfirmInput" placeholder="Nome do workspace" autocomplete="off">
+            </div>
+        </div>
+        <div class="modal-actions">
+            <button class="btn-minimal btn-minimal-danger" id="deleteWorkspaceConfirmBtn" disabled>Excluir</button>
+            <button class="btn-minimal" data-modal="deleteWorkspaceModal">Cancelar</button>
+        </div>
+    </div>
+</div>
+{% endblock %}

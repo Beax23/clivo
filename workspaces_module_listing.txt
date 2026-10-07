@@ -1,0 +1,3726 @@
+﻿================================================================================
+LISTAGEM COMPLETA DO MÓDULO workspaces
+Clivo Platform - Refatoração Arquitetural
+Gerado em: 28/09/2026 10:41:49
+Total de arquivos: 32
+================================================================================
+
+
+================================================================================
+ARQUIVO 1 DE 32
+================================================================================
+📁 PASTA: apps\workspaces\__init__.py
+📄 ARQUIVO: __init__.py
+📏 TAMANHO: 2.02 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 54
+================================================================================
+
+"""
+Workspaces â€” tenant boundary da Clivo.
+
+============================================================================
+REGRA ARQUITETURAL
+============================================================================
+
+    Console administra a plataforma.
+    Workspace executa o trabalho do escritÃ³rio.
+
+O app `workspaces` Ã© DELIBERADAMENTE pequeno. Ele nÃ£o replica a
+complexidade administrativa do Console.
+
+============================================================================
+O QUE O WORKSPACE POSSUI (V1)
+============================================================================
+
+    Workspace
+        â””â”€â”€ identidade do escritÃ³rio (nome, slug, CNPJ, cidade/UF)
+
+    WorkspaceMembership
+        â”œâ”€â”€ user
+        â””â”€â”€ governance â†’ ConsoleGovernance
+
+    WorkspaceSubscription
+        â””â”€â”€ plan â†’ ConsolePlan
+
+============================================================================
+O QUE O WORKSPACE NÃƒO POSSUI
+============================================================================
+
+    Governance prÃ³pria          â†’ pertence ao Console
+    Capability prÃ³pria          â†’ pertence ao Console
+    Plan prÃ³prio                â†’ pertence ao Console
+    Feature prÃ³pria             â†’ pertence ao Console
+    Branding / logo / settings  â†’ deferred
+    Client / Project / Briefing â†’ outros domÃ­nios (futuro)
+    Document / Intelligence     â†’ outros domÃ­nios (futuro)
+    Billing / Invoice           â†’ deferred
+
+============================================================================
+FRONTEIRA CONGELADA (V1)
+============================================================================
+
+    Console administra Governance, Capability, Plan, Feature.
+    Workspace consome via referÃªncia (FK).
+
+    WorkspaceMembership.governance  â†’ ConsoleGovernance
+    WorkspaceSubscription.plan      â†’ ConsolePlan
+
+    O Workspace NÃƒO duplica nem redefine nenhum desses conceitos.
+"""
+
+default_app_config = 'apps.workspaces.apps.WorkspacesConfig'
+
+
+
+================================================================================
+ARQUIVO 2 DE 32
+================================================================================
+📁 PASTA: apps\workspaces\admin.py
+📄 ARQUIVO: admin.py
+📏 TAMANHO: 3.98 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 126
+================================================================================
+
+from django.contrib import admin
+
+from apps.workspaces.models import (
+    Workspace,
+    WorkspaceMembership,
+    WorkspaceSubscription,
+)
+
+
+# =========================================================================
+# INLINES
+# =========================================================================
+
+class WorkspaceSubscriptionInline(admin.StackedInline):
+    """Subscription Ã© OneToOne â€” no mÃ¡ximo uma por Workspace."""
+    model = WorkspaceSubscription
+    extra = 0
+    max_num = 1
+    fields = ['plan', 'is_active', 'started_at', 'ended_at']
+    autocomplete_fields = ['plan']
+    readonly_fields = []
+
+
+class WorkspaceMembershipInline(admin.TabularInline):
+    """Membros do Workspace dentro do admin do Workspace."""
+    model = WorkspaceMembership
+    extra = 0
+    fields = ['user', 'governance', 'joined_at', 'last_access_at']
+    readonly_fields = ['joined_at', 'last_access_at']
+    autocomplete_fields = ['user', 'governance']
+    ordering = ['-joined_at']
+
+
+# =========================================================================
+# WORKSPACE
+# =========================================================================
+
+@admin.register(Workspace)
+class WorkspaceAdmin(admin.ModelAdmin):
+    list_display = [
+        'name', 'slug', 'city', 'state',
+        'is_active', 'created_at',
+    ]
+    list_filter = ['is_active', 'state']
+    search_fields = ['name', 'slug', 'cnpj', 'city']
+    readonly_fields = ['id', 'slug', 'created_at', 'updated_at']
+    ordering = ['name']
+    inlines = [WorkspaceSubscriptionInline, WorkspaceMembershipInline]
+
+    fieldsets = (
+        ('IdentificaÃ§Ã£o', {
+            'fields': ('id', 'name', 'slug'),
+        }),
+        ('Dados do escritÃ³rio', {
+            'fields': ('cnpj', 'city', 'state'),
+        }),
+        ('Estado', {
+            'fields': ('is_active',),
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',),
+        }),
+    )
+
+    def get_readonly_fields(self, request, obj=None):
+        """
+        `slug` Ã© sempre read-only (gerado na criaÃ§Ã£o, imutÃ¡vel na V1).
+        """
+        return self.readonly_fields
+
+
+# =========================================================================
+# MEMBERSHIP
+# =========================================================================
+
+@admin.register(WorkspaceMembership)
+class WorkspaceMembershipAdmin(admin.ModelAdmin):
+    list_display = [
+        'user', 'workspace', 'governance',
+        'joined_at', 'last_access_at',
+    ]
+    list_filter = ['governance', 'workspace']
+    search_fields = ['user__email', 'workspace__name']
+    autocomplete_fields = ['user', 'workspace', 'governance']
+    readonly_fields = ['id', 'joined_at', 'last_access_at', 'updated_at']
+    ordering = ['-joined_at']
+
+    fieldsets = (
+        ('VÃ­nculo', {
+            'fields': ('id', 'workspace', 'user', 'governance'),
+        }),
+        ('Acesso', {
+            'fields': ('joined_at', 'last_access_at', 'updated_at'),
+        }),
+    )
+
+
+# =========================================================================
+# SUBSCRIPTION
+# =========================================================================
+
+@admin.register(WorkspaceSubscription)
+class WorkspaceSubscriptionAdmin(admin.ModelAdmin):
+    list_display = [
+        'workspace', 'plan', 'is_active',
+        'started_at', 'ended_at',
+    ]
+    list_filter = ['is_active', 'plan']
+    search_fields = ['workspace__name', 'plan__name']
+    autocomplete_fields = ['workspace', 'plan']
+    readonly_fields = ['id', 'created_at', 'updated_at']
+    ordering = ['-started_at']
+
+    fieldsets = (
+        ('VÃ­nculo', {
+            'fields': ('id', 'workspace', 'plan'),
+        }),
+        ('VigÃªncia', {
+            'fields': ('is_active', 'started_at', 'ended_at'),
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',),
+        }),
+    )
+
+
+
+================================================================================
+ARQUIVO 3 DE 32
+================================================================================
+📁 PASTA: apps\workspaces\api\serializers\__init__.py
+📄 ARQUIVO: __init__.py
+📏 TAMANHO: 1.04 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 31
+================================================================================
+
+from apps.workspaces.api.serializers.workspace_serializers import (
+    WorkspaceSerializer,
+    WorkspaceCreateSerializer,
+    WorkspaceUpdateSerializer,
+)
+from apps.workspaces.api.serializers.membership_serializers import (
+    WorkspaceMembershipSerializer,
+    WorkspaceMembershipCreateSerializer,
+    WorkspaceMembershipUpdateSerializer,
+)
+from apps.workspaces.api.serializers.subscription_serializers import (
+    WorkspaceSubscriptionSerializer,
+)
+from apps.workspaces.api.serializers.invitation_serializers import (
+    WorkspaceInvitationSerializer,
+    WorkspaceInvitationCreateSerializer,
+    WorkspaceInvitationUpdateSerializer,
+)
+
+__all__ = [
+    'WorkspaceSerializer',
+    'WorkspaceCreateSerializer',
+    'WorkspaceUpdateSerializer',
+    'WorkspaceMembershipSerializer',
+    'WorkspaceMembershipCreateSerializer',
+    'WorkspaceMembershipUpdateSerializer',
+    'WorkspaceSubscriptionSerializer',
+    'WorkspaceInvitationSerializer',
+    'WorkspaceInvitationCreateSerializer',
+    'WorkspaceInvitationUpdateSerializer',
+]
+
+
+
+================================================================================
+ARQUIVO 4 DE 32
+================================================================================
+📁 PASTA: apps\workspaces\api\serializers\invitation_serializers.py
+📄 ARQUIVO: invitation_serializers.py
+📏 TAMANHO: 1.95 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 60
+================================================================================
+
+from rest_framework import serializers
+from django.utils import timezone
+
+from apps.workspaces.models import WorkspaceInvitation
+
+
+class WorkspaceInvitationSerializer(serializers.ModelSerializer):
+    governance_key = serializers.CharField(source='governance.key', read_only=True)
+    governance_name = serializers.CharField(source='governance.name', read_only=True)
+    invited_by_email = serializers.EmailField(
+        source='invited_by.email', read_only=True, allow_null=True
+    )
+    is_expired = serializers.SerializerMethodField()
+
+    class Meta:
+        model = WorkspaceInvitation
+        fields = [
+            'id',
+            'workspace',
+            'email',
+            'governance', 'governance_key', 'governance_name',
+            'status',
+            'invited_by', 'invited_by_email',
+            'created_at', 'updated_at',
+            'expires_at',
+            'accepted_at',
+            'last_sent_at', 'send_count',
+            'is_expired',
+        ]
+        read_only_fields = fields
+
+    def get_is_expired(self, obj):
+        return obj.is_expired()
+
+
+class WorkspaceInvitationCreateSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    governance_key = serializers.CharField()
+
+    def validate_email(self, value):
+        value = value.strip().lower()
+        if not value:
+            raise serializers.ValidationError('Informe um email vÃ¡lido')
+        return value
+
+    def validate_governance_key(self, value):
+        value = (value or '').strip()
+        if not value:
+            raise serializers.ValidationError('Escolha uma governanÃ§a')
+        return value
+
+
+class WorkspaceInvitationUpdateSerializer(serializers.Serializer):
+    governance_key = serializers.CharField()
+
+    def validate_governance_key(self, value):
+        value = (value or '').strip()
+        if not value:
+            raise serializers.ValidationError('Escolha uma governanÃ§a')
+        return value
+
+
+
+================================================================================
+ARQUIVO 5 DE 32
+================================================================================
+📁 PASTA: apps\workspaces\api\serializers\membership_serializers.py
+📄 ARQUIVO: membership_serializers.py
+📏 TAMANHO: 3.65 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 108
+================================================================================
+
+from rest_framework import serializers
+from django.utils.translation import gettext_lazy as _
+from django.contrib.auth import get_user_model
+
+from apps.workspaces.models import WorkspaceMembership
+
+User = get_user_model()
+
+
+class WorkspaceMembershipSerializer(serializers.ModelSerializer):
+    """
+    Serializer de leitura de WorkspaceMembership.
+
+    `created_at` foi removido do model â€” nÃ£o aparece aqui.
+    """
+
+    user_email = serializers.EmailField(source='user.email', read_only=True)
+    user_full_name = serializers.CharField(source='user.full_name', read_only=True)
+    user_avatar = serializers.CharField(
+        source='user.avatar', read_only=True, allow_null=True
+    )
+
+    governance_key = serializers.CharField(source='governance.key', read_only=True)
+    governance_name = serializers.CharField(source='governance.name', read_only=True)
+
+    class Meta:
+        model = WorkspaceMembership
+        fields = [
+            'id',
+            'workspace',
+            'user', 'user_email', 'user_full_name', 'user_avatar',
+            'governance', 'governance_key', 'governance_name',
+            'joined_at',
+            'last_access_at',
+            'updated_at',
+        ]
+        read_only_fields = [
+            'id', 'workspace', 'user',
+            'joined_at', 'updated_at',
+        ]
+
+
+class WorkspaceMembershipCreateSerializer(serializers.Serializer):
+    """
+    Serializer para adicionar membro ao Workspace.
+
+    Aceita DUAS formas:
+        - user_id: usuÃ¡rio jÃ¡ existente
+        - email: usuÃ¡rio pode jÃ¡ existir OU precisa ser criado
+
+    A governanÃ§a Ã© escolhida no momento da adiÃ§Ã£o.
+    O service valida que a governanÃ§a tem scope='workspace'.
+    """
+
+    user_id = serializers.CharField(required=False, allow_blank=True)
+    email = serializers.EmailField(required=False, allow_blank=True)
+    governance_key = serializers.CharField()
+
+    def validate(self, attrs):
+        user_id = attrs.get('user_id')
+        email = attrs.get('email')
+        governance_key = (attrs.get('governance_key') or '').strip()
+
+        if not user_id and not email:
+            raise serializers.ValidationError(_('Informe user_id ou email'))
+
+        if not governance_key:
+            raise serializers.ValidationError(
+                {'governance_key': _('A governanÃ§a Ã© obrigatÃ³ria')}
+            )
+
+        user = None
+        if user_id:
+            try:
+                user = User.objects.get(id=user_id)
+            except (User.DoesNotExist, ValueError):
+                raise serializers.ValidationError(
+                    {'user_id': _('UsuÃ¡rio nÃ£o encontrado')}
+                )
+        elif email:
+            email = User.normalize_email(email)
+            user = User.objects.filter(email__iexact=email).first()
+
+            if not user:
+                # Cria conta pendente â€” vinculada ao Google no primeiro login
+                user = User.objects.create_user(
+                    email=email,
+                    password=None,
+                    is_active=True,
+                )
+                user.set_unusable_password()
+                user.save(update_fields=['password'])
+
+        attrs['user'] = user
+        attrs['governance_key'] = governance_key
+        return attrs
+
+
+class WorkspaceMembershipUpdateSerializer(serializers.Serializer):
+    """Serializer para alterar a governanÃ§a de um membro."""
+
+    governance_key = serializers.CharField()
+
+    def validate_governance_key(self, value):
+        value = (value or '').strip()
+        if not value:
+            raise serializers.ValidationError(_('A governanÃ§a Ã© obrigatÃ³ria'))
+        return value
+
+
+
+================================================================================
+ARQUIVO 6 DE 32
+================================================================================
+📁 PASTA: apps\workspaces\api\serializers\subscription_serializers.py
+📄 ARQUIVO: subscription_serializers.py
+📏 TAMANHO: 1.14 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 34
+================================================================================
+
+from rest_framework import serializers
+
+from apps.workspaces.models import WorkspaceSubscription
+
+
+class WorkspaceSubscriptionSerializer(serializers.ModelSerializer):
+    """
+    Serializer read-only de WorkspaceSubscription.
+
+    ExpÃµe os dados do Plan para conveniÃªncia do frontend.
+    """
+
+    plan_key = serializers.CharField(source='plan.key', read_only=True)
+    plan_name = serializers.CharField(source='plan.name', read_only=True)
+    plan_price = serializers.DecimalField(
+        source='plan.price', max_digits=10, decimal_places=2, read_only=True
+    )
+    plan_currency = serializers.CharField(source='plan.currency', read_only=True)
+    plan_billing_period = serializers.CharField(
+        source='plan.billing_period', read_only=True
+    )
+
+    class Meta:
+        model = WorkspaceSubscription
+        fields = [
+            'id',
+            'workspace',
+            'plan', 'plan_key', 'plan_name',
+            'plan_price', 'plan_currency', 'plan_billing_period',
+            'is_active',
+            'started_at', 'ended_at',
+            'created_at', 'updated_at',
+        ]
+        read_only_fields = fields
+
+
+
+================================================================================
+ARQUIVO 7 DE 32
+================================================================================
+📁 PASTA: apps\workspaces\api\serializers\workspace_serializers.py
+📄 ARQUIVO: workspace_serializers.py
+📏 TAMANHO: 3.36 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 115
+================================================================================
+
+import re
+from rest_framework import serializers
+from django.utils.translation import gettext_lazy as _
+
+from apps.workspaces.models import Workspace
+from apps.workspaces.public_id import encode_workspace_id
+
+
+class WorkspaceSerializer(serializers.ModelSerializer):
+    """
+    Serializer de leitura de Workspace.
+
+    - `id` Ã© o UUID real (usado em chamadas API).
+    - `public_id` Ã© o token ofuscado (usado em URLs do browser).
+    """
+
+    plan = serializers.SerializerMethodField()
+    members_count = serializers.SerializerMethodField()
+    public_id = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Workspace
+        fields = [
+            'id', 'public_id', 'name', 'slug',
+            'cnpj', 'city', 'state',
+            'is_active',
+            'plan',
+            'members_count',
+            'created_at', 'updated_at',
+        ]
+        read_only_fields = [
+            'id', 'public_id', 'slug', 'created_at', 'updated_at',
+            'plan', 'members_count',
+        ]
+
+    def get_public_id(self, obj):
+        return encode_workspace_id(obj.id)
+
+    def get_plan(self, obj):
+        sub = getattr(obj, 'subscription', None)
+        if sub and sub.is_active and sub.plan:
+            return {
+                'id': str(sub.plan.id),
+                'key': sub.plan.key,
+                'name': sub.plan.name,
+                'price': str(sub.plan.price),
+                'currency': sub.plan.currency,
+                'billing_period': sub.plan.billing_period,
+            }
+        return None
+
+    def get_members_count(self, obj):
+        return obj.memberships.count()
+
+
+class WorkspaceCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Workspace
+        fields = ['name', 'cnpj', 'city', 'state']
+
+    def validate_name(self, value):
+        if not value or not value.strip():
+            raise serializers.ValidationError(_('O nome Ã© obrigatÃ³rio'))
+        return value.strip()
+
+    def validate_cnpj(self, value):
+        if not value:
+            return ''
+        return value.strip()
+
+    def validate_city(self, value):
+        if not value:
+            return ''
+        return value.strip()
+
+    def validate_state(self, value):
+        if not value:
+            return ''
+        value = value.strip().upper()
+        if len(value) != 2:
+            raise serializers.ValidationError(
+                _('A UF deve ter exatamente 2 caracteres')
+            )
+        return value
+
+
+class WorkspaceUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Workspace
+        fields = ['name', 'cnpj', 'city', 'state', 'is_active']
+
+    def validate_name(self, value):
+        if not value or not value.strip():
+            raise serializers.ValidationError(_('O nome Ã© obrigatÃ³rio'))
+        return value.strip()
+
+    def validate_cnpj(self, value):
+        if not value:
+            return ''
+        return value.strip()
+
+    def validate_city(self, value):
+        if not value:
+            return ''
+        return value.strip()
+
+    def validate_state(self, value):
+        if not value:
+            return ''
+        value = value.strip().upper()
+        if len(value) != 2:
+            raise serializers.ValidationError(
+                _('A UF deve ter exatamente 2 caracteres')
+            )
+        return value
+
+
+
+================================================================================
+ARQUIVO 8 DE 32
+================================================================================
+📁 PASTA: apps\workspaces\api\views\__init__.py
+📄 ARQUIVO: __init__.py
+📏 TAMANHO: 0.11 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 5
+================================================================================
+
+from apps.workspaces.api.views.workspace_views import WorkspaceViewSet
+
+__all__ = [
+    'WorkspaceViewSet',
+]
+
+
+
+================================================================================
+ARQUIVO 9 DE 32
+================================================================================
+📁 PASTA: apps\workspaces\api\views\workspace_views.py
+📄 ARQUIVO: workspace_views.py
+📏 TAMANHO: 22.81 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 588
+================================================================================
+
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+
+from apps.workspaces.models import (
+    Workspace,
+    WorkspaceMembership,
+    WorkspaceInvitation,
+)
+from apps.workspaces.queries import WorkspaceQueries
+from apps.workspaces.public_id import encode_workspace_id
+from apps.workspaces.api.serializers import (
+    WorkspaceSerializer,
+    WorkspaceCreateSerializer,
+    WorkspaceUpdateSerializer,
+    WorkspaceMembershipSerializer,
+    WorkspaceMembershipCreateSerializer,
+    WorkspaceMembershipUpdateSerializer,
+    WorkspaceSubscriptionSerializer,
+    WorkspaceInvitationSerializer,
+    WorkspaceInvitationCreateSerializer,
+    WorkspaceInvitationUpdateSerializer,
+)
+from apps.workspaces.services import (
+    WorkspaceService,
+    WorkspaceMembershipService,
+    WorkspaceSubscriptionService,
+    WorkspaceInvitationService,
+)
+from apps.workspaces.permissions import (
+    IsWorkspaceMember,
+    IsWorkspaceOwner,
+)
+from apps.workspaces.exceptions import (
+    DefaultPlanNotFoundError,
+    DefaultPlanAmbiguousError,
+    ProprietarioGovernanceNotFoundError,
+    WorkspaceUserNotActiveError,
+    DuplicateMembershipError,
+    UserNotActiveError,
+    GovernanceNotFoundError,
+    GovernanceScopeError,
+    LastOwnerError,
+    WorkspaceInvitationError,
+    InvitationResendLimitError,
+)
+
+
+class WorkspaceViewSet(viewsets.ModelViewSet):
+    lookup_field = 'id'
+
+    def get_permissions(self):
+        if self.action in [
+            'list', 'create', 'current', 'my_workspaces', 'governances',
+            'my_capabilities',
+        ]:
+            return [IsAuthenticated()]
+        if self.action in ['update', 'partial_update']:
+            return [IsAuthenticated(), IsWorkspaceOwner()]
+        return [IsAuthenticated(), IsWorkspaceMember()]
+
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return WorkspaceCreateSerializer
+        if self.action in ['update', 'partial_update']:
+            return WorkspaceUpdateSerializer
+        return WorkspaceSerializer
+
+    def get_queryset(self):
+        return WorkspaceQueries.list_for_user_with_plan(self.request.user)
+
+    # ==================================================================
+    # AUTORIZAÃ‡ÃƒO
+    # ==================================================================
+
+    @staticmethod
+    def _capabilities_for_membership(membership) -> list:
+        from apps.console.models import ConsoleGovernanceCapability
+
+        if membership is None:
+            return []
+
+        # ProprietÃ¡rio Ã© a invariante estrutural do tenant.
+        # Ele sempre tem todas as capabilities, sem precisar
+        # que o operador configure isso no Console UI.
+        if membership.governance.key == 'proprietario':
+            return ['*']
+
+        return list(
+            ConsoleGovernanceCapability.objects
+            .filter(
+                governance=membership.governance,
+                capability__is_active=True,
+            )
+            .values_list('capability__code', flat=True)
+            .distinct()
+        )
+
+    def _has_capability(self, request, workspace, capability_code) -> bool:
+        membership = WorkspaceMembership.objects.filter(
+            workspace=workspace,
+            user=request.user,
+        ).select_related('governance').first()
+
+        if membership is None:
+            return False
+
+        caps = self._capabilities_for_membership(membership)
+        if '*' in caps:
+            return True
+        return capability_code in caps
+
+    def _require_capability(self, request, workspace, capability_code):
+        membership = WorkspaceMembership.objects.filter(
+            workspace=workspace,
+            user=request.user,
+        ).select_related('governance').first()
+
+        if membership is None:
+            return Response(
+                {'error': 'VocÃª nÃ£o Ã© membro deste Workspace'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if not self._has_capability(request, workspace, capability_code):
+            return Response(
+                {
+                    'error': (
+                        f'Sua governanÃ§a nÃ£o permite esta aÃ§Ã£o '
+                        f'({capability_code}).'
+                    )
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        return None
+
+    # ==================================================================
+    # CRUD
+    # ==================================================================
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            workspace = WorkspaceService.create_workspace(
+                name=serializer.validated_data['name'],
+                created_by=request.user,
+                cnpj=serializer.validated_data.get('cnpj', ''),
+                city=serializer.validated_data.get('city', ''),
+                state=serializer.validated_data.get('state', ''),
+            )
+        except (
+            DefaultPlanNotFoundError,
+            DefaultPlanAmbiguousError,
+            ProprietarioGovernanceNotFoundError,
+        ) as e:
+            return Response({'error': str(e)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        except WorkspaceUserNotActiveError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        workspace = WorkspaceQueries.get_with_subscription(workspace.id)
+        request.session['current_workspace_id'] = str(workspace.id)
+
+        # MantÃ©m `last_access_at` coerente para `get_last_accessed_for_user`.
+        # Sem isso, o Workspace recÃ©m-criado entra com last_access_at=NULL
+        # e perde a prioridade na ordenaÃ§Ã£o por Ãºltimo acesso.
+        WorkspaceMembershipService.touch_last_access(workspace, request.user)
+
+        return Response(
+            WorkspaceSerializer(workspace).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    def retrieve(self, request, *args, **kwargs):
+        workspace = self.get_object()
+        WorkspaceMembershipService.touch_last_access(workspace, request.user)
+        serializer = self.get_serializer(workspace)
+        return Response(serializer.data)
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        workspace = self.get_object()
+        err = self._require_capability(
+            request, workspace, 'workspaces.workspace.update'
+        )
+        if err is not None:
+            return err
+
+        serializer = self.get_serializer(workspace, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(WorkspaceSerializer(workspace).data)
+
+    def destroy(self, request, *args, **kwargs):
+        workspace = self.get_object()
+        err = self._require_capability(request, workspace, 'workspaces.workspace.delete')
+        if err is not None:
+            return err
+        WorkspaceService.delete_workspace(workspace)
+        return Response(
+            {'detail': 'Workspace excluÃ­do com sucesso'},
+            status=status.HTTP_204_NO_CONTENT,
+        )
+
+    # ==================================================================
+    # WORKSPACE ATUAL / MEU / GOVERNANÃ‡AS / CAPABILITIES
+    # ==================================================================
+
+    @action(detail=False, methods=['get'], url_path='current')
+    def current(self, request):
+        workspace_id = request.session.get('current_workspace_id')
+        workspace = None
+        if workspace_id:
+            workspace = WorkspaceQueries.get_for_user(workspace_id, request.user)
+        if workspace is None:
+            workspace = WorkspaceQueries.get_last_accessed_for_user(request.user)
+        if workspace is None:
+            return Response(
+                {'error': 'Nenhum Workspace acessÃ­vel para este usuÃ¡rio'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        request.session['current_workspace_id'] = str(workspace.id)
+        WorkspaceMembershipService.touch_last_access(workspace, request.user)
+        return Response(WorkspaceSerializer(workspace).data)
+
+    @action(detail=False, methods=['get'], url_path='my')
+    def my_workspaces(self, request):
+        memberships = (
+            WorkspaceMembership.objects
+            .filter(user=request.user, workspace__is_active=True)
+            .select_related('workspace', 'governance')
+            .order_by('-last_access_at', '-joined_at')
+        )
+        current_id = request.session.get('current_workspace_id')
+        results = []
+        for m in memberships:
+            results.append({
+                'id': str(m.workspace.id),
+                'public_id': encode_workspace_id(m.workspace.id),
+                'name': m.workspace.name,
+                'slug': m.workspace.slug,
+                'governance_key': m.governance.key,
+                'governance_name': m.governance.name,
+                'is_current': str(m.workspace.id) == str(current_id) if current_id else False,
+            })
+        return Response(results)
+
+    @action(
+        detail=False,
+        methods=['get'],
+        url_path='governances',
+        url_name='governances',
+    )
+    def governances(self, request):
+        from apps.console.models import ConsoleGovernance, ConsoleGovernanceCapability
+
+        governances = ConsoleGovernance.objects.filter(scope='workspace').order_by('name')
+        results = []
+        for g in governances:
+            caps = (
+                ConsoleGovernanceCapability.objects
+                .filter(governance=g, capability__is_active=True)
+                .select_related('capability')
+            )
+            capabilities = [
+                {
+                    'code': c.capability.code,
+                    'name': c.capability.name,
+                    'description': c.capability.description or '',
+                }
+                for c in caps
+            ]
+            results.append({
+                'key': g.key,
+                'name': g.name,
+                'description': g.description or '',
+                'is_system': g.is_system,
+                'is_protected': g.is_protected,
+                'capabilities': capabilities,
+                'capabilities_count': len(capabilities),
+            })
+        return Response(results)
+
+    @action(
+        detail=False,
+        methods=['get'],
+        url_path='my-capabilities',
+        url_name='my-capabilities',
+    )
+    def my_capabilities(self, request):
+        workspace_id = request.session.get('current_workspace_id')
+        workspace = None
+        if workspace_id:
+            workspace = WorkspaceQueries.get_for_user(workspace_id, request.user)
+        if workspace is None:
+            workspace = WorkspaceQueries.get_last_accessed_for_user(request.user)
+
+        if workspace is None:
+            return Response({
+                'workspace_id': None,
+                'governance_key': None,
+                'governance_name': None,
+                'capabilities': [],
+                'is_owner': False,
+            })
+
+        membership = WorkspaceMembership.objects.filter(
+            workspace=workspace, user=request.user
+        ).select_related('governance').first()
+
+        if membership is None:
+            return Response({
+                'workspace_id': str(workspace.id),
+                'governance_key': None,
+                'governance_name': None,
+                'capabilities': [],
+                'is_owner': False,
+            })
+
+        caps = self._capabilities_for_membership(membership)
+        return Response({
+            'workspace_id': str(workspace.id),
+            'governance_key': membership.governance.key,
+            'governance_name': membership.governance.name,
+            'capabilities': caps,
+            'is_owner': membership.governance.key == 'proprietario',
+        })
+
+    # ==================================================================
+    # MEMBERS
+    # ==================================================================
+
+    @action(
+        detail=True,
+        methods=['get', 'post'],
+        url_path='members',
+        url_name='members',
+    )
+    def members(self, request, id=None):
+        workspace = self.get_object()
+
+        if request.method == 'GET':
+            err = self._require_capability(
+                request, workspace, 'workspaces.member.view'
+            )
+            if err is not None:
+                return err
+            memberships = WorkspaceMembershipService.list_members(workspace)
+            return Response(WorkspaceMembershipSerializer(memberships, many=True).data)
+
+        # POST
+        err = self._require_capability(
+            request, workspace, 'workspaces.member.invite'
+        )
+        if err is not None:
+            return err
+
+        serializer = WorkspaceMembershipCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            membership = WorkspaceMembershipService.add_member(
+                workspace=workspace,
+                user=serializer.validated_data['user'],
+                governance_key=serializer.validated_data['governance_key'],
+            )
+        except UserNotActiveError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except DuplicateMembershipError as e:
+            return Response({'error': str(e)}, status=status.HTTP_409_CONFLICT)
+        except GovernanceScopeError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except GovernanceNotFoundError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(
+            WorkspaceMembershipSerializer(membership).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(
+        detail=True,
+        methods=['patch'],
+        url_path=r'members/(?P<membership_id>[^/.]+)',
+        url_name='member-detail',
+    )
+    def update_member(self, request, id=None, membership_id=None):
+        workspace = self.get_object()
+        err = self._require_capability(request, workspace, 'workspaces.member.change_governance')
+        if err is not None:
+            return err
+
+        try:
+            membership = WorkspaceMembership.objects.get(id=membership_id, workspace=workspace)
+        except (WorkspaceMembership.DoesNotExist, ValueError):
+            return Response({'error': 'Membro nÃ£o encontrado'}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = WorkspaceMembershipUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            membership = WorkspaceMembershipService.change_governance(
+                membership=membership,
+                governance_key=serializer.validated_data['governance_key'],
+            )
+        except GovernanceNotFoundError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except GovernanceScopeError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except LastOwnerError as e:
+            return Response({'error': str(e)}, status=status.HTTP_409_CONFLICT)
+
+        return Response(WorkspaceMembershipSerializer(membership).data)
+
+    @action(
+        detail=True,
+        methods=['delete'],
+        url_path=r'members/(?P<membership_id>[^/.]+)',
+        url_name='member-remove',
+    )
+    def remove_member(self, request, id=None, membership_id=None):
+        workspace = self.get_object()
+        err = self._require_capability(request, workspace, 'workspaces.member.remove')
+        if err is not None:
+            return err
+
+        try:
+            membership = WorkspaceMembership.objects.get(id=membership_id, workspace=workspace)
+        except (WorkspaceMembership.DoesNotExist, ValueError):
+            return Response({'error': 'Membro nÃ£o encontrado'}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            WorkspaceMembershipService.remove_member(membership)
+        except LastOwnerError as e:
+            return Response({'error': str(e)}, status=status.HTTP_409_CONFLICT)
+
+        return Response({'detail': 'Membro removido com sucesso'}, status=status.HTTP_204_NO_CONTENT)
+
+    # ==================================================================
+    # INVITATIONS
+    # ==================================================================
+
+    @action(
+        detail=True,
+        methods=['get', 'post'],
+        url_path='invitations',
+        url_name='invitations',
+    )
+    def invitations(self, request, id=None):
+        workspace = self.get_object()
+
+        if request.method == 'GET':
+            err = self._require_capability(
+                request, workspace, 'workspaces.member.view'
+            )
+            if err is not None:
+                return err
+            invitations = WorkspaceInvitationService.list_pending_for_workspace(workspace)
+            return Response(WorkspaceInvitationSerializer(invitations, many=True).data)
+
+        # POST
+        err = self._require_capability(
+            request, workspace, 'workspaces.member.invite'
+        )
+        if err is not None:
+            return err
+
+        serializer = WorkspaceInvitationCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            invitation = WorkspaceInvitationService.create_invitation(
+                workspace=workspace,
+                email=serializer.validated_data['email'],
+                governance_key=serializer.validated_data['governance_key'],
+                invited_by=request.user,
+            )
+        except DuplicateMembershipError as e:
+            return Response({'error': str(e)}, status=status.HTTP_409_CONFLICT)
+        except GovernanceNotFoundError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except GovernanceScopeError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except WorkspaceInvitationError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(
+            WorkspaceInvitationSerializer(invitation).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(
+        detail=True,
+        methods=['patch'],
+        url_path=r'invitations/(?P<invitation_id>[^/.]+)',
+        url_name='invitation-detail',
+    )
+    def update_invitation(self, request, id=None, invitation_id=None):
+        workspace = self.get_object()
+        err = self._require_capability(request, workspace, 'workspaces.member.change_governance')
+        if err is not None:
+            return err
+
+        invitation = WorkspaceInvitationService.get_by_id(invitation_id)
+        if invitation is None or invitation.workspace_id != workspace.id:
+            return Response({'error': 'Convite nÃ£o encontrado'}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = WorkspaceInvitationUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            invitation = WorkspaceInvitationService.change_governance(
+                invitation=invitation,
+                governance_key=serializer.validated_data['governance_key'],
+            )
+        except GovernanceNotFoundError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except GovernanceScopeError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except WorkspaceInvitationError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(WorkspaceInvitationSerializer(invitation).data)
+
+    @action(
+        detail=True,
+        methods=['post'],
+        url_path=r'invitations/(?P<invitation_id>[^/.]+)/resend',
+        url_name='invitation-resend',
+    )
+    def resend_invitation(self, request, id=None, invitation_id=None):
+        workspace = self.get_object()
+        err = self._require_capability(request, workspace, 'workspaces.member.invite')
+        if err is not None:
+            return err
+
+        invitation = WorkspaceInvitationService.get_by_id(invitation_id)
+        if invitation is None or invitation.workspace_id != workspace.id:
+            return Response({'error': 'Convite nÃ£o encontrado'}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            invitation = WorkspaceInvitationService.resend_invitation(invitation)
+        except InvitationResendLimitError as e:
+            return Response({'error': str(e)}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+        except WorkspaceInvitationError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(WorkspaceInvitationSerializer(invitation).data)
+
+    @action(
+        detail=True,
+        methods=['delete'],
+        url_path=r'invitations/(?P<invitation_id>[^/.]+)',
+        url_name='invitation-cancel',
+    )
+    def cancel_invitation(self, request, id=None, invitation_id=None):
+        workspace = self.get_object()
+        err = self._require_capability(request, workspace, 'workspaces.member.remove')
+        if err is not None:
+            return err
+
+        invitation = WorkspaceInvitationService.get_by_id(invitation_id)
+        if invitation is None or invitation.workspace_id != workspace.id:
+            return Response({'error': 'Convite nÃ£o encontrado'}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            WorkspaceInvitationService.cancel_invitation(invitation)
+        except WorkspaceInvitationError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({'detail': 'Convite cancelado'}, status=status.HTTP_204_NO_CONTENT)
+
+    # ==================================================================
+    # SUBSCRIPTION
+    # ==================================================================
+
+    @action(detail=True, methods=['get'], url_path='subscription')
+    def get_subscription(self, request, id=None):
+        workspace = self.get_object()
+        err = self._require_capability(request, workspace, 'workspaces.subscription.view')
+        if err is not None:
+            return err
+        subscription = WorkspaceSubscriptionService.get_subscription(workspace)
+        if not subscription:
+            return Response({'error': 'Assinatura nÃ£o encontrada'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(WorkspaceSubscriptionSerializer(subscription).data)
+
+
+
+================================================================================
+ARQUIVO 10 DE 32
+================================================================================
+📁 PASTA: apps\workspaces\apps.py
+📄 ARQUIVO: apps.py
+📏 TAMANHO: 0.39 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 12
+================================================================================
+
+from django.apps import AppConfig
+from django.utils.translation import gettext_lazy as _
+
+
+class WorkspacesConfig(AppConfig):
+    default_auto_field = 'django.db.models.BigAutoField'
+    name = 'apps.workspaces'
+    verbose_name = _('Workspaces')
+
+    def ready(self):
+        # Registra signals (aceite automÃ¡tico de convites no login)
+        import apps.workspaces.signals  # noqa: F401
+
+
+
+================================================================================
+ARQUIVO 11 DE 32
+================================================================================
+📁 PASTA: apps\workspaces\capabilities.py
+📄 ARQUIVO: capabilities.py
+📏 TAMANHO: 2.87 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 91
+================================================================================
+
+"""
+Capabilities declaradas pelo mÃ³dulo workspaces.
+
+REGRA ARQUITETURAL:
+    Capability nasce no app que executa a aÃ§Ã£o.
+    O Console descobre, cataloga e permite que GovernanÃ§as selecionem.
+
+FORMATO:
+    code        â†’ "<app>.<resource>.<action>"
+                  (o primeiro segmento DEVE ser o label do AppConfig: 'workspaces')
+    name        â†’ nome exibido no Console
+    description â†’ descriÃ§Ã£o do que a capability permite
+"""
+
+CAPABILITIES = [
+    # ==================================================================
+    # WORKSPACE
+    # ==================================================================
+
+    {
+        'code': 'workspaces.workspace.view',
+        'name': 'Ver Workspace',
+        'description': (
+            'Permite visualizar os dados do Workspace '
+            '(nome, CNPJ, cidade, estado, plano ativo).'
+        ),
+    },
+    {
+        'code': 'workspaces.workspace.update',
+        'name': 'Editar Workspace',
+        'description': (
+            'Permite alterar nome, CNPJ, cidade e estado do Workspace.'
+        ),
+    },
+    {
+        'code': 'workspaces.workspace.delete',
+        'name': 'Excluir Workspace',
+        'description': (
+            'Permite excluir o Workspace e todos os dados associados. '
+            'AÃ§Ã£o irreversÃ­vel.'
+        ),
+    },
+
+    # ==================================================================
+    # MEMBERS
+    # ==================================================================
+
+    {
+        'code': 'workspaces.member.view',
+        'name': 'Ver membros',
+        'description': (
+            'Permite listar os membros do Workspace e suas governanÃ§as.'
+        ),
+    },
+    {
+        'code': 'workspaces.member.invite',
+        'name': 'Convidar membro',
+        'description': (
+            'Permite convidar um novo membro por email, '
+            'atribuindo-lhe uma governanÃ§a do escopo workspace.'
+        ),
+    },
+    {
+        'code': 'workspaces.member.remove',
+        'name': 'Remover membro',
+        'description': (
+            'Permite remover um membro do Workspace ou cancelar um convite. '
+            'O Ãºltimo proprietÃ¡rio nÃ£o pode ser removido.'
+        ),
+    },
+    {
+        'code': 'workspaces.member.change_governance',
+        'name': 'Alterar governanÃ§a de membro',
+        'description': (
+            'Permite trocar a governanÃ§a atribuÃ­da a um membro ou convite. '
+            'O Ãºltimo proprietÃ¡rio nÃ£o pode ser rebaixado.'
+        ),
+    },
+
+    # ==================================================================
+    # SUBSCRIPTION
+    # ==================================================================
+
+    {
+        'code': 'workspaces.subscription.view',
+        'name': 'Ver assinatura',
+        'description': (
+            'Permite visualizar o plano ativo do Workspace.'
+        ),
+    },
+]
+
+
+
+================================================================================
+ARQUIVO 12 DE 32
+================================================================================
+📁 PASTA: apps\workspaces\exceptions\__init__.py
+📄 ARQUIVO: __init__.py
+📏 TAMANHO: 1.21 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 43
+================================================================================
+
+from apps.workspaces.exceptions.workspace_exceptions import (
+    WorkspaceError,
+    WorkspaceNotFoundError,
+    WorkspaceSlugConflictError,
+    WorkspaceUserNotActiveError,
+    SlugGenerationError,
+    MembershipError,
+    DuplicateMembershipError,
+    UserNotActiveError,
+    GovernanceNotFoundError,
+    GovernanceScopeError,
+    LastOwnerError,
+    SubscriptionError,
+    DefaultPlanNotFoundError,
+    DefaultPlanAmbiguousError,
+    ProprietarioGovernanceNotFoundError,
+    WorkspaceInvitationError,
+    InvitationNotFoundError,
+    InvitationAlreadyPendingError,
+    InvitationResendLimitError,
+)
+
+__all__ = [
+    'WorkspaceError',
+    'WorkspaceNotFoundError',
+    'WorkspaceSlugConflictError',
+    'WorkspaceUserNotActiveError',
+    'SlugGenerationError',
+    'MembershipError',
+    'DuplicateMembershipError',
+    'UserNotActiveError',
+    'GovernanceNotFoundError',
+    'GovernanceScopeError',
+    'LastOwnerError',
+    'SubscriptionError',
+    'DefaultPlanNotFoundError',
+    'DefaultPlanAmbiguousError',
+    'ProprietarioGovernanceNotFoundError',
+    'WorkspaceInvitationError',
+    'InvitationNotFoundError',
+    'InvitationAlreadyPendingError',
+    'InvitationResendLimitError',
+]
+
+
+
+================================================================================
+ARQUIVO 13 DE 32
+================================================================================
+📁 PASTA: apps\workspaces\exceptions\workspace_exceptions.py
+📄 ARQUIVO: workspace_exceptions.py
+📏 TAMANHO: 3.87 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 156
+================================================================================
+
+"""
+ExceÃ§Ãµes do mÃ³dulo workspaces.
+
+PadrÃ£o:
+    WorkspaceError (base)
+        â”œâ”€â”€ WorkspaceNotFoundError
+        â”œâ”€â”€ WorkspaceSlugConflictError
+        â”œâ”€â”€ WorkspaceUserNotActiveError
+        â”œâ”€â”€ SlugGenerationError
+        â”œâ”€â”€ MembershipError
+        â”‚       â”œâ”€â”€ DuplicateMembershipError
+        â”‚       â”œâ”€â”€ UserNotActiveError
+        â”‚       â”œâ”€â”€ GovernanceNotFoundError
+        â”‚       â”œâ”€â”€ GovernanceScopeError
+        â”‚       â””â”€â”€ LastOwnerError
+        â”œâ”€â”€ SubscriptionError
+        â”‚       â”œâ”€â”€ DefaultPlanNotFoundError
+        â”‚       â”œâ”€â”€ DefaultPlanAmbiguousError
+        â”‚       â””â”€â”€ ProprietarioGovernanceNotFoundError
+        â””â”€â”€ WorkspaceInvitationError
+                â”œâ”€â”€ InvitationNotFoundError
+                â”œâ”€â”€ InvitationAlreadyPendingError
+                â””â”€â”€ InvitationResendLimitError
+"""
+
+
+class WorkspaceError(Exception):
+    """ExceÃ§Ã£o base para o mÃ³dulo workspaces."""
+    pass
+
+
+# ---- Workspace ----
+
+class WorkspaceNotFoundError(WorkspaceError):
+    """Workspace nÃ£o encontrado."""
+    pass
+
+
+class WorkspaceSlugConflictError(WorkspaceError):
+    """Slug jÃ¡ estÃ¡ em uso por outro Workspace."""
+    pass
+
+
+class WorkspaceUserNotActiveError(WorkspaceError):
+    """O usuÃ¡rio criador do Workspace precisa estar ativo."""
+    pass
+
+
+class SlugGenerationError(WorkspaceError):
+    """
+    NÃ£o foi possÃ­vel gerar um slug Ãºnico apÃ³s vÃ¡rias tentativas.
+
+    Sintoma de bug de concorrÃªncia ou de estado inconsistente
+    do banco.
+    """
+    pass
+
+
+# ---- Membership ----
+
+class MembershipError(WorkspaceError):
+    """Erro relacionado a membros do Workspace."""
+    pass
+
+
+class DuplicateMembershipError(MembershipError):
+    """UsuÃ¡rio jÃ¡ Ã© membro deste Workspace."""
+    pass
+
+
+class UserNotActiveError(MembershipError):
+    """UsuÃ¡rio inativo nÃ£o pode ser adicionado ao Workspace."""
+    pass
+
+
+class GovernanceNotFoundError(MembershipError):
+    """Governance referenciada nÃ£o existe."""
+    pass
+
+
+class GovernanceScopeError(MembershipError):
+    """
+    A Governance referenciada nÃ£o Ã© do escopo WORKSPACE.
+
+    Apenas governanÃ§as com scope='workspace' podem ser atribuÃ­das
+    a membros de um Workspace.
+    """
+    pass
+
+
+class LastOwnerError(MembershipError):
+    """
+    NÃ£o Ã© possÃ­vel remover o Ãºltimo proprietÃ¡rio do Workspace.
+
+    Um Workspace sem proprietÃ¡rio fica Ã³rfÃ£o de administraÃ§Ã£o.
+    """
+    pass
+
+
+# ---- Subscription ----
+
+class SubscriptionError(WorkspaceError):
+    """Erro relacionado Ã  assinatura do Workspace."""
+    pass
+
+
+class DefaultPlanNotFoundError(SubscriptionError):
+    """
+    NÃ£o existe Plan com is_default=True no Console.
+
+    O Console precisa ter exatamente um plano inicial antes que
+    qualquer Workspace possa ser criado.
+    """
+    pass
+
+
+class DefaultPlanAmbiguousError(SubscriptionError):
+    """
+    Existe mais de um Plan com is_default=True no Console.
+
+    Isso Ã© um bug de integridade da plataforma, nÃ£o uma situaÃ§Ã£o
+    para escolher arbitrariamente.
+    """
+    pass
+
+
+class ProprietarioGovernanceNotFoundError(SubscriptionError):
+    """
+    A Governance 'proprietario' com scope='workspace' nÃ£o foi
+    encontrada no Console.
+
+    Rode `python manage.py seed_console` para criÃ¡-la.
+    """
+    pass
+
+
+# ---- Invitations ----
+
+class WorkspaceInvitationError(WorkspaceError):
+    """Erro genÃ©rico de convite."""
+    pass
+
+
+class InvitationNotFoundError(WorkspaceInvitationError):
+    """Convite nÃ£o encontrado."""
+    pass
+
+
+class InvitationAlreadyPendingError(WorkspaceInvitationError):
+    """JÃ¡ existe convite pendente para este email."""
+    pass
+
+
+class InvitationResendLimitError(WorkspaceInvitationError):
+    """Limite de reenvios atingido."""
+    pass
+
+
+
+================================================================================
+ARQUIVO 14 DE 32
+================================================================================
+📁 PASTA: apps\workspaces\models\__init__.py
+📄 ARQUIVO: __init__.py
+📏 TAMANHO: 0.37 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 11
+================================================================================
+
+from apps.workspaces.models.workspace import Workspace
+from apps.workspaces.models.membership import WorkspaceMembership
+from apps.workspaces.models.subscription import WorkspaceSubscription
+from apps.workspaces.models.invitation import WorkspaceInvitation
+
+__all__ = [
+    'Workspace',
+    'WorkspaceMembership',
+    'WorkspaceSubscription',
+    'WorkspaceInvitation',
+]
+
+
+
+================================================================================
+ARQUIVO 15 DE 32
+================================================================================
+📁 PASTA: apps\workspaces\models\invitation.py
+📄 ARQUIVO: invitation.py
+📏 TAMANHO: 4.88 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 172
+================================================================================
+
+"""
+Modelo WorkspaceInvitation.
+
+Convite pendente para um email entrar em um Workspace com uma
+GovernanÃ§a especÃ­fica.
+
+REGRA:
+    O convite NÃƒO cria membership imediata. Ele fica `pending` atÃ©
+    que alguÃ©m se cadastre (Google ou email/senha) com o email
+    convidado. Quando isso acontece, o signal `user_logged_in` cria
+    a membership e marca o convite como `accepted`.
+
+    Se ninguÃ©m se cadastrar, o convite expira (default: 7 dias).
+"""
+
+import uuid
+import secrets
+from datetime import timedelta
+
+from django.db import models
+from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
+from django.conf import settings
+
+from apps.workspaces.models.workspace import Workspace
+
+
+def _generate_token():
+    """Token URL-safe de 48 caracteres."""
+    return secrets.token_urlsafe(36)
+
+
+class WorkspaceInvitation(models.Model):
+
+    STATUS_PENDING = 'pending'
+    STATUS_ACCEPTED = 'accepted'
+    STATUS_EXPIRED = 'expired'
+    STATUS_CANCELLED = 'cancelled'
+
+    STATUS_CHOICES = [
+        (STATUS_PENDING, 'Pendente'),
+        (STATUS_ACCEPTED, 'Aceito'),
+        (STATUS_EXPIRED, 'Expirado'),
+        (STATUS_CANCELLED, 'Cancelado'),
+    ]
+
+    DEFAULT_TTL_DAYS = 7
+    MAX_RESENDS = 5
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
+
+    workspace = models.ForeignKey(
+        Workspace,
+        on_delete=models.CASCADE,
+        related_name='invitations',
+    )
+
+    email = models.EmailField(
+        db_index=True,
+        help_text=_('Email do convidado'),
+    )
+
+    governance = models.ForeignKey(
+        'console.ConsoleGovernance',
+        on_delete=models.PROTECT,
+        related_name='workspace_invitations',
+        help_text=_('GovernanÃ§a a ser atribuÃ­da quando o convite for aceito'),
+    )
+
+    token = models.CharField(
+        max_length=64,
+        unique=True,
+        default=_generate_token,
+        db_index=True,
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING,
+        db_index=True,
+    )
+
+    invited_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='sent_workspace_invitations',
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    expires_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=_('Data em que o convite deixa de ser vÃ¡lido'),
+    )
+
+    accepted_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=_('Quando o convidado se cadastrou e a membership foi criada'),
+    )
+
+    last_sent_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=_('Ãšltimo envio de email'),
+    )
+
+    send_count = models.PositiveIntegerField(
+        default=0,
+        help_text=_('Quantas vezes o email de convite foi enviado'),
+    )
+
+    class Meta:
+        db_table = 'workspace_invitation'
+        verbose_name = _('Convite de Workspace')
+        verbose_name_plural = _('Convites de Workspace')
+        indexes = [
+            models.Index(fields=['workspace', 'status']),
+            models.Index(fields=['email', 'status']),
+            models.Index(fields=['token']),
+            models.Index(fields=['expires_at']),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['workspace', 'email'],
+                condition=models.Q(status='pending'),
+                name='unique_pending_invitation_per_workspace_email',
+            ),
+        ]
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.email} â†’ {self.workspace.name} ({self.status})"
+
+    # ------------------------------------------------------------------
+    # HELPERS
+    # ------------------------------------------------------------------
+
+    def is_expired(self) -> bool:
+        if not self.expires_at:
+            return False
+        return timezone.now() >= self.expires_at
+
+    def can_resend(self) -> bool:
+        return (
+            self.status == self.STATUS_PENDING
+            and self.send_count < self.MAX_RESENDS
+        )
+
+    def mark_expired_if_needed(self) -> bool:
+        """Se passou do prazo e ainda estÃ¡ pendente, marca como expirado."""
+        if self.status == self.STATUS_PENDING and self.is_expired():
+            self.status = self.STATUS_EXPIRED
+            self.save(update_fields=['status', 'updated_at'])
+            return True
+        return False
+
+    def save(self, *args, **kwargs):
+        if not self.expires_at:
+            self.expires_at = timezone.now() + timedelta(
+                days=self.DEFAULT_TTL_DAYS
+            )
+        super().save(*args, **kwargs)
+
+
+
+================================================================================
+ARQUIVO 16 DE 32
+================================================================================
+📁 PASTA: apps\workspaces\models\membership.py
+📄 ARQUIVO: membership.py
+📏 TAMANHO: 3.66 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 122
+================================================================================
+
+"""
+Modelo WorkspaceMembership.
+
+Associa um usuÃ¡rio a um Workspace com uma Governance do Console.
+
+REGRA ARQUITETURAL:
+    A mesma pessoa pode ter governanÃ§as diferentes em Workspaces
+    diferentes.
+
+    Beatriz
+        â”œâ”€â”€ Workspace A â†’ ProprietÃ¡rio
+        â”œâ”€â”€ Workspace B â†’ Administrador
+        â””â”€â”€ Workspace C â†’ Membro
+
+    Governance Ã© CONTEXTUAL ao Workspace.
+    Governance Ã© DEFINIDA pelo Console.
+    Governance Ã© REFERENCIADA por WorkspaceMembership.
+
+O Workspace NÃƒO possui Governance prÃ³pria.
+O Workspace NÃƒO possui WorkspaceGovernance / WorkspaceCapability.
+"""
+
+import uuid
+from django.db import models
+from django.utils.translation import gettext_lazy as _
+from django.conf import settings
+
+from apps.workspaces.models.workspace import Workspace
+
+
+class WorkspaceMembership(models.Model):
+    """AssociaÃ§Ã£o entre um usuÃ¡rio, um Workspace e uma Governance."""
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+        help_text=_('Identificador Ãºnico da associaÃ§Ã£o')
+    )
+
+    workspace = models.ForeignKey(
+        Workspace,
+        on_delete=models.CASCADE,
+        related_name='memberships',
+        help_text=_('Workspace ao qual o usuÃ¡rio pertence')
+    )
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='workspace_memberships',
+        help_text=_('UsuÃ¡rio membro do Workspace')
+    )
+
+    governance = models.ForeignKey(
+        'console.ConsoleGovernance',
+        on_delete=models.PROTECT,
+        related_name='workspace_memberships',
+        help_text=_(
+            'GovernanÃ§a do Console atribuÃ­da a este usuÃ¡rio neste Workspace. '
+            'Deve ter scope="workspace".'
+        )
+    )
+
+    joined_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text=_('Quando o usuÃ¡rio entrou no Workspace')
+    )
+
+    last_access_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=_('Ãšltimo acesso do usuÃ¡rio a este Workspace')
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        help_text=_('Data da Ãºltima atualizaÃ§Ã£o')
+    )
+
+    class Meta:
+        db_table = 'workspace_membership'
+        verbose_name = _('Membro do Workspace')
+        verbose_name_plural = _('Membros do Workspace')
+        constraints = [
+            models.UniqueConstraint(
+                fields=['workspace', 'user'],
+                name='unique_workspace_user',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['workspace', 'user']),
+            models.Index(fields=['user']),
+            models.Index(fields=['governance']),
+            models.Index(fields=['joined_at']),
+        ]
+        ordering = ['-joined_at']
+
+    def __str__(self):
+        return f"{self.user} @ {self.workspace.name} ({self.governance.key})"
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+
+        if self.user and not self.user.is_active:
+            raise ValidationError({
+                'user': _(
+                    'NÃ£o Ã© possÃ­vel adicionar um usuÃ¡rio inativo ao Workspace'
+                )
+            })
+
+        if self.governance and self.governance.scope != 'workspace':
+            raise ValidationError({
+                'governance': _(
+                    'Apenas governanÃ§as com scope="workspace" podem ser '
+                    'atribuÃ­das a membros de um Workspace.'
+                )
+            })
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+
+
+================================================================================
+ARQUIVO 17 DE 32
+================================================================================
+📁 PASTA: apps\workspaces\models\subscription.py
+📄 ARQUIVO: subscription.py
+📏 TAMANHO: 2.92 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 103
+================================================================================
+
+"""
+Modelo WorkspaceSubscription.
+
+Associa um Workspace a um Plan do Console.
+
+REGRA ARQUITETURAL:
+    Plan pertence ao Console.
+    UtilizaÃ§Ã£o do Plan pertence ao Workspace.
+
+    WorkspaceSubscription Ã© a ponte entre os dois domÃ­nios.
+
+CICLO DE VIDA (V1):
+    - Criado automaticamente com o Plan is_default=True do Console.
+    - Sem troca de plano via API na V1.
+    - Sem billing / invoice.
+"""
+
+import uuid
+from django.db import models
+from django.utils.translation import gettext_lazy as _
+
+from apps.workspaces.models.workspace import Workspace
+
+
+class WorkspaceSubscription(models.Model):
+    """
+    Assinatura de um Workspace a um Plan do Console.
+
+    V1: uma subscription ativa por Workspace (OneToOne).
+    V2 (futuro): histÃ³rico de subscriptions se necessÃ¡rio.
+    """
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+        help_text=_('Identificador Ãºnico da assinatura')
+    )
+
+    workspace = models.OneToOneField(
+        Workspace,
+        on_delete=models.CASCADE,
+        related_name='subscription',
+        help_text=_('Workspace assinante')
+    )
+
+    plan = models.ForeignKey(
+        'console.Plan',
+        on_delete=models.PROTECT,
+        related_name='workspace_subscriptions',
+        help_text=_('Plano comercial do Console')
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+        help_text=_('Se a assinatura estÃ¡ ativa')
+    )
+
+    started_at = models.DateTimeField(
+        help_text=_('InÃ­cio da vigÃªncia desta assinatura')
+    )
+
+    ended_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=_('Fim da vigÃªncia (opcional)')
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'workspace_subscription'
+        verbose_name = _('Assinatura de Workspace')
+        verbose_name_plural = _('Assinaturas de Workspace')
+        indexes = [
+            models.Index(fields=['workspace', 'is_active']),
+            models.Index(fields=['plan']),
+            models.Index(fields=['started_at']),
+        ]
+        ordering = ['-started_at']
+
+    def __str__(self):
+        return f"{self.workspace.name} â†’ {self.plan.name}"
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+
+        if self.ended_at and self.started_at and self.ended_at < self.started_at:
+            raise ValidationError({
+                'ended_at': _('Fim deve ser posterior ao inÃ­cio')
+            })
+
+        if self.is_active and self.ended_at:
+            raise ValidationError({
+                'is_active': _(
+                    'Assinatura ativa nÃ£o pode ter data de tÃ©rmino definida'
+                )
+            })
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+
+
+================================================================================
+ARQUIVO 18 DE 32
+================================================================================
+📁 PASTA: apps\workspaces\models\workspace.py
+📄 ARQUIVO: workspace.py
+📏 TAMANHO: 3.43 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 132
+================================================================================
+
+"""
+Modelo Workspace.
+
+Workspace Ã© o tenant do Clivo â€” representa um escritÃ³rio de arquitetura.
+
+REGRA ARQUITETURAL:
+    Workspace V1 Ã© identidade pura.
+
+    Workspace NÃƒO Ã© objeto de configuraÃ§Ã£o.
+    Workspace NÃƒO carrega branding.
+    Workspace NÃƒO carrega settings de domÃ­nio.
+
+    ConfiguraÃ§Ãµes especÃ­ficas (briefing, intelligence, etc)
+    pertencem aos domÃ­nios que as usam, nÃ£o ao tenant.
+
+RELAÃ‡ÃƒO:
+
+    Workspace
+        â”œâ”€â”€ WorkspaceMembership  (quem pertence)
+        â””â”€â”€ WorkspaceSubscription (qual plano)
+"""
+
+import uuid
+from django.db import models
+from django.utils.translation import gettext_lazy as _
+from django.utils.text import slugify
+
+
+class Workspace(models.Model):
+    """
+    EscritÃ³rio de arquitetura â€” tenant do Clivo.
+
+    Identidade mÃ­nima: nome, slug, CNPJ, localizaÃ§Ã£o.
+    """
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+        help_text=_('Identificador Ãºnico do Workspace')
+    )
+
+    name = models.CharField(
+        max_length=150,
+        help_text=_('Nome do escritÃ³rio (ex: "Studio Exemplo")')
+    )
+
+    slug = models.SlugField(
+        max_length=150,
+        unique=True,
+        help_text=_(
+            'Identificador tÃ©cnico estÃ¡vel (gerado do nome). '
+            'Nunca exibido diretamente ao usuÃ¡rio.'
+        )
+    )
+
+    cnpj = models.CharField(
+        max_length=18,
+        blank=True,
+        help_text=_('CNPJ do escritÃ³rio (opcional)')
+    )
+
+    city = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text=_('Cidade do escritÃ³rio')
+    )
+
+    state = models.CharField(
+        max_length=2,
+        blank=True,
+        help_text=_('UF do escritÃ³rio (ex: "BA", "SP")')
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+        help_text=_('Se o Workspace estÃ¡ ativo')
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text=_('Data de criaÃ§Ã£o')
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        help_text=_('Data da Ãºltima atualizaÃ§Ã£o')
+    )
+
+    class Meta:
+        db_table = 'workspace'
+        verbose_name = _('Workspace')
+        verbose_name_plural = _('Workspaces')
+        indexes = [
+            models.Index(fields=['slug']),
+            models.Index(fields=['is_active']),
+            models.Index(fields=['created_at']),
+        ]
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+
+        if not self.name or not self.name.strip():
+            raise ValidationError({
+                'name': _('O nome Ã© obrigatÃ³rio')
+            })
+
+        if not self.slug:
+            raise ValidationError({
+                'slug': _('O slug Ã© obrigatÃ³rio')
+            })
+
+        if self.slug != slugify(self.slug):
+            raise ValidationError({
+                'slug': _(
+                    'O slug deve conter apenas letras minÃºsculas, '
+                    'nÃºmeros e hÃ­fens.'
+                )
+            })
+
+        if self.state and len(self.state) != 2:
+            raise ValidationError({
+                'state': _('A UF deve ter exatamente 2 caracteres')
+            })
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+
+
+================================================================================
+ARQUIVO 19 DE 32
+================================================================================
+📁 PASTA: apps\workspaces\permissions\__init__.py
+📄 ARQUIVO: __init__.py
+📏 TAMANHO: 0.23 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 11
+================================================================================
+
+from apps.workspaces.permissions.workspace_permissions import (
+    IsWorkspaceMember,
+    IsWorkspaceOwner,
+    RequireCapability,
+)
+
+__all__ = [
+    'IsWorkspaceMember',
+    'IsWorkspaceOwner',
+    'RequireCapability',
+]
+
+
+
+================================================================================
+ARQUIVO 20 DE 32
+================================================================================
+📁 PASTA: apps\workspaces\permissions\workspace_permissions.py
+📄 ARQUIVO: workspace_permissions.py
+📏 TAMANHO: 4.08 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 122
+================================================================================
+
+"""
+PermissÃµes do Workspace.
+
+REGRA ARQUITETURAL:
+    O Workspace NÃƒO conhece nomes de Governance como regra geral.
+    A exceÃ§Ã£o Ã© "proprietario", que Ã© uma INVARIANTE ESTRUTURAL do
+    tenant (todo Workspace precisa ter pelo menos um proprietÃ¡rio).
+
+    Toda outra autorizaÃ§Ã£o passa por:
+        WorkspaceMembership
+            â†’ ConsoleGovernance
+                â†’ ConsoleGovernanceCapability
+                    â†’ ConsoleCapability
+
+    Este mÃ³dulo expÃµe:
+        IsWorkspaceMember   â€” qualquer membro
+        IsWorkspaceOwner    â€” invariante estrutural (proprietÃ¡rio)
+        RequireCapability   â€” autorizaÃ§Ã£o baseada em capability do Console
+"""
+
+from rest_framework.permissions import BasePermission
+
+from apps.workspaces.models import Workspace, WorkspaceMembership
+
+
+def _extract_workspace(obj):
+    """Extrai o Workspace de um objeto do domÃ­nio."""
+    if isinstance(obj, Workspace):
+        return obj
+    if isinstance(obj, WorkspaceMembership):
+        return obj.workspace
+    return getattr(obj, 'workspace', None)
+
+
+class IsWorkspaceMember(BasePermission):
+    """Requer que o usuÃ¡rio seja membro do Workspace."""
+
+    def has_permission(self, request, view):
+        return bool(request.user and request.user.is_authenticated)
+
+    def has_object_permission(self, request, view, obj):
+        workspace = _extract_workspace(obj)
+        if workspace is None:
+            return False
+        return WorkspaceMembership.objects.filter(
+            workspace=workspace,
+            user=request.user,
+        ).exists()
+
+
+class IsWorkspaceOwner(BasePermission):
+    """
+    Requer que o usuÃ¡rio seja proprietÃ¡rio do Workspace.
+
+    Este Ã© o ÃšNICO lugar em que o Workspace referencia uma Governance
+    por nome. "proprietario" Ã© uma invariante estrutural do tenant,
+    nÃ£o uma regra de autorizaÃ§Ã£o configurÃ¡vel.
+    """
+
+    OWNER_KEY = 'proprietario'
+
+    def has_permission(self, request, view):
+        return bool(request.user and request.user.is_authenticated)
+
+    def has_object_permission(self, request, view, obj):
+        workspace = _extract_workspace(obj)
+        if workspace is None:
+            return False
+        return WorkspaceMembership.objects.filter(
+            workspace=workspace,
+            user=request.user,
+            governance__key=self.OWNER_KEY,
+        ).exists()
+
+
+class RequireCapability(BasePermission):
+    """
+    AutorizaÃ§Ã£o baseada em capability do Console.
+
+    Uso:
+        class MinhaView(APIView):
+            permission_classes = [IsAuthenticated, RequireCapability]
+            required_capability = 'workspaces.member.invite'
+
+    Este permission classe NÃƒO define capabilities aqui â€” apenas
+    verifica se a governanÃ§a da membership do usuÃ¡rio possui a
+    capability requerida pela view.
+
+    A cadeia Ã©:
+        user â†’ WorkspaceMembership â†’ ConsoleGovernance
+             â†’ ConsoleGovernanceCapability â†’ ConsoleCapability
+    """
+
+    def has_permission(self, request, view):
+        return bool(request.user and request.user.is_authenticated)
+
+    def has_object_permission(self, request, view, obj):
+        capability_code = getattr(view, 'required_capability', None)
+        if not capability_code:
+            # Se a view nÃ£o declarou capability, deixa passar â€”
+            # quem configurou a view Ã© responsÃ¡vel por declarar.
+            return True
+
+        workspace = _extract_workspace(obj)
+        if workspace is None:
+            return False
+
+        membership = WorkspaceMembership.objects.filter(
+            workspace=workspace,
+            user=request.user,
+        ).select_related('governance').first()
+
+        if membership is None:
+            return False
+
+        # Consulta ConsoleGovernanceCapability â†’ ConsoleCapability
+        from apps.console.models import ConsoleGovernanceCapability
+        return ConsoleGovernanceCapability.objects.filter(
+            governance=membership.governance,
+            capability__code=capability_code,
+            capability__is_active=True,
+        ).exists()
+
+
+
+================================================================================
+ARQUIVO 21 DE 32
+================================================================================
+📁 PASTA: apps\workspaces\public_id.py
+📄 ARQUIVO: public_id.py
+📏 TAMANHO: 2.3 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 80
+================================================================================
+
+"""
+WorkspacePublicID â€” mapeia UUID â†” token pÃºblico ofuscado.
+
+REGRA:
+    O token NÃƒO Ã© autorizaÃ§Ã£o. Ele sÃ³ esconde o UUID.
+    Quem garante acesso Ã© o `WorkspaceMembership` do request.user.
+
+    O salt DEVE vir do settings (nunca hardcoded). Trocar o salt
+    invalida todos os tokens antigos.
+
+USO:
+    from apps.workspaces.public_id import (
+        encode_workspace_id,
+        decode_workspace_id,
+    )
+
+    token = encode_workspace_id(workspace.id)   # 'k9xPz3aQ'
+    uid   = decode_workspace_id(token)           # '3b7a0fb5-...'
+"""
+
+from typing import Optional
+from uuid import UUID
+
+from django.conf import settings
+from hashids import Hashids
+
+
+# Tamanho mÃ­nimo do token.
+# 8 caracteres Ã© o sweet spot: curto o suficiente para URL,
+# longo o suficiente para nÃ£o colidir em bases de centenas de milhares.
+_MIN_HASH_LENGTH = 8
+
+# Alfabeto sem caracteres ambÃ­guos (0/O, 1/l/I).
+_ALPHABET = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+
+
+def _get_hasher() -> Hashids:
+    salt = getattr(settings, 'WORKSPACE_PUBLIC_ID_SALT', None)
+    if not salt:
+        raise RuntimeError(
+            'WORKSPACE_PUBLIC_ID_SALT nÃ£o definido em settings. '
+            'Defina uma string aleatÃ³ria longa em .env.'
+        )
+    return Hashids(
+        salt=salt,
+        min_length=_MIN_HASH_LENGTH,
+        alphabet=_ALPHABET,
+    )
+
+
+def encode_workspace_id(workspace_id) -> str:
+    """
+    Converte um UUID (ou string) em token pÃºblico.
+
+    O UUID Ã© reduzido a um inteiro de 128 bits. O Hashids transforma
+    esse inteiro em string usando o salt. Como UUID Ã© determinÃ­stico,
+    o mesmo workspace sempre gera o mesmo token.
+    """
+    uid = UUID(str(workspace_id))
+    return _get_hasher().encode(uid.int)
+
+
+def decode_workspace_id(token: str) -> Optional[str]:
+    """
+    Converte um token pÃºblico em UUID (string), ou None se invÃ¡lido.
+    """
+    if not token:
+        return None
+    try:
+        numbers = _get_hasher().decode(token)
+    except Exception:
+        return None
+    if not numbers:
+        return None
+    # Hashids devolve tupla de inteiros; usamos o primeiro (Ã© um sÃ³).
+    value = numbers[0]
+    # Reconstroi o UUID de 128 bits
+    if value < 0 or value >= (1 << 128):
+        return None
+    return str(UUID(int=value))
+
+
+
+================================================================================
+ARQUIVO 22 DE 32
+================================================================================
+📁 PASTA: apps\workspaces\queries\__init__.py
+📄 ARQUIVO: __init__.py
+📏 TAMANHO: 0.21 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 7
+================================================================================
+
+from apps.workspaces.queries.workspace_queries import WorkspaceQueries
+from apps.workspaces.queries.membership_queries import MembershipQueries
+
+__all__ = [
+    'WorkspaceQueries',
+    'MembershipQueries',
+]
+
+
+
+================================================================================
+ARQUIVO 23 DE 32
+================================================================================
+📁 PASTA: apps\workspaces\queries\membership_queries.py
+📄 ARQUIVO: membership_queries.py
+📏 TAMANHO: 0.55 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 20
+================================================================================
+
+from apps.workspaces.models import WorkspaceMembership
+
+
+class MembershipQueries:
+
+    @staticmethod
+    def list_for_workspace(workspace_id):
+        return (
+            WorkspaceMembership.objects
+            .filter(workspace_id=workspace_id)
+            .select_related('user', 'governance')
+            .order_by('-joined_at')
+        )
+
+    @staticmethod
+    def count_owners(workspace_id):
+        return WorkspaceMembership.objects.filter(
+            workspace_id=workspace_id,
+            governance__key='proprietario',
+        ).count()
+
+
+
+================================================================================
+ARQUIVO 24 DE 32
+================================================================================
+📁 PASTA: apps\workspaces\queries\workspace_queries.py
+📄 ARQUIVO: workspace_queries.py
+📏 TAMANHO: 2.69 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 92
+================================================================================
+
+"""
+Queries otimizadas para Workspace.
+
+REGRA MULTI-TENANT:
+    A resoluÃ§Ã£o de "Workspace atual" nasce SEMPRE da combinaÃ§Ã£o
+    (workspace_id, user). Nunca de "workspace depois checar user".
+"""
+
+from apps.workspaces.models import Workspace, WorkspaceMembership
+
+
+class WorkspaceQueries:
+
+    @staticmethod
+    def get_for_user(workspace_id, user):
+        """
+        Porta padrÃ£o de resoluÃ§Ã£o do Workspace atual.
+
+        Retorna o Workspace SOMENTE se:
+            - o id corresponde
+            - o usuÃ¡rio Ã© membro
+            - o Workspace estÃ¡ ativo
+
+        Caso contrÃ¡rio, retorna None.
+        A view decide se 404 ou 403.
+        """
+        return (
+            Workspace.objects
+            .filter(
+                id=workspace_id,
+                memberships__user=user,
+                is_active=True,
+            )
+            .select_related('subscription__plan')
+            .first()
+        )
+
+    @staticmethod
+    def list_for_user_with_plan(user):
+        """Lista Workspaces do usuÃ¡rio jÃ¡ com subscription e plan."""
+        return (
+            Workspace.objects
+            .filter(memberships__user=user, is_active=True)
+            .select_related('subscription__plan')
+            .distinct()
+            .order_by('name')
+        )
+
+    @staticmethod
+    def get_last_accessed_for_user(user):
+        """
+        Retorna o Workspace da membership mais recentemente acessada
+        pelo usuÃ¡rio.
+
+        EstratÃ©gia:
+            1. Ordena as memberships por `last_access_at` DESC (NULLs por Ãºltimo).
+            2. Se todas forem NULL, cai para `joined_at` DESC.
+            3. Retorna o Workspace da primeira membership elegÃ­vel.
+
+        Nunca retorna None se o usuÃ¡rio tiver ao menos um Workspace.
+        """
+        qs = (
+            WorkspaceMembership.objects
+            .filter(
+                user=user,
+                workspace__is_active=True,
+            )
+            .select_related('workspace', 'workspace__subscription__plan')
+            .order_by('-last_access_at', '-joined_at')
+        )
+        membership = qs.first()
+        if membership is None:
+            return None
+        return membership.workspace
+
+    @staticmethod
+    def get_with_subscription(workspace_id):
+        return (
+            Workspace.objects
+            .select_related('subscription__plan')
+            .filter(id=workspace_id)
+            .first()
+        )
+
+    @staticmethod
+    def get_with_members(workspace_id):
+        return (
+            Workspace.objects
+            .prefetch_related('memberships__user', 'memberships__governance')
+            .filter(id=workspace_id)
+            .first()
+        )
+
+
+
+================================================================================
+ARQUIVO 25 DE 32
+================================================================================
+📁 PASTA: apps\workspaces\services\__init__.py
+📄 ARQUIVO: __init__.py
+📏 TAMANHO: 0.47 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 11
+================================================================================
+
+from apps.workspaces.services.workspace_service import WorkspaceService
+from apps.workspaces.services.membership_service import WorkspaceMembershipService
+from apps.workspaces.services.subscription_service import WorkspaceSubscriptionService
+from apps.workspaces.services.invitation_service import WorkspaceInvitationService
+
+__all__ = [
+    'WorkspaceService',
+    'WorkspaceMembershipService',
+    'WorkspaceSubscriptionService',
+    'WorkspaceInvitationService',
+]
+
+
+
+================================================================================
+ARQUIVO 26 DE 32
+================================================================================
+📁 PASTA: apps\workspaces\services\invitation_service.py
+📄 ARQUIVO: invitation_service.py
+📏 TAMANHO: 9.81 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 284
+================================================================================
+
+"""
+WorkspaceInvitationService â€” cria, reenvia, cancela e aceita convites.
+
+REGRA:
+    - Convite nÃ£o cria membership. Fica `pending` atÃ© alguÃ©m se
+      cadastrar com o email convidado.
+    - Quando um usuÃ¡rio se cadastra com email que tem convite pendente,
+      o signal `user_logged_in` chama `accept_all_for_email()`.
+"""
+
+from typing import Optional, List
+from datetime import timedelta
+
+from django.db import transaction
+from django.utils import timezone
+
+from apps.workspaces.models import (
+    Workspace,
+    WorkspaceMembership,
+    WorkspaceInvitation,
+)
+from apps.workspaces.exceptions import (
+    DuplicateMembershipError,
+    GovernanceNotFoundError,
+    GovernanceScopeError,
+    WorkspaceInvitationError,
+    InvitationResendLimitError,
+)
+
+
+class WorkspaceInvitationService:
+
+    # ==================================================================
+    # CRIAR
+    # ==================================================================
+
+    @staticmethod
+    @transaction.atomic
+    def create_invitation(
+        workspace: Workspace,
+        email: str,
+        governance_key: str,
+        invited_by,
+        send_email: bool = True,
+    ) -> WorkspaceInvitation:
+        from apps.console.models import ConsoleGovernance
+        from django.contrib.auth import get_user_model
+
+        User = get_user_model()
+        email = User.normalize_email(email)
+
+        if not email:
+            raise WorkspaceInvitationError('Informe o email do convidado')
+
+        # JÃ¡ Ã© membro?
+        existing_member = WorkspaceMembership.objects.filter(
+            workspace=workspace,
+            user__email__iexact=email,
+        ).exists()
+        if existing_member:
+            raise DuplicateMembershipError(
+                'Este email jÃ¡ Ã© membro do workspace'
+            )
+
+        # Governance vÃ¡lida?
+        try:
+            governance = ConsoleGovernance.objects.get(
+                key=governance_key,
+                scope='workspace',
+            )
+        except ConsoleGovernance.DoesNotExist:
+            if ConsoleGovernance.objects.filter(key=governance_key).exists():
+                raise GovernanceScopeError(
+                    f'A governanÃ§a "{governance_key}" nÃ£o Ã© do escopo workspace'
+                )
+            raise GovernanceNotFoundError(
+                f'GovernanÃ§a "{governance_key}" nÃ£o encontrada'
+            )
+
+        # Convite pendente jÃ¡ existe?
+        existing = WorkspaceInvitation.objects.filter(
+            workspace=workspace,
+            email__iexact=email,
+            status=WorkspaceInvitation.STATUS_PENDING,
+        ).first()
+
+        if existing:
+            if existing.governance_id != governance.id:
+                existing.governance = governance
+                existing.save(update_fields=['governance', 'updated_at'])
+            if send_email:
+                WorkspaceInvitationService._send(existing)
+            return existing
+
+        invitation = WorkspaceInvitation.objects.create(
+            workspace=workspace,
+            email=email,
+            governance=governance,
+            invited_by=invited_by,
+            expires_at=timezone.now() + timedelta(
+                days=WorkspaceInvitation.DEFAULT_TTL_DAYS
+            ),
+        )
+
+        if send_email:
+            WorkspaceInvitationService._send(invitation)
+
+        return invitation
+
+    # ==================================================================
+    # REENVIAR
+    # ==================================================================
+
+    @staticmethod
+    def resend_invitation(invitation: WorkspaceInvitation) -> WorkspaceInvitation:
+        if invitation.status != WorkspaceInvitation.STATUS_PENDING:
+            raise WorkspaceInvitationError(
+                'SÃ³ Ã© possÃ­vel reenviar convites pendentes'
+            )
+
+        if not invitation.can_resend():
+            raise InvitationResendLimitError(
+                f'Limite de {WorkspaceInvitation.MAX_RESENDS} reenvios atingido. '
+                f'Cancele o convite e crie um novo.'
+            )
+
+        invitation.expires_at = timezone.now() + timedelta(
+            days=WorkspaceInvitation.DEFAULT_TTL_DAYS
+        )
+        invitation.save(update_fields=['expires_at', 'updated_at'])
+
+        WorkspaceInvitationService._send(invitation)
+        return invitation
+
+    # ==================================================================
+    # CANCELAR
+    # ==================================================================
+
+    @staticmethod
+    def cancel_invitation(invitation: WorkspaceInvitation) -> None:
+        if invitation.status != WorkspaceInvitation.STATUS_PENDING:
+            raise WorkspaceInvitationError(
+                'SÃ³ Ã© possÃ­vel cancelar convites pendentes'
+            )
+        invitation.status = WorkspaceInvitation.STATUS_CANCELLED
+        invitation.save(update_fields=['status', 'updated_at'])
+
+    # ==================================================================
+    # ALTERAR GOVERNANÃ‡A
+    # ==================================================================
+
+    @staticmethod
+    def change_governance(
+        invitation: WorkspaceInvitation,
+        governance_key: str,
+    ) -> WorkspaceInvitation:
+        from apps.console.models import ConsoleGovernance
+
+        if invitation.status != WorkspaceInvitation.STATUS_PENDING:
+            raise WorkspaceInvitationError(
+                'SÃ³ Ã© possÃ­vel alterar convites pendentes'
+            )
+
+        try:
+            governance = ConsoleGovernance.objects.get(
+                key=governance_key,
+                scope='workspace',
+            )
+        except ConsoleGovernance.DoesNotExist:
+            if ConsoleGovernance.objects.filter(key=governance_key).exists():
+                raise GovernanceScopeError(
+                    f'A governanÃ§a "{governance_key}" nÃ£o Ã© do escopo workspace'
+                )
+            raise GovernanceNotFoundError(
+                f'GovernanÃ§a "{governance_key}" nÃ£o encontrada'
+            )
+
+        invitation.governance = governance
+        invitation.save(update_fields=['governance', 'updated_at'])
+        return invitation
+
+    # ==================================================================
+    # ACEITE AUTOMÃTICO
+    # ==================================================================
+
+    @staticmethod
+    @transaction.atomic
+    def accept_all_for_email(user) -> List[WorkspaceMembership]:
+        email = user.email
+        if not email:
+            return []
+
+        invitations = WorkspaceInvitation.objects.filter(
+            email__iexact=email,
+            status=WorkspaceInvitation.STATUS_PENDING,
+        ).select_related('workspace', 'governance')
+
+        created = []
+        for inv in invitations:
+            if inv.mark_expired_if_needed():
+                continue
+
+            if WorkspaceMembership.objects.filter(
+                workspace=inv.workspace, user=user
+            ).exists():
+                inv.status = WorkspaceInvitation.STATUS_ACCEPTED
+                inv.accepted_at = timezone.now()
+                inv.save(update_fields=['status', 'accepted_at', 'updated_at'])
+                continue
+
+            membership = WorkspaceMembership.objects.create(
+                workspace=inv.workspace,
+                user=user,
+                governance=inv.governance,
+            )
+
+            inv.status = WorkspaceInvitation.STATUS_ACCEPTED
+            inv.accepted_at = timezone.now()
+            inv.save(update_fields=['status', 'accepted_at', 'updated_at'])
+
+            created.append(membership)
+
+        return created
+
+    # ==================================================================
+    # CONSULTAS
+    # ==================================================================
+
+    @staticmethod
+    def list_pending_for_workspace(workspace: Workspace) -> List[WorkspaceInvitation]:
+        """
+        Lista convites pendentes do workspace.
+
+        NÃ£o marca expirados â€” apenas filtra por status='pending'.
+        O serializer expÃµe `is_expired` para o frontend sinalizar.
+        """
+        return list(
+            WorkspaceInvitation.objects
+            .filter(
+                workspace=workspace,
+                status=WorkspaceInvitation.STATUS_PENDING,
+            )
+            .select_related('governance', 'invited_by')
+            .order_by('-created_at')
+        )
+
+    @staticmethod
+    def get_by_id(invitation_id) -> Optional[WorkspaceInvitation]:
+        try:
+            return WorkspaceInvitation.objects.select_related(
+                'workspace', 'governance', 'invited_by'
+            ).get(id=invitation_id)
+        except (WorkspaceInvitation.DoesNotExist, ValueError):
+            return None
+
+    @staticmethod
+    def get_by_token(token: str) -> Optional[WorkspaceInvitation]:
+        try:
+            return WorkspaceInvitation.objects.select_related(
+                'workspace', 'governance'
+            ).get(token=token)
+        except WorkspaceInvitation.DoesNotExist:
+            return None
+
+    # ==================================================================
+    # EMAIL
+    # ==================================================================
+
+    @staticmethod
+    def _send(invitation: WorkspaceInvitation) -> None:
+        from apps.accounts.services.email import EmailService
+        from django.conf import settings
+
+        base_url = settings.FRONTEND_URL.rstrip('/')
+        invite_url = f"{base_url}/convite/{invitation.token}/"
+
+        EmailService.send_workspace_invitation(
+            invitation=invitation,
+            invite_url=invite_url,
+        )
+
+        invitation.last_sent_at = timezone.now()
+        invitation.send_count += 1
+        invitation.save(update_fields=['last_sent_at', 'send_count', 'updated_at'])
+
+
+
+================================================================================
+ARQUIVO 27 DE 32
+================================================================================
+📁 PASTA: apps\workspaces\services\membership_service.py
+📄 ARQUIVO: membership_service.py
+📏 TAMANHO: 7.05 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 205
+================================================================================
+
+"""
+WorkspaceMembershipService â€” gestÃ£o de membros do Workspace.
+
+REGRA V1:
+    - A Governance atribuÃ­da precisa ter scope='workspace'.
+    - O Ãºltimo proprietÃ¡rio do Workspace nÃ£o pode ser removido
+      nem rebaixado.
+    - Rastreabilidade de "quem adicionou quem" Ã© responsabilidade
+      de Audit/Event (futuro), nÃ£o desta camada.
+"""
+
+from typing import Optional, List
+
+from django.utils import timezone
+
+from apps.workspaces.models import (
+    Workspace,
+    WorkspaceMembership,
+)
+from apps.workspaces.exceptions import (
+    DuplicateMembershipError,
+    UserNotActiveError,
+    GovernanceNotFoundError,
+    GovernanceScopeError,
+    LastOwnerError,
+)
+
+
+class WorkspaceMembershipService:
+
+    # Governance key que define o proprietÃ¡rio â€” invariante estrutural
+    # do tenant. NÃ£o Ã© regra de autorizaÃ§Ã£o geral.
+    PROPRIETARIO_KEY = 'proprietario'
+
+    # ==================================================================
+    # ADIÃ‡ÃƒO
+    # ==================================================================
+
+    @staticmethod
+    def add_member(
+        workspace: Workspace,
+        user,
+        governance_key: str,
+    ) -> WorkspaceMembership:
+        """
+        Adiciona um usuÃ¡rio ao Workspace com a Governance informada.
+
+        A Governance precisa:
+            - existir no Console
+            - ter scope='workspace'
+        """
+        from apps.console.models import ConsoleGovernance
+
+        if not user.is_active:
+            raise UserNotActiveError(
+                'UsuÃ¡rio inativo nÃ£o pode ser adicionado ao Workspace'
+            )
+
+        if WorkspaceMembership.objects.filter(
+            workspace=workspace, user=user
+        ).exists():
+            raise DuplicateMembershipError(
+                'UsuÃ¡rio jÃ¡ Ã© membro deste Workspace'
+            )
+
+        # Resolve a Governance validando o escopo
+        try:
+            governance = ConsoleGovernance.objects.get(
+                key=governance_key,
+                scope='workspace',
+            )
+        except ConsoleGovernance.DoesNotExist:
+            # Distinguir "nÃ£o existe" de "existe fora do escopo"
+            if ConsoleGovernance.objects.filter(key=governance_key).exists():
+                raise GovernanceScopeError(
+                    f'A governanÃ§a "{governance_key}" existe, mas nÃ£o Ã© '
+                    f'do escopo "workspace". Apenas governanÃ§as de Workspace '
+                    f'podem ser atribuÃ­das a membros.'
+                )
+            raise GovernanceNotFoundError(
+                f'GovernanÃ§a "{governance_key}" nÃ£o encontrada no Console'
+            )
+
+        membership = WorkspaceMembership.objects.create(
+            workspace=workspace,
+            user=user,
+            governance=governance,
+            joined_at=timezone.now(),
+        )
+        return membership
+
+    # ==================================================================
+    # REMOÃ‡ÃƒO
+    # ==================================================================
+
+    @staticmethod
+    def remove_member(membership: WorkspaceMembership) -> None:
+        """
+        Remove um membro do Workspace.
+
+        Bloqueia a remoÃ§Ã£o se for o Ãºltimo proprietÃ¡rio.
+        """
+        workspace = membership.workspace
+
+        if membership.governance.key == WorkspaceMembershipService.PROPRIETARIO_KEY:
+            owners_count = WorkspaceMembership.objects.filter(
+                workspace=workspace,
+                governance__key=WorkspaceMembershipService.PROPRIETARIO_KEY,
+            ).count()
+
+            if owners_count <= 1:
+                raise LastOwnerError(
+                    'NÃ£o Ã© possÃ­vel remover o Ãºltimo proprietÃ¡rio do Workspace. '
+                    'Promova outro membro a proprietÃ¡rio primeiro.'
+                )
+
+        membership.delete()
+
+    # ==================================================================
+    # TROCA DE GOVERNANÃ‡A
+    # ==================================================================
+
+    @staticmethod
+    def change_governance(
+        membership: WorkspaceMembership,
+        governance_key: str,
+    ) -> WorkspaceMembership:
+        """
+        Troca a governanÃ§a de um membro.
+
+        Impede rebaixar o Ãºltimo proprietÃ¡rio.
+        """
+        from apps.console.models import ConsoleGovernance
+
+        try:
+            new_gov = ConsoleGovernance.objects.get(
+                key=governance_key,
+                scope='workspace',
+            )
+        except ConsoleGovernance.DoesNotExist:
+            if ConsoleGovernance.objects.filter(key=governance_key).exists():
+                raise GovernanceScopeError(
+                    f'A governanÃ§a "{governance_key}" nÃ£o Ã© do escopo workspace'
+                )
+            raise GovernanceNotFoundError(
+                f'GovernanÃ§a "{governance_key}" nÃ£o encontrada'
+            )
+
+        # Se estava como proprietÃ¡rio e vai sair de proprietÃ¡rio,
+        # garantir que outro proprietÃ¡rio existe
+        if (
+            membership.governance.key == WorkspaceMembershipService.PROPRIETARIO_KEY
+            and new_gov.key != WorkspaceMembershipService.PROPRIETARIO_KEY
+        ):
+            owners_count = WorkspaceMembership.objects.filter(
+                workspace=membership.workspace,
+                governance__key=WorkspaceMembershipService.PROPRIETARIO_KEY,
+            ).count()
+
+            if owners_count <= 1:
+                raise LastOwnerError(
+                    'NÃ£o Ã© possÃ­vel rebaixar o Ãºltimo proprietÃ¡rio. '
+                    'Promova outro membro primeiro.'
+                )
+
+        membership.governance = new_gov
+        membership.save(update_fields=['governance', 'updated_at'])
+        return membership
+
+    # ==================================================================
+    # CONSULTAS
+    # ==================================================================
+
+    @staticmethod
+    def get_membership(workspace: Workspace, user) -> Optional[WorkspaceMembership]:
+        try:
+            return WorkspaceMembership.objects.get(
+                workspace=workspace,
+                user=user,
+            )
+        except WorkspaceMembership.DoesNotExist:
+            return None
+
+    @staticmethod
+    def list_members(workspace: Workspace) -> List[WorkspaceMembership]:
+        return list(
+            WorkspaceMembership.objects
+            .filter(workspace=workspace)
+            .select_related('user', 'governance')
+            .order_by('-joined_at')
+        )
+
+    @staticmethod
+    def touch_last_access(workspace: Workspace, user) -> None:
+        """
+        Atualiza `last_access_at` da membership do usuÃ¡rio.
+
+        Deve ser chamado sempre que a aplicaÃ§Ã£o resolve o contexto
+        do Workspace atual para o usuÃ¡rio â€” por exemplo, na entrada
+        da Mesa, ou em um middleware leve de resoluÃ§Ã£o de Workspace.
+        """
+        WorkspaceMembership.objects.filter(
+            workspace=workspace,
+            user=user,
+        ).update(last_access_at=timezone.now())
+
+
+
+================================================================================
+ARQUIVO 28 DE 32
+================================================================================
+📁 PASTA: apps\workspaces\services\subscription_service.py
+📄 ARQUIVO: subscription_service.py
+📏 TAMANHO: 0.97 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 36
+================================================================================
+
+"""
+WorkspaceSubscriptionService â€” consulta e (futuramente) alteraÃ§Ã£o
+do plano do Workspace.
+
+V1:
+    - A subscription Ã© criada junto com o Workspace.
+    - Sem endpoint para trocar plano.
+    - Sem billing.
+"""
+
+from typing import Optional
+
+from apps.workspaces.models import (
+    Workspace,
+    WorkspaceSubscription,
+)
+
+
+class WorkspaceSubscriptionService:
+
+    @staticmethod
+    def get_subscription(workspace: Workspace) -> Optional[WorkspaceSubscription]:
+        try:
+            return WorkspaceSubscription.objects.select_related('plan').get(
+                workspace=workspace
+            )
+        except WorkspaceSubscription.DoesNotExist:
+            return None
+
+    @staticmethod
+    def get_active_plan(workspace: Workspace):
+        """Retorna o Plan ativo do Workspace, ou None."""
+        sub = WorkspaceSubscriptionService.get_subscription(workspace)
+        if sub and sub.is_active:
+            return sub.plan
+        return None
+
+
+
+================================================================================
+ARQUIVO 29 DE 32
+================================================================================
+📁 PASTA: apps\workspaces\services\workspace_service.py
+📄 ARQUIVO: workspace_service.py
+📏 TAMANHO: 7.39 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 231
+================================================================================
+
+"""
+WorkspaceService â€” criaÃ§Ã£o, gestÃ£o e exclusÃ£o de Workspace.
+
+REGRA DE CRIAÃ‡ÃƒO (V1):
+    O frontend NÃƒO escolhe:
+        - governance_id
+        - plan_id
+
+    O backend determina:
+        - Plan is_default=True (do Console)
+        - Governance "proprietario" scope='workspace' (do Console)
+        - Membership do criador como proprietÃ¡rio
+
+    Tudo dentro de @transaction.atomic.
+"""
+
+import re
+from typing import Optional
+
+from django.db import transaction
+from django.utils import timezone
+from django.utils.text import slugify
+
+from apps.workspaces.models import (
+    Workspace,
+    WorkspaceMembership,
+    WorkspaceSubscription,
+)
+from apps.workspaces.exceptions import (
+    WorkspaceNotFoundError,
+    DefaultPlanNotFoundError,
+    DefaultPlanAmbiguousError,
+    ProprietarioGovernanceNotFoundError,
+    WorkspaceUserNotActiveError,
+    SlugGenerationError,
+)
+
+
+# NÃºmero mÃ¡ximo de tentativas de geraÃ§Ã£o de slug antes de desistir.
+# A constraint unique + tratamento de IntegrityError cuidam do caso
+# real; este limite Ã© sÃ³ uma trava defensiva.
+_MAX_SLUG_ATTEMPTS = 50
+
+
+class WorkspaceService:
+
+    # ==================================================================
+    # CRIAÃ‡ÃƒO
+    # ==================================================================
+
+    @staticmethod
+    @transaction.atomic
+    def create_workspace(
+        name: str,
+        created_by,
+        cnpj: str = '',
+        city: str = '',
+        state: str = '',
+    ) -> Workspace:
+        """
+        Cria um Workspace completo.
+
+        Passos:
+            1. Valida usuÃ¡rio criador
+            2. Gera slug Ãºnico
+            3. Resolve o Plan is_default=True (Ãºnico) do Console
+            4. Resolve a Governance 'proprietario' scope='workspace'
+            5. Cria Workspace
+            6. Cria WorkspaceSubscription
+            7. Cria WorkspaceMembership do criador como proprietÃ¡rio
+
+        Se qualquer passo falhar, nada Ã© persistido.
+        """
+        from apps.console.models import Plan, ConsoleGovernance
+
+        # 1. ValidaÃ§Ãµes bÃ¡sicas
+        name = (name or '').strip()
+        if not name:
+            raise ValueError('O nome do Workspace Ã© obrigatÃ³rio')
+
+        if not created_by or not created_by.is_active:
+            raise WorkspaceUserNotActiveError(
+                'O usuÃ¡rio criador do Workspace precisa estar ativo'
+            )
+
+        # 2. Slug
+        slug = WorkspaceService._generate_unique_slug(name)
+
+        # 3. Plan default â€” resoluÃ§Ã£o estrita
+        plan_qs = Plan.objects.filter(is_default=True, is_active=True)
+        count = plan_qs.count()
+        if count == 0:
+            raise DefaultPlanNotFoundError(
+                'Nenhum plano inicial (is_default=True) ativo encontrado. '
+                'Defina um plano inicial no Console antes de criar Workspaces.'
+            )
+        if count > 1:
+            raise DefaultPlanAmbiguousError(
+                'Existe mais de um plano marcado como inicial. '
+                'Isso Ã© uma inconsistÃªncia de configuraÃ§Ã£o do Console.'
+            )
+        default_plan = plan_qs.first()
+
+        # 4. Governance proprietario
+        try:
+            proprietario_gov = ConsoleGovernance.objects.get(
+                key='proprietario',
+                scope='workspace',
+            )
+        except ConsoleGovernance.DoesNotExist:
+            raise ProprietarioGovernanceNotFoundError(
+                'A governanÃ§a "proprietario" com scope="workspace" '
+                'nÃ£o foi encontrada. Rode `python manage.py seed_console`.'
+            )
+
+        # 5. Workspace
+        workspace = Workspace.objects.create(
+            name=name,
+            slug=slug,
+            cnpj=(cnpj or '').strip(),
+            city=(city or '').strip(),
+            state=(state or '').strip().upper(),
+            is_active=True,
+        )
+
+        # 6. Subscription
+        WorkspaceSubscription.objects.create(
+            workspace=workspace,
+            plan=default_plan,
+            is_active=True,
+            started_at=timezone.now(),
+        )
+
+        # 7. Membership do criador
+        WorkspaceMembership.objects.create(
+            workspace=workspace,
+            user=created_by,
+            governance=proprietario_gov,
+        )
+
+        return workspace
+
+    # ==================================================================
+    # EXCLUSÃƒO
+    # ==================================================================
+
+    @staticmethod
+    @transaction.atomic
+    def delete_workspace(workspace: Workspace) -> None:
+        """
+        Exclui o Workspace e todos os dados associados.
+
+        V1: delete real. Sem soft delete.
+        V2 (futuro): pode-se adicionar arquivamento quando outros
+        domÃ­nios passarem a referenciar o Workspace.
+        """
+        workspace.delete()
+
+    # ==================================================================
+    # SLUG
+    # ==================================================================
+
+    @staticmethod
+    def _generate_unique_slug(name: str) -> str:
+        """
+        Gera um slug Ãºnico a partir do nome.
+
+        EstratÃ©gia:
+            1. Slugifica e limpa
+            2. Tenta o slug base
+            3. Se ocupado, tenta base-2, base-3, ...
+            4. Se esgotar tentativas, levanta SlugGenerationError
+
+        A constraint unique + IntegrityError no create() cobre
+        race condition real. Este loop sÃ³ evita a colisÃ£o Ã³bvia.
+        """
+        base = slugify(name)
+        base = re.sub(r'[^a-z0-9-]', '', base).strip('-') or 'workspace'
+
+        # Tenta o slug base primeiro
+        if not Workspace.objects.filter(slug=base).exists():
+            return base
+
+        # Tenta sufixos incrementais
+        for counter in range(2, _MAX_SLUG_ATTEMPTS + 1):
+            candidate = f"{base}-{counter}"
+            if not Workspace.objects.filter(slug=candidate).exists():
+                return candidate
+
+        raise SlugGenerationError(
+            f'NÃ£o foi possÃ­vel gerar um slug Ãºnico para "{name}" '
+            f'apÃ³s {_MAX_SLUG_ATTEMPTS} tentativas.'
+        )
+
+    # ==================================================================
+    # CONSULTAS
+    # ==================================================================
+
+    @staticmethod
+    def get_by_id(workspace_id) -> Optional[Workspace]:
+        try:
+            return Workspace.objects.get(id=workspace_id)
+        except Workspace.DoesNotExist:
+            return None
+
+    @staticmethod
+    def get_or_raise(workspace_id) -> Workspace:
+        workspace = WorkspaceService.get_by_id(workspace_id)
+        if workspace is None:
+            raise WorkspaceNotFoundError(
+                f'Workspace com id "{workspace_id}" nÃ£o encontrado'
+            )
+        return workspace
+
+    @staticmethod
+    def list_for_user(user) -> list:
+        """Lista Workspaces em que o usuÃ¡rio Ã© membro."""
+        return list(
+            Workspace.objects.filter(
+                memberships__user=user,
+                is_active=True,
+            ).distinct().order_by('name')
+        )
+
+    @staticmethod
+    def user_has_access(user, workspace: Workspace) -> bool:
+        """Verifica se o usuÃ¡rio Ã© membro do Workspace."""
+        return WorkspaceMembership.objects.filter(
+            workspace=workspace,
+            user=user,
+        ).exists()
+
+
+
+================================================================================
+ARQUIVO 30 DE 32
+================================================================================
+📁 PASTA: apps\workspaces\signals.py
+📄 ARQUIVO: signals.py
+📏 TAMANHO: 1.29 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 36
+================================================================================
+
+"""
+Signals do mÃ³dulo workspaces.
+
+REGRA:
+    Quando um usuÃ¡rio faz login (ou se cadastra), aceita automaticamente
+    todos os convites pendentes para o email dele.
+"""
+
+from django.contrib.auth.signals import user_logged_in
+from django.dispatch import receiver
+import logging
+
+from apps.workspaces.services.invitation_service import WorkspaceInvitationService
+
+logger = logging.getLogger('workspaces')
+
+
+@receiver(user_logged_in)
+def accept_pending_invitations(sender, request, user, **kwargs):
+    """
+    ApÃ³s um login bem-sucedido, verifica se existem convites pendentes
+    para o email do usuÃ¡rio e cria as memberships correspondentes.
+    """
+    try:
+        memberships = WorkspaceInvitationService.accept_all_for_email(user)
+        if memberships:
+            logger.info(
+                f"Convites aceitos para {user.email}: "
+                f"{', '.join(m.workspace.name for m in memberships)}"
+            )
+            # Guarda na sessÃ£o o Ãºltimo workspace criado, para redirecionar
+            if request is not None:
+                request.session['current_workspace_id'] = str(memberships[-1].workspace_id)
+    except Exception as e:
+        # Nunca quebra o login por causa disso
+        logger.exception(f"Falha ao aceitar convites para {user.email}: {e}")
+
+
+
+================================================================================
+ARQUIVO 31 DE 32
+================================================================================
+📁 PASTA: apps\workspaces\urls.py
+📄 ARQUIVO: urls.py
+📏 TAMANHO: 1.03 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 43
+================================================================================
+
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+
+from apps.workspaces.api.views import WorkspaceViewSet
+from apps.workspaces.views import (
+    WorkspaceEntryView,
+    WorkspaceCreateView,
+    InvitationEntryView,
+    MesaView,
+    MesaRedirectView,
+)
+
+router = DefaultRouter()
+router.register(r'workspaces', WorkspaceViewSet, basename='workspace')
+
+urlpatterns = [
+    path(
+        'workspaces/entrar/',
+        WorkspaceEntryView.as_view(),
+        name='workspace-entry',
+    ),
+    path(
+        'workspaces/novo/',
+        WorkspaceCreateView.as_view(),
+        name='workspace-create',
+    ),
+    path(
+        'convite/<str:token>/',
+        InvitationEntryView.as_view(),
+        name='workspace-invitation-entry',
+    ),
+    path(
+        'mesa/<str:public_id>/',
+        MesaView.as_view(),
+        name='mesa',
+    ),
+    path(
+        'mesa/',
+        MesaRedirectView.as_view(),
+        name='mesa-redirect',
+    ),
+    path('api/', include(router.urls)),
+]
+
+
+
+================================================================================
+ARQUIVO 32 DE 32
+================================================================================
+📁 PASTA: apps\workspaces\views.py
+📄 ARQUIVO: views.py
+📏 TAMANHO: 4.76 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 153
+================================================================================
+
+"""
+Views HTML do mÃ³dulo Workspace.
+
+FLUXO DE URL:
+    /mesa/<public_id>/
+        â”‚
+        â”œâ”€â”€ decode public_id â†’ UUID
+        â”œâ”€â”€ valida membership do request.user nesse workspace
+        â”œâ”€â”€ grava request.session['current_workspace_id']
+        â””â”€â”€ renderiza mesa.html
+
+    /mesa/ (sem public_id)
+        â””â”€â”€ redireciona para /workspaces/entrar/
+"""
+
+from django.shortcuts import redirect, render
+from django.views import View
+import logging
+
+from apps.workspaces.public_id import (
+    encode_workspace_id,
+    decode_workspace_id,
+)
+from apps.workspaces.queries import WorkspaceQueries
+from apps.workspaces.services import (
+    WorkspaceService,
+    WorkspaceMembershipService,
+    WorkspaceInvitationService,
+)
+
+logger = logging.getLogger('workspaces')
+
+
+def _is_clivo_admin(user) -> bool:
+    try:
+        from apps.accounts.api.entry import resolve_entry_target
+        return resolve_entry_target(user) == 'console'
+    except Exception as e:
+        logger.warning(f"Falha ao resolver entry target: {e}")
+        if not user or not user.is_authenticated:
+            return False
+        return bool(user.is_superuser)
+
+
+class WorkspaceEntryView(View):
+    """
+    Ponto de entrada do usuÃ¡rio.
+
+    Resolve qual workspace abrir e redireciona para /mesa/<public_id>/.
+    """
+
+    def get(self, request):
+        if not request.user.is_authenticated:
+            return redirect('/login/')
+
+        if _is_clivo_admin(request.user):
+            return redirect('/console/')
+
+        workspaces = WorkspaceService.list_for_user(request.user)
+        if not workspaces:
+            return redirect('/workspaces/novo/')
+
+        workspace = WorkspaceQueries.get_last_accessed_for_user(request.user)
+        if workspace is None:
+            workspace = workspaces[0]
+
+        WorkspaceMembershipService.touch_last_access(workspace, request.user)
+        request.session['current_workspace_id'] = str(workspace.id)
+
+        public_id = encode_workspace_id(workspace.id)
+        return redirect(f'/mesa/{public_id}/')
+
+
+class WorkspaceCreateView(View):
+    def get(self, request):
+        if not request.user.is_authenticated:
+            return redirect('/login/')
+
+        if _is_clivo_admin(request.user):
+            return redirect('/console/')
+
+        if WorkspaceService.list_for_user(request.user):
+            return redirect('/workspaces/entrar/')
+
+        return render(request, 'workspace.html')
+
+
+class InvitationEntryView(View):
+    """Ponto de entrada do convite."""
+
+    def get(self, request, token):
+        invitation = WorkspaceInvitationService.get_by_token(token)
+
+        if invitation is None:
+            logger.warning(f"Convite nÃ£o encontrado: token={token}")
+            return render(request, 'convite_invalido.html', status=404)
+
+        if request.user.is_authenticated:
+            try:
+                WorkspaceInvitationService.accept_all_for_email(request.user)
+            except Exception as e:
+                logger.exception(f"Falha ao aceitar convite: {e}")
+            return redirect('/workspaces/entrar/')
+
+        login_url = f"/login/?next=/convite/{token}/"
+        return redirect(login_url)
+
+
+class MesaView(View):
+    """
+    Renderiza a Mesa para um workspace especÃ­fico.
+
+    Recebe `<public_id>` no path, resolve para o UUID real, valida
+    membership e grava na sessÃ£o. Se o token for invÃ¡lido ou o usuÃ¡rio
+    nÃ£o for membro, redireciona para /workspaces/entrar/.
+    """
+
+    def get(self, request, public_id):
+        if not request.user.is_authenticated:
+            return redirect('/login/')
+
+        if _is_clivo_admin(request.user):
+            return redirect('/console/')
+
+        workspace_id = decode_workspace_id(public_id)
+        if workspace_id is None:
+            logger.warning(f"public_id invÃ¡lido: {public_id}")
+            return redirect('/workspaces/entrar/')
+
+        # ResoluÃ§Ã£o multi-tenant: (workspace_id, user)
+        workspace = WorkspaceQueries.get_for_user(workspace_id, request.user)
+        if workspace is None:
+            logger.warning(
+                f"UsuÃ¡rio {request.user.email} sem acesso ao workspace "
+                f"{workspace_id} (via public_id={public_id})"
+            )
+            return redirect('/workspaces/entrar/')
+
+        # Fixa o workspace como "atual"
+        request.session['current_workspace_id'] = str(workspace.id)
+        WorkspaceMembershipService.touch_last_access(workspace, request.user)
+
+        return render(request, 'mesa.html')
+
+
+class MesaRedirectView(View):
+    """
+    Atalho: /mesa/ sem public_id.
+    Redireciona para o Ãºltimo workspace acessado.
+    """
+
+    def get(self, request):
+        return redirect('/workspaces/entrar/')
+
+
+
+================================================================================
+FIM DA LISTAGEM
+================================================================================
+Total de arquivos: 32
+Total de linhas: 3294
+Tamanho total: 0.25 MB
+Arquivo gerado em: 28/09/2026 10:41:50
+================================================================================

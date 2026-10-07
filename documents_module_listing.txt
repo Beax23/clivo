@@ -1,0 +1,2933 @@
+﻿================================================================================
+LISTAGEM COMPLETA DO MÓDULO documents
+Clivo Platform - Refatoração Arquitetural
+Gerado em: 02/10/2026 11:31:41
+Total de arquivos: 21
+================================================================================
+
+
+================================================================================
+ARQUIVO 1 DE 21
+================================================================================
+📁 PASTA: apps\documents\__init__.py
+📄 ARQUIVO: __init__.py
+📏 TAMANHO: 6.7 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 172
+================================================================================
+
+"""
+Documents â€” arquivos que o Clivo conhece.
+
+============================================================================
+REGRA ARQUITETURAL
+============================================================================
+
+`documents` responde por:
+
+    - armazenar arquivos
+    - registrar quem subiu, quem alterou, quando
+    - associar arquivos a contexto (cliente, projeto futuro)
+    - manter histÃ³rico de todas as alteraÃ§Ãµes
+
+`documents` NÃƒO responde por:
+
+    - identidade do usuÃ¡rio           â†’ pertence a `accounts`
+    - contexto do cliente             â†’ pertence a `clients`
+    - briefing                        â†’ pertence a `briefings`
+    - projeto                         â†’ pertence a `projects` (futuro)
+    - timeline transversal            â†’ pertence a `timeline`
+    - interpretaÃ§Ã£o/IA                â†’ pertence a `intelligence`
+    - integraÃ§Ãµes externas            â†’ pertence a `references` (futuro)
+                                         Pinterest/Unsplash como fontes
+                                         ficam em `references.providers`
+    - versionamento real de arquivo   â†’ NÃƒO existe na V1
+
+============================================================================
+PRINCÃPIO
+============================================================================
+
+    Arquivo â†’ armazenamento â†’ contexto â†’ rastreabilidade
+
+Documents Ã© o armazenamento canÃ´nico de arquivos do Clivo.
+
+O arquiteto sobe um arquivo uma vez. O Clivo conhece aquele arquivo
+em qualquer contexto que ele seja usado (cliente, briefing, projeto).
+
+Documents nÃ£o Ã© Google Drive. NÃ£o Ã© Office. NÃ£o Ã© um sistema de
+ediÃ§Ã£o de conteÃºdo. Ã‰ o cofre de arquivos do escritÃ³rio.
+
+============================================================================
+MODELOS (P0)
+============================================================================
+
+    Document
+        â””â”€â”€ um arquivo conhecido pelo Clivo
+
+    DocumentHistory
+        â””â”€â”€ registro de cada alteraÃ§Ã£o no arquivo
+
+O P0 tem DOIS MODELOS. NÃ£o criamos antecipadamente:
+
+    âŒ DocumentTag             (sistema de tags Ã© complexidade nÃ£o pedida)
+    âŒ DocumentFolder          (pastas complexas nÃ£o existem na V1)
+    âŒ DocumentVersion         (versionamento separado nÃ£o existe na V1;
+                                substituiÃ§Ã£o registra no histÃ³rico)
+    âŒ DocumentPermission      (permissÃµes individuais por documento nÃ£o
+                                existem na V1; capability + workspace
+                                resolvem)
+    âŒ DocumentComment         (comentÃ¡rios nÃ£o existem na V1)
+    âŒ DocumentApproval        (aprovaÃ§Ã£o nÃ£o existe na V1)
+    âŒ DocumentOCR             (OCR nÃ£o existe na V1)
+
+Cada um nasce quando existir demanda real.
+
+============================================================================
+SOBRE O ARQUIVO
+============================================================================
+
+O arquivo fÃ­sico Ã© armazenado via `FileField`, usando o storage padrÃ£o
+do Django (`DEFAULT_FILE_STORAGE`). Se o projeto estiver configurado
+com Cloudinary ou S3, usa o storage configurado. Se estiver em
+`MEDIA_ROOT` local, usa local.
+
+Documents NÃƒO amarra lÃ³gica especÃ­fica de Cloudinary, S3, ou qualquer
+provider. Trocar storage Ã© decisÃ£o de infraestrutura, nÃ£o deste mÃ³dulo.
+
+============================================================================
+SOBRE A EXTENSÃƒO E O MIME TYPE
+============================================================================
+
+Documents NÃƒO possui lista de extensÃµes permitidas.
+
+O sistema aceita arquivos de todos os tipos. O que armazenamos Ã©:
+
+    - name         â†’ nome sem extensÃ£o
+    - extension    â†’ extensÃ£o em minÃºsculas (ex: "pdf", "m4a")
+    - mime_type    â†’ MIME type reportado pelo upload
+    - size         â†’ tamanho em bytes
+    - file         â†’ arquivo fÃ­sico
+
+A visualizaÃ§Ã£o depende do tipo. Se o navegador nÃ£o conseguir
+visualizar, oferece download. Isso Ã© responsabilidade da camada
+de apresentaÃ§Ã£o, nÃ£o do model.
+
+============================================================================
+SOBRE O HISTÃ“RICO
+============================================================================
+
+`DocumentHistory` registra TODA alteraÃ§Ã£o no documento.
+
+AÃ§Ãµes:
+    created
+    renamed
+    replaced
+    client_associated
+    client_removed
+    project_associated
+    project_removed
+    downloaded
+    deleted
+
+`downloaded` registra apenas aÃ§Ã£o + usuÃ¡rio + timestamp.
+`previous_value` e `new_value` sÃ£o NULL quando a aÃ§Ã£o nÃ£o tem
+estado anterior/novo.
+
+`document` Ã© FK nullable para `Document`. Quando o documento Ã©
+excluÃ­do, o histÃ³rico sobrevive com `document = NULL`. Isso preserva
+auditoria sem preservar o arquivo.
+
+============================================================================
+REGRA DE EXCLUSÃƒO
+============================================================================
+
+    DELETE Ã‰ DELETE.
+
+Ao excluir um Document:
+
+    - o arquivo fÃ­sico Ã© removido
+    - o registro em `Document` Ã© removido
+    - o registro em `DocumentHistory` com action='deleted' Ã© criado
+      ANTES da exclusÃ£o, com `document` apontando para o objeto
+      prestes a ser apagado
+    - apÃ³s a exclusÃ£o, o FK de `DocumentHistory` recebe SET_NULL
+      automaticamente pelo Django
+
+Sem soft delete. Sem restore. Sem lixeira.
+
+============================================================================
+SOBRE `project_id`
+============================================================================
+
+`project_id` Ã© UUIDField solto, NÃƒO Ã© FK, porque o app `projects`
+ainda nÃ£o existe.
+
+    REGRA: este UUID representa `projects.Project.id`.
+    Quando `projects` existir, isso vira ForeignKey.
+
+NÃ£o transformar em `related_object_id`, `context_id` ou qualquer
+nome genÃ©rico de pseudo-polimorfismo.
+
+============================================================================
+FRONTEIRA CONGELADA (V1)
+============================================================================
+
+    accounts      â†’ identidade e autenticaÃ§Ã£o
+    workspaces    â†’ tenancy e membros
+    console       â†’ governanÃ§a e capabilities
+    clients       â†’ contexto do cliente
+    documents     â†’ arquivos (este app)
+    references    â†’ curadoria de referÃªncias (futuro)
+    briefings     â†’ descoberta/contexto (futuro)
+    projects      â†’ operaÃ§Ã£o (futuro)
+    timeline      â†’ memÃ³ria factual (futuro)
+    intelligence  â†’ interpretaÃ§Ã£o (futuro)
+
+Documents apenas armazena. NÃ£o interpreta. NÃ£o versiona.
+NÃ£o organiza em pastas. NÃ£o comenta. NÃ£o aprova.
+"""
+
+default_app_config = 'apps.documents.apps.DocumentsConfig'
+
+
+
+================================================================================
+ARQUIVO 2 DE 21
+================================================================================
+📁 PASTA: apps\documents\admin.py
+📄 ARQUIVO: admin.py
+📏 TAMANHO: 2.17 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 72
+================================================================================
+
+from django.contrib import admin
+
+from apps.documents.models import Document, DocumentHistory
+
+
+@admin.register(Document)
+class DocumentAdmin(admin.ModelAdmin):
+    list_display = [
+        'name', 'extension', 'workspace', 'client',
+        'size_display', 'created_by', 'created_at',
+    ]
+    list_filter = ['extension', 'workspace']
+    search_fields = ['name', 'client__name', 'workspace__name']
+    readonly_fields = [
+        'id', 'extension', 'mime_type', 'size',
+        'created_at', 'updated_at',
+    ]
+    ordering = ['-created_at']
+    autocomplete_fields = ['workspace', 'client', 'created_by', 'updated_by']
+    date_hierarchy = 'created_at'
+
+    fieldsets = (
+        ('IdentificaÃ§Ã£o', {
+            'fields': ('id', 'workspace', 'name'),
+        }),
+        ('Arquivo', {
+            'fields': ('file', 'extension', 'mime_type', 'size'),
+        }),
+        ('Contexto', {
+            'fields': ('client', 'project_id'),
+        }),
+        ('Rastreabilidade', {
+            'fields': ('created_by', 'updated_by', 'created_at', 'updated_at'),
+            'classes': ('collapse',),
+        }),
+    )
+
+
+@admin.register(DocumentHistory)
+class DocumentHistoryAdmin(admin.ModelAdmin):
+    list_display = [
+        'action', 'document', 'user', 'timestamp',
+    ]
+    list_filter = ['action']
+    search_fields = ['document__name', 'user__email']
+    readonly_fields = [
+        'id', 'document', 'user', 'action',
+        'timestamp', 'previous_value', 'new_value',
+    ]
+    ordering = ['-timestamp']
+    autocomplete_fields = ['document', 'user']
+    date_hierarchy = 'timestamp'
+
+    fieldsets = (
+        ('Evento', {
+            'fields': ('id', 'document', 'user', 'action', 'timestamp'),
+        }),
+        ('AlteraÃ§Ã£o', {
+            'fields': ('previous_value', 'new_value'),
+            'classes': ('collapse',),
+        }),
+    )
+
+    def has_add_permission(self, request):
+        # HistÃ³rico Ã© append-only e criado exclusivamente via service.
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+
+================================================================================
+ARQUIVO 3 DE 21
+================================================================================
+📁 PASTA: apps\documents\api\serializers\__init__.py
+📄 ARQUIVO: __init__.py
+📏 TAMANHO: 0.69 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 24
+================================================================================
+
+from apps.documents.api.serializers.document_serializers import (
+    DocumentListSerializer,
+    DocumentDetailSerializer,
+    DocumentUploadSerializer,
+    DocumentUpdateSerializer,
+    DocumentReplaceSerializer,
+    DocumentAssociateClientSerializer,
+    DocumentAssociateProjectSerializer,
+)
+
+from apps.documents.api.serializers.history_serializers import (
+    DocumentHistorySerializer,
+)
+
+__all__ = [
+    'DocumentListSerializer',
+    'DocumentDetailSerializer',
+    'DocumentUploadSerializer',
+    'DocumentUpdateSerializer',
+    'DocumentReplaceSerializer',
+    'DocumentAssociateClientSerializer',
+    'DocumentAssociateProjectSerializer',
+    'DocumentHistorySerializer',
+]
+
+
+
+================================================================================
+ARQUIVO 4 DE 21
+================================================================================
+📁 PASTA: apps\documents\api\serializers\document_serializers.py
+📄 ARQUIVO: document_serializers.py
+📏 TAMANHO: 7.58 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 263
+================================================================================
+
+"""
+Serializers de Document.
+
+SEPARAÃ‡ÃƒO DE RESPONSABILIDADES
+------------------------------
+    DocumentListSerializer           â†’ listagem leve
+    DocumentDetailSerializer         â†’ detalhe completo
+    DocumentUploadSerializer         â†’ criaÃ§Ã£o (multipart)
+    DocumentUpdateSerializer         â†’ renomear (PATCH simples)
+    DocumentReplaceSerializer        â†’ substituir arquivo fÃ­sico
+    DocumentAssociateClientSerializer  â†’ associar/desassociar cliente
+    DocumentAssociateProjectSerializer â†’ associar/desassociar projeto
+
+REGRA DE SEGURANÃ‡A
+------------------
+`workspace`, `created_by`, `updated_by`, `created_at`, `updated_at`,
+`extension`, `mime_type` e `size` sÃ£o sempre read-only.
+
+Nunca vÃªm do body. SÃ£o extraÃ­dos do upload pelo service.
+"""
+
+from rest_framework import serializers
+
+from apps.documents.models import Document
+
+
+# =========================================================================
+# LEITURA
+# =========================================================================
+
+class DocumentListSerializer(serializers.ModelSerializer):
+    """
+    Serializer leve para listagem.
+
+    ExpÃµe apenas o necessÃ¡rio para a lista de arquivos:
+    nome, extensÃ£o, tamanho, contexto e rastreabilidade.
+    """
+
+    full_name = serializers.CharField(read_only=True)
+    size_display = serializers.CharField(read_only=True)
+    file_url = serializers.SerializerMethodField()
+
+    client_name = serializers.CharField(
+        source='client.name', read_only=True, allow_null=True
+    )
+
+    created_by_name = serializers.CharField(
+        source='created_by.full_name', read_only=True, allow_null=True
+    )
+    updated_by_name = serializers.CharField(
+        source='updated_by.full_name', read_only=True, allow_null=True
+    )
+
+    class Meta:
+        model = Document
+        fields = [
+            'id',
+            'name',
+            'full_name',
+            'file_url',
+            'extension',
+            'mime_type',
+            'size',
+            'size_display',
+            'client', 'client_name',
+            'project_id',
+            'created_by', 'created_by_name',
+            'updated_by', 'updated_by_name',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = fields
+
+    def get_file_url(self, obj):
+        """
+        URL do arquivo no storage.
+        """
+        if not obj.file:
+            return ''
+        try:
+            return obj.file.url
+        except Exception:
+            return ''
+
+
+class DocumentDetailSerializer(serializers.ModelSerializer):
+    """
+    Serializer completo do documento.
+
+    ExpÃµe URL do arquivo e todos os metadados.
+    """
+
+    full_name = serializers.CharField(read_only=True)
+    size_display = serializers.CharField(read_only=True)
+    file_url = serializers.SerializerMethodField()
+
+    workspace_id = serializers.UUIDField(source='workspace.id', read_only=True)
+
+    client_name = serializers.CharField(
+        source='client.name', read_only=True, allow_null=True
+    )
+
+    created_by_name = serializers.CharField(
+        source='created_by.full_name', read_only=True, allow_null=True
+    )
+    created_by_email = serializers.EmailField(
+        source='created_by.email', read_only=True, allow_null=True
+    )
+    updated_by_name = serializers.CharField(
+        source='updated_by.full_name', read_only=True, allow_null=True
+    )
+    updated_by_email = serializers.EmailField(
+        source='updated_by.email', read_only=True, allow_null=True
+    )
+
+    class Meta:
+        model = Document
+        fields = [
+            'id',
+            'workspace_id',
+            'name',
+            'full_name',
+            'file_url',
+            'extension',
+            'mime_type',
+            'size',
+            'size_display',
+            'client', 'client_name',
+            'project_id',
+            'created_by', 'created_by_name', 'created_by_email',
+            'updated_by', 'updated_by_name', 'updated_by_email',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = [
+            'id',
+            'workspace_id',
+            'name',
+            'full_name',
+            'file_url',
+            'extension',
+            'mime_type',
+            'size',
+            'size_display',
+            'client',
+            'project_id',
+            'created_by', 'created_by_name', 'created_by_email',
+            'updated_by', 'updated_by_name', 'updated_by_email',
+            'created_at',
+            'updated_at',
+        ]
+
+    def get_file_url(self, obj):
+        """
+        URL do arquivo no storage.
+
+        Pode ser uma URL de Cloudinary, S3 ou o path do MEDIA_URL
+        local. NÃ£o inspecionamos o provider â€” apenas devolvemos
+        o que o storage reportar.
+        """
+        if not obj.file:
+            return ''
+        try:
+            return obj.file.url
+        except Exception:
+            return ''
+
+
+# =========================================================================
+# ESCRITA
+# =========================================================================
+
+class DocumentUploadSerializer(serializers.Serializer):
+    """
+    CriaÃ§Ã£o de Document via upload.
+
+    Multipart form-data:
+        file        â†’ arquivo (obrigatÃ³rio)
+        name        â†’ opcional (se vazio, extraÃ­do do filename)
+        client_id   â†’ opcional
+        project_id  â†’ opcional
+
+    `workspace` e `created_by` vÃªm do contexto autenticado.
+    """
+
+    file = serializers.FileField(required=True)
+    name = serializers.CharField(
+        required=False, allow_blank=True, max_length=255,
+    )
+    client_id = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True,
+    )
+    project_id = serializers.UUIDField(
+        required=False, allow_null=True,
+    )
+
+    def validate_name(self, value):
+        if value is None:
+            return ''
+        return value.strip()
+
+
+class DocumentUpdateSerializer(serializers.Serializer):
+    """
+    AtualizaÃ§Ã£o parcial do Document.
+
+    No P0, o Ãºnico campo editÃ¡vel via PATCH Ã© `name`.
+
+    AssociaÃ§Ãµes (cliente / projeto) tÃªm endpoints prÃ³prios porque
+    exigem capabilities distintas.
+    """
+
+    name = serializers.CharField(
+        required=False, max_length=255,
+    )
+
+    def validate_name(self, value):
+        if value is None:
+            return value
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError('O nome nÃ£o pode ser vazio.')
+        return value
+
+
+class DocumentReplaceSerializer(serializers.Serializer):
+    """
+    SubstituiÃ§Ã£o do arquivo fÃ­sico.
+
+    Multipart form-data:
+        file â†’ novo arquivo (obrigatÃ³rio)
+
+    MantÃ©m o mesmo registro Document. Atualiza `extension`, `mime_type`
+    e `size`. O arquivo antigo NÃƒO Ã© preservado.
+    """
+
+    file = serializers.FileField(required=True)
+
+
+class DocumentAssociateClientSerializer(serializers.Serializer):
+    """
+    Body para associar ou desassociar cliente.
+
+    `client_id` vazio ou None â†’ desassocia.
+    `client_id` preenchido    â†’ associa.
+    """
+
+    client_id = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True,
+    )
+
+
+class DocumentAssociateProjectSerializer(serializers.Serializer):
+    """
+    Body para associar ou desassociar projeto.
+
+    `project_id` vazio ou None â†’ desassocia.
+    `project_id` preenchido    â†’ associa.
+    """
+
+    project_id = serializers.UUIDField(
+        required=False, allow_null=True,
+    )
+
+
+
+================================================================================
+ARQUIVO 5 DE 21
+================================================================================
+📁 PASTA: apps\documents\api\serializers\history_serializers.py
+📄 ARQUIVO: history_serializers.py
+📏 TAMANHO: 1.19 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 44
+================================================================================
+
+"""
+Serializer de DocumentHistory.
+
+HistÃ³rico Ã© READ-ONLY. A criaÃ§Ã£o Ã© feita exclusivamente por
+`DocumentHistoryService.log()`. NÃ£o existe endpoint pÃºblico
+para criaÃ§Ã£o de histÃ³rico.
+"""
+
+from rest_framework import serializers
+
+from apps.documents.models import DocumentHistory
+
+
+class DocumentHistorySerializer(serializers.ModelSerializer):
+    """
+    Serializer de leitura de DocumentHistory.
+
+    `document` pode ser null (histÃ³rico Ã³rfÃ£o apÃ³s exclusÃ£o).
+    `user` pode ser null (usuÃ¡rio removido do Clivo).
+    """
+
+    action_display = serializers.CharField(
+        source='get_action_display', read_only=True
+    )
+
+    user_name = serializers.CharField(
+        source='user.full_name', read_only=True, allow_null=True
+    )
+    user_email = serializers.EmailField(
+        source='user.email', read_only=True, allow_null=True
+    )
+
+    class Meta:
+        model = DocumentHistory
+        fields = [
+            'id',
+            'document',
+            'user', 'user_name', 'user_email',
+            'action', 'action_display',
+            'timestamp',
+            'previous_value',
+            'new_value',
+        ]
+        read_only_fields = fields
+
+
+
+================================================================================
+ARQUIVO 6 DE 21
+================================================================================
+📁 PASTA: apps\documents\api\views\__init__.py
+📄 ARQUIVO: __init__.py
+📏 TAMANHO: 0.11 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 5
+================================================================================
+
+from apps.documents.api.views.document_views import DocumentViewSet
+
+__all__ = [
+    'DocumentViewSet',
+]
+
+
+
+================================================================================
+ARQUIVO 7 DE 21
+================================================================================
+📁 PASTA: apps\documents\api\views\document_views.py
+📄 ARQUIVO: document_views.py
+📏 TAMANHO: 24.72 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 630
+================================================================================
+
+"""
+DocumentViewSet â€” CRUD + actions de negÃ³cio.
+"""
+
+import logging
+import re
+import unicodedata
+
+from django.conf import settings
+from django.core import signing
+from django.http import FileResponse, Http404
+from django.views import View
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+
+from apps.documents.models import Document
+from apps.documents.api.serializers import (
+    DocumentListSerializer,
+    DocumentDetailSerializer,
+    DocumentUploadSerializer,
+    DocumentUpdateSerializer,
+    DocumentReplaceSerializer,
+    DocumentAssociateClientSerializer,
+    DocumentAssociateProjectSerializer,
+    DocumentHistorySerializer,
+)
+from apps.documents.services import DocumentService, DocumentHistoryService
+from apps.documents.exceptions import (
+    DocumentError,
+    DocumentNotFoundError,
+    DocumentFileMissingError,
+    DocumentInvalidUploadError,
+    DocumentClientNotFoundError,
+    DocumentProjectNotFoundError,
+    DocumentStorageError,
+)
+from apps.clients.models import Client
+from apps.workspaces.queries import WorkspaceQueries
+from apps.workspaces.models import WorkspaceMembership
+from apps.console.models import ConsoleGovernanceCapability
+
+logger = logging.getLogger('documents')
+
+PUBLIC_PREVIEW_SALT = 'documents.public-preview'
+PUBLIC_PREVIEW_MAX_AGE = 60 * 30
+
+
+def _ascii_filename(name: str) -> str:
+    if not name:
+        return 'arquivo'
+    normalized = unicodedata.normalize('NFKD', name).encode('ascii', 'ignore').decode('ascii')
+    normalized = re.sub(r'[^\w\-\. ]+', '_', normalized).strip()
+    return normalized or 'arquivo'
+
+
+def _content_type_for(doc: Document) -> str:
+    ct = (doc.mime_type or '').strip()
+    if ct and ct != 'application/octet-stream':
+        return ct
+    ext = (doc.extension or '').lower()
+    fallback = {
+        'pdf':  'application/pdf',
+        'png':  'image/png',
+        'jpg':  'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'gif':  'image/gif',
+        'webp': 'image/webp',
+        'svg':  'image/svg+xml',
+        'txt':  'text/plain; charset=utf-8',
+        'md':   'text/plain; charset=utf-8',
+        'csv':  'text/csv; charset=utf-8',
+        'doc':  'application/msword',
+        'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'xls':  'application/vnd.ms-excel',
+        'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'ppt':  'application/vnd.ms-powerpoint',
+        'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    }.get(ext)
+    return fallback or 'application/octet-stream'
+
+
+class DocumentViewSet(viewsets.ModelViewSet):
+
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+    lookup_field = 'id'
+
+    # ------------------------------------------------------------------
+    # CONTEXTO
+    # ------------------------------------------------------------------
+
+    def _current_workspace(self):
+        workspace_id = self.request.session.get('current_workspace_id')
+        if not workspace_id:
+            return None
+        return WorkspaceQueries.get_for_user(workspace_id, self.request.user)
+
+    def _require_capability(self, workspace, capability_code):
+        membership = WorkspaceMembership.objects.filter(
+            workspace=workspace,
+            user=self.request.user,
+        ).select_related('governance').first()
+
+        if membership is None:
+            return Response(
+                {'error': 'VocÃª nÃ£o Ã© membro deste Workspace'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if membership.governance.key == 'proprietario':
+            return None
+
+        has = ConsoleGovernanceCapability.objects.filter(
+            governance=membership.governance,
+            capability__code=capability_code,
+            capability__is_active=True,
+        ).exists()
+
+        if not has:
+            return Response(
+                {'error': f'Sua governanÃ§a nÃ£o permite esta aÃ§Ã£o ({capability_code}).'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        return None
+
+    # ------------------------------------------------------------------
+    # QUERYSET
+    # ------------------------------------------------------------------
+
+    def get_queryset(self):
+        workspace = self._current_workspace()
+        if workspace is None:
+            return Document.objects.none()
+
+        qs = (
+            Document.objects
+            .filter(workspace=workspace)
+            .select_related('client', 'created_by', 'updated_by')
+            .order_by('-created_at')
+        )
+
+        client_id = self.request.query_params.get('client')
+        if client_id:
+            qs = qs.filter(client_id=client_id)
+
+        project_id = self.request.query_params.get('project')
+        if project_id:
+            qs = qs.filter(project_id=project_id)
+
+        return qs
+
+    def _get_document_or_404(self, document_id):
+        workspace = self._current_workspace()
+        if workspace is None:
+            return None
+        return Document.objects.filter(
+            id=document_id, workspace=workspace
+        ).select_related('client', 'created_by', 'updated_by', 'workspace').first()
+
+    # ------------------------------------------------------------------
+    # SERIALIZER
+    # ------------------------------------------------------------------
+
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return DocumentUploadSerializer
+        if self.action in ('update', 'partial_update'):
+            return DocumentUpdateSerializer
+        if self.action == 'replace':
+            return DocumentReplaceSerializer
+        if self.action == 'associate_client':
+            return DocumentAssociateClientSerializer
+        if self.action == 'associate_project':
+            return DocumentAssociateProjectSerializer
+        if self.action == 'list':
+            return DocumentListSerializer
+        return DocumentDetailSerializer
+
+    # ------------------------------------------------------------------
+    # ERROS
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _handle_domain_error(exc):
+        if isinstance(exc, DocumentNotFoundError):
+            return Response({'error': str(exc) or 'Arquivo nÃ£o encontrado.'}, status=404)
+        if isinstance(exc, DocumentFileMissingError):
+            return Response({'error': str(exc)}, status=410)
+        if isinstance(exc, DocumentInvalidUploadError):
+            return Response({'error': str(exc)}, status=400)
+        if isinstance(exc, DocumentClientNotFoundError):
+            return Response({'error': str(exc)}, status=400)
+        if isinstance(exc, DocumentProjectNotFoundError):
+            return Response({'error': str(exc)}, status=400)
+        if isinstance(exc, DocumentStorageError):
+            return Response({'error': str(exc)}, status=500)
+        if isinstance(exc, DocumentError):
+            return Response({'error': str(exc)}, status=400)
+        return None
+
+    # ------------------------------------------------------------------
+    # LIST
+    # ------------------------------------------------------------------
+
+    def list(self, request, *args, **kwargs):
+        workspace = self._current_workspace()
+        if workspace is None:
+            return Response({'error': 'Nenhum workspace ativo'}, status=400)
+
+        err = self._require_capability(workspace, 'documents.document.view')
+        if err is not None:
+            return err
+
+        qs = self.get_queryset()
+        serializer = DocumentListSerializer(qs, many=True)
+        return Response(serializer.data)
+
+    # ------------------------------------------------------------------
+    # CREATE
+    # ------------------------------------------------------------------
+
+    def create(self, request, *args, **kwargs):
+        workspace = self._current_workspace()
+        if workspace is None:
+            return Response({'error': 'Nenhum workspace ativo'}, status=400)
+
+        err = self._require_capability(workspace, 'documents.document.upload')
+        if err is not None:
+            return err
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        client = None
+        client_id = serializer.validated_data.get('client_id')
+        if client_id:
+            client = Client.objects.filter(id=client_id, workspace=workspace).first()
+            if client is None:
+                return Response({'error': 'Cliente nÃ£o encontrado neste workspace.'}, status=400)
+
+        try:
+            document = DocumentService.upload(
+                workspace=workspace,
+                uploaded_file=serializer.validated_data['file'],
+                name=serializer.validated_data.get('name', ''),
+                client=client,
+                project_id=serializer.validated_data.get('project_id'),
+                created_by=request.user,
+            )
+        except Exception as exc:
+            handled = self._handle_domain_error(exc)
+            if handled is not None:
+                return handled
+            logger.exception('Erro inesperado ao subir arquivo')
+            return Response({'error': 'Erro inesperado ao subir o arquivo.'}, status=500)
+
+        return Response(DocumentDetailSerializer(document).data, status=201)
+
+    # ------------------------------------------------------------------
+    # RETRIEVE
+    # ------------------------------------------------------------------
+
+    def retrieve(self, request, *args, **kwargs):
+        document = self._get_document_or_404(kwargs.get('id'))
+        if document is None:
+            return Response({'error': 'Arquivo nÃ£o encontrado'}, status=404)
+
+        err = self._require_capability(document.workspace, 'documents.document.view')
+        if err is not None:
+            return err
+
+        return Response(DocumentDetailSerializer(document).data)
+
+    # ------------------------------------------------------------------
+    # UPDATE
+    # ------------------------------------------------------------------
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        document = self._get_document_or_404(kwargs.get('id'))
+        if document is None:
+            return Response({'error': 'Arquivo nÃ£o encontrado'}, status=404)
+
+        err = self._require_capability(document.workspace, 'documents.document.rename')
+        if err is not None:
+            return err
+
+        serializer = self.get_serializer(data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            if 'name' in serializer.validated_data:
+                document = DocumentService.rename(
+                    document=document,
+                    new_name=serializer.validated_data['name'],
+                    actor=request.user,
+                )
+        except Exception as exc:
+            handled = self._handle_domain_error(exc)
+            if handled is not None:
+                return handled
+            logger.exception('Erro inesperado ao renomear arquivo')
+            return Response({'error': 'Erro inesperado ao renomear o arquivo.'}, status=500)
+
+        return Response(DocumentDetailSerializer(document).data)
+
+    # ------------------------------------------------------------------
+    # DESTROY
+    # ------------------------------------------------------------------
+
+    def destroy(self, request, *args, **kwargs):
+        document = self._get_document_or_404(kwargs.get('id'))
+        if document is None:
+            return Response({'error': 'Arquivo nÃ£o encontrado'}, status=404)
+
+        err = self._require_capability(document.workspace, 'documents.document.delete')
+        if err is not None:
+            return err
+
+        try:
+            DocumentService.delete(document, actor=request.user)
+        except Exception as exc:
+            handled = self._handle_domain_error(exc)
+            if handled is not None:
+                return handled
+            logger.exception('Erro inesperado ao excluir arquivo')
+            return Response({'error': 'Erro inesperado ao excluir o arquivo.'}, status=500)
+
+        return Response(status=204)
+
+    # ------------------------------------------------------------------
+    # ACTION: replace
+    # ------------------------------------------------------------------
+
+    @action(detail=True, methods=['post'], url_path='replace')
+    def replace(self, request, id=None):
+        document = self._get_document_or_404(id)
+        if document is None:
+            return Response({'error': 'Arquivo nÃ£o encontrado'}, status=404)
+
+        err = self._require_capability(document.workspace, 'documents.document.replace')
+        if err is not None:
+            return err
+
+        serializer = DocumentReplaceSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            document = DocumentService.replace_file(
+                document=document,
+                uploaded_file=serializer.validated_data['file'],
+                actor=request.user,
+            )
+        except Exception as exc:
+            handled = self._handle_domain_error(exc)
+            if handled is not None:
+                return handled
+            logger.exception('Erro inesperado ao substituir arquivo')
+            return Response({'error': 'Erro inesperado ao substituir o arquivo.'}, status=500)
+
+        document.refresh_from_db()
+        return Response(DocumentDetailSerializer(document).data)
+
+    # ------------------------------------------------------------------
+    # ACTION: associate_client
+    # ------------------------------------------------------------------
+
+    @action(detail=True, methods=['post'], url_path='associate-client')
+    def associate_client(self, request, id=None):
+        document = self._get_document_or_404(id)
+        if document is None:
+            return Response({'error': 'Arquivo nÃ£o encontrado'}, status=404)
+
+        err = self._require_capability(document.workspace, 'documents.document.associate_client')
+        if err is not None:
+            return err
+
+        serializer = DocumentAssociateClientSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        client_id = serializer.validated_data.get('client_id')
+
+        try:
+            if client_id:
+                client = Client.objects.filter(id=client_id, workspace=document.workspace).first()
+                if client is None:
+                    return Response({'error': 'Cliente nÃ£o encontrado neste workspace.'}, status=400)
+                document = DocumentService.associate_client(
+                    document=document, client=client, actor=request.user,
+                )
+            else:
+                document = DocumentService.dissociate_client(
+                    document=document, actor=request.user,
+                )
+        except Exception as exc:
+            handled = self._handle_domain_error(exc)
+            if handled is not None:
+                return handled
+            logger.exception('Erro inesperado ao associar cliente')
+            return Response({'error': 'Erro inesperado ao associar cliente.'}, status=500)
+
+        return Response(DocumentDetailSerializer(document).data)
+
+    # ------------------------------------------------------------------
+    # ACTION: associate_project
+    # ------------------------------------------------------------------
+
+    @action(detail=True, methods=['post'], url_path='associate-project')
+    def associate_project(self, request, id=None):
+        document = self._get_document_or_404(id)
+        if document is None:
+            return Response({'error': 'Arquivo nÃ£o encontrado'}, status=404)
+
+        err = self._require_capability(document.workspace, 'documents.document.associate_project')
+        if err is not None:
+            return err
+
+        serializer = DocumentAssociateProjectSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        project_id = serializer.validated_data.get('project_id')
+
+        try:
+            if project_id:
+                document = DocumentService.associate_project(
+                    document=document, project_id=project_id, actor=request.user,
+                )
+            else:
+                document = DocumentService.dissociate_project(
+                    document=document, actor=request.user,
+                )
+        except Exception as exc:
+            handled = self._handle_domain_error(exc)
+            if handled is not None:
+                return handled
+            logger.exception('Erro inesperado ao associar projeto')
+            return Response({'error': 'Erro inesperado ao associar projeto.'}, status=500)
+
+        return Response(DocumentDetailSerializer(document).data)
+
+    # ------------------------------------------------------------------
+    # ACTION: download
+    # ------------------------------------------------------------------
+
+    @action(detail=True, methods=['get'], url_path='download')
+    def download(self, request, id=None):
+        document = self._get_document_or_404(id)
+        if document is None:
+            return Response({'error': 'Arquivo nÃ£o encontrado'}, status=404)
+
+        err = self._require_capability(document.workspace, 'documents.document.download')
+        if err is not None:
+            return err
+
+        try:
+            DocumentService.ensure_file_present(document)
+        except Exception as exc:
+            handled = self._handle_domain_error(exc)
+            if handled is not None:
+                return handled
+            logger.exception('Erro inesperado ao verificar arquivo')
+            return Response({'error': 'Erro inesperado ao verificar o arquivo.'}, status=500)
+
+        try:
+            response = FileResponse(
+                document.file.open('rb'),
+                as_attachment=True,
+                filename=document.full_name,
+            )
+            response['Content-Type'] = _content_type_for(document)
+            return response
+        except Exception as exc:
+            logger.exception('Erro inesperado ao servir arquivo')
+            return Response({'error': 'Erro inesperado ao servir o arquivo.'}, status=500)
+
+    # ------------------------------------------------------------------
+    # ACTION: preview (inline)
+    # ------------------------------------------------------------------
+
+    @action(detail=True, methods=['get'], url_path='preview')
+    def preview(self, request, id=None):
+        document = self._get_document_or_404(id)
+        if document is None:
+            return Response({'error': 'Arquivo nÃ£o encontrado'}, status=404)
+
+        err = self._require_capability(document.workspace, 'documents.document.view')
+        if err is not None:
+            return err
+
+        try:
+            DocumentService.ensure_file_present(document)
+        except Exception as exc:
+            handled = self._handle_domain_error(exc)
+            if handled is not None:
+                return handled
+            logger.exception('Erro inesperado ao verificar arquivo')
+            return Response({'error': 'Erro inesperado ao verificar o arquivo.'}, status=500)
+
+        try:
+            file_handle = document.file.open('rb')
+            response = FileResponse(file_handle)
+            response['Content-Type'] = _content_type_for(document)
+            safe_name = _ascii_filename(document.full_name)
+            response['Content-Disposition'] = f'inline; filename="{safe_name}"'
+            response['X-Frame-Options'] = 'SAMEORIGIN'
+            response['Content-Security-Policy'] = "frame-ancestors 'self'"
+            response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+            response['Pragma'] = 'no-cache'
+            response['Expires'] = '0'
+            return response
+        except Exception as exc:
+            logger.exception('Erro inesperado ao servir preview')
+            return Response({'error': 'Erro inesperado ao servir o preview.'}, status=500)
+
+    # ------------------------------------------------------------------
+    # ACTION: public_preview_link (Office Viewer)
+    # ------------------------------------------------------------------
+
+    @action(detail=True, methods=['get'], url_path='public-preview-link')
+    def public_preview_link(self, request, id=None):
+        """
+        Gera URL pÃºblica assinada para o Office Online Viewer.
+
+        Usa FRONTEND_URL como base absoluta para garantir HTTPS
+        em produÃ§Ã£o (Render atrÃ¡s de proxy pode gerar http://).
+        """
+        document = self._get_document_or_404(id)
+        if document is None:
+            return Response({'error': 'Arquivo nÃ£o encontrado'}, status=404)
+
+        err = self._require_capability(document.workspace, 'documents.document.view')
+        if err is not None:
+            return err
+
+        token = signing.dumps(
+            {'doc_id': str(document.id)},
+            salt=PUBLIC_PREVIEW_SALT,
+        )
+
+        path = f'/api/documents/public-preview/{token}/'
+
+        # Base absoluta: prioriza FRONTEND_URL (https://clivo.onrender.com)
+        base = getattr(settings, 'FRONTEND_URL', '') or ''
+        base = base.rstrip('/')
+
+        if base:
+            absolute = base + path
+        else:
+            absolute = request.build_absolute_uri(path)
+
+        # Se ainda estiver em http:// e nÃ£o for localhost, forÃ§a https
+        if absolute.startswith('http://') and 'localhost' not in absolute and '127.0.0.1' not in absolute:
+            absolute = 'https://' + absolute[len('http://'):]
+
+        return Response({
+            'url': absolute,
+            'expires_in': PUBLIC_PREVIEW_MAX_AGE,
+        })
+
+    # ------------------------------------------------------------------
+    # ACTION: history
+    # ------------------------------------------------------------------
+
+    @action(detail=True, methods=['get'], url_path='history')
+    def history(self, request, id=None):
+        document = self._get_document_or_404(id)
+        if document is None:
+            return Response({'error': 'Arquivo nÃ£o encontrado'}, status=404)
+
+        err = self._require_capability(document.workspace, 'documents.document.view')
+        if err is not None:
+            return err
+
+        entries = DocumentHistoryService.list_for_document(document)
+        serializer = DocumentHistorySerializer(entries, many=True)
+        return Response(serializer.data)
+
+
+# =========================================================================
+# VIEW PÃšBLICA (Office Online Viewer)
+# =========================================================================
+
+class DocumentPublicPreviewView(View):
+    """
+    Serve o arquivo para o Office Online Viewer via token assinado.
+    """
+
+    def get(self, request, token):
+        try:
+            data = signing.loads(
+                token,
+                salt=PUBLIC_PREVIEW_SALT,
+                max_age=PUBLIC_PREVIEW_MAX_AGE,
+            )
+        except signing.SignatureExpired:
+            raise Http404('Link expirado.')
+        except signing.BadSignature:
+            raise Http404('Link invÃ¡lido.')
+
+        doc_id = data.get('doc_id')
+        if not doc_id:
+            raise Http404('Link invÃ¡lido.')
+
+        try:
+            document = Document.objects.select_related('workspace').get(id=doc_id)
+        except Document.DoesNotExist:
+            raise Http404('Arquivo nÃ£o encontrado.')
+
+        try:
+            DocumentService.ensure_file_present(document)
+        except Exception:
+            raise Http404('Arquivo indisponÃ­vel.')
+
+        try:
+            file_handle = document.file.open('rb')
+            response = FileResponse(file_handle)
+            response['Content-Type'] = _content_type_for(document)
+            safe_name = _ascii_filename(document.full_name)
+            response['Content-Disposition'] = f'inline; filename="{safe_name}"'
+            # Microsoft/Google precisa poder acessar sem restriÃ§Ãµes
+            response['X-Frame-Options'] = 'ALLOWALL'
+            response['Access-Control-Allow-Origin'] = '*'
+            response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+            return response
+        except Exception as exc:
+            logger.exception('Erro ao servir public preview')
+            raise Http404('Erro ao servir arquivo.')
+
+
+
+================================================================================
+ARQUIVO 8 DE 21
+================================================================================
+📁 PASTA: apps\documents\apps.py
+📄 ARQUIVO: apps.py
+📏 TAMANHO: 0.6 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 19
+================================================================================
+
+from django.apps import AppConfig
+from django.utils.translation import gettext_lazy as _
+
+
+class DocumentsConfig(AppConfig):
+    default_auto_field = 'django.db.models.BigAutoField'
+    name = 'apps.documents'
+    verbose_name = _('Arquivos')
+
+    def ready(self):
+        """
+        Inicializa o mÃ³dulo documents.
+
+        Signals nÃ£o sÃ£o registrados por padrÃ£o. O mÃ³dulo `documents`
+        emite eventos de domÃ­nio quando os services existirem
+        (fase seguinte). No P0, Ã© apenas CRUD + histÃ³rico local.
+        """
+        # import apps.documents.signals  # noqa: F401
+        pass
+
+
+
+================================================================================
+ARQUIVO 9 DE 21
+================================================================================
+📁 PASTA: apps\documents\capabilities.py
+📄 ARQUIVO: capabilities.py
+📏 TAMANHO: 3.24 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 103
+================================================================================
+
+"""
+Capabilities declaradas pelo mÃ³dulo documents.
+
+REGRA: capability nasce no app que executa a aÃ§Ã£o.
+O Console descobre, cataloga e permite que GovernanÃ§as selecionem.
+
+Formato: <app>.<resource>.<action> â€” o primeiro segmento DEVE ser
+o label do AppConfig ('documents').
+
+NOTA SOBRE GRANULARIDADE
+------------------------
+As capabilities refletem operaÃ§Ãµes reais e distinguÃ­veis.
+
+O que Ã‰ permissÃ£o:
+
+    "pode ver arquivos do workspace"
+    "pode subir arquivo"
+    "pode renomear arquivo"
+    "pode substituir o arquivo fÃ­sico"
+    "pode associar arquivo a um cliente"
+    "pode associar arquivo a um projeto"
+    "pode baixar arquivo"
+    "pode excluir arquivo"
+
+O que NÃƒO Ã© permissÃ£o:
+
+    - "pode ver histÃ³rico" â†’ visualizar histÃ³rico Ã© parte da
+      visualizaÃ§Ã£o do documento (documents.document.view), nÃ£o
+      uma operaÃ§Ã£o independente
+    - "pode editar metadados" â†’ renomear cobre o caso de P0
+    - "pode gerenciar tags" â†’ tags nÃ£o existem no P0
+    - "pode aprovar" â†’ aprovaÃ§Ã£o nÃ£o existe no P0
+
+NÃ£o existe `documents.document.manage`.
+"""
+
+CAPABILITIES = [
+    # ==================================================================
+    # DOCUMENT
+    # ==================================================================
+
+    {
+        'code': 'documents.document.view',
+        'name': 'Ver arquivos',
+        'description': (
+            'Permite listar e visualizar arquivos do workspace, '
+            'incluindo seus metadados e o histÃ³rico de alteraÃ§Ãµes.'
+        ),
+    },
+    {
+        'code': 'documents.document.upload',
+        'name': 'Subir arquivo',
+        'description': (
+            'Permite enviar novos arquivos para o workspace.'
+        ),
+    },
+    {
+        'code': 'documents.document.rename',
+        'name': 'Renomear arquivo',
+        'description': (
+            'Permite alterar o nome de um arquivo jÃ¡ existente.'
+        ),
+    },
+    {
+        'code': 'documents.document.replace',
+        'name': 'Substituir arquivo',
+        'description': (
+            'Permite substituir o arquivo fÃ­sico de um documento '
+            'jÃ¡ existente, mantendo o mesmo registro e atualizando '
+            'extensÃ£o, MIME type e tamanho.'
+        ),
+    },
+    {
+        'code': 'documents.document.associate_client',
+        'name': 'Associar arquivo a cliente',
+        'description': (
+            'Permite vincular ou desvincular um arquivo a um cliente.'
+        ),
+    },
+    {
+        'code': 'documents.document.associate_project',
+        'name': 'Associar arquivo a projeto',
+        'description': (
+            'Permite vincular ou desvincular um arquivo a um projeto.'
+        ),
+    },
+    {
+        'code': 'documents.document.download',
+        'name': 'Baixar arquivo',
+        'description': (
+            'Permite baixar o arquivo original do Clivo.'
+        ),
+    },
+    {
+        'code': 'documents.document.delete',
+        'name': 'Excluir arquivo',
+        'description': (
+            'Permite excluir arquivos do workspace. AÃ§Ã£o irreversÃ­vel. '
+            'O arquivo fÃ­sico Ã© removido permanentemente. O histÃ³rico '
+            'Ã© preservado com o documento marcado como excluÃ­do.'
+        ),
+    },
+]
+
+
+
+================================================================================
+ARQUIVO 10 DE 21
+================================================================================
+📁 PASTA: apps\documents\exceptions\__init__.py
+📄 ARQUIVO: __init__.py
+📏 TAMANHO: 0.5 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 19
+================================================================================
+
+from apps.documents.exceptions.document_exceptions import (
+    DocumentError,
+    DocumentNotFoundError,
+    DocumentFileMissingError,
+    DocumentInvalidUploadError,
+    DocumentClientNotFoundError,
+    DocumentProjectNotFoundError,
+    DocumentStorageError,
+)
+
+__all__ = [
+    'DocumentError',
+    'DocumentNotFoundError',
+    'DocumentFileMissingError',
+    'DocumentInvalidUploadError',
+    'DocumentClientNotFoundError',
+    'DocumentProjectNotFoundError',
+    'DocumentStorageError',
+]
+
+
+
+================================================================================
+ARQUIVO 11 DE 21
+================================================================================
+📁 PASTA: apps\documents\exceptions\document_exceptions.py
+📄 ARQUIVO: document_exceptions.py
+📏 TAMANHO: 1.97 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 75
+================================================================================
+
+"""
+ExceÃ§Ãµes do mÃ³dulo documents.
+
+PadrÃ£o:
+
+    DocumentError (base)
+        â”œâ”€â”€ DocumentNotFoundError
+        â”œâ”€â”€ DocumentFileMissingError
+        â”œâ”€â”€ DocumentInvalidUploadError
+        â”œâ”€â”€ DocumentClientNotFoundError
+        â”œâ”€â”€ DocumentProjectNotFoundError
+        â””â”€â”€ DocumentStorageError
+"""
+
+
+class DocumentError(Exception):
+    """ExceÃ§Ã£o base do mÃ³dulo documents."""
+    pass
+
+
+# =====================================================================
+# DOCUMENT
+# =====================================================================
+
+class DocumentNotFoundError(DocumentError):
+    """Documento nÃ£o encontrado no workspace."""
+    pass
+
+
+class DocumentFileMissingError(DocumentError):
+    """
+    O registro Document existe, mas o arquivo fÃ­sico estÃ¡ ausente
+    no storage (Ã³rfÃ£o de storage).
+    """
+    pass
+
+
+class DocumentInvalidUploadError(DocumentError):
+    """
+    O upload nÃ£o possui arquivo, ou o arquivo Ã© invÃ¡lido
+    (sem nome, sem tamanho, ou sem conteÃºdo legÃ­vel).
+    """
+    pass
+
+
+# =====================================================================
+# CONTEXTO
+# =====================================================================
+
+class DocumentClientNotFoundError(DocumentError):
+    """Cliente referenciado nÃ£o existe no workspace do documento."""
+    pass
+
+
+class DocumentProjectNotFoundError(DocumentError):
+    """
+    Projeto referenciado nÃ£o existe.
+
+    Como `projects` ainda nÃ£o existe no P0, esta exceÃ§Ã£o Ã© reservada
+    para quando o app `projects` nascer e o UUID passado nÃ£o corresponder
+    a nenhum projeto.
+    """
+    pass
+
+
+# =====================================================================
+# STORAGE
+# =====================================================================
+
+class DocumentStorageError(DocumentError):
+    """
+    Falha ao interagir com o storage (gravar, remover ou recuperar
+    o arquivo fÃ­sico).
+    """
+    pass
+
+
+
+================================================================================
+ARQUIVO 12 DE 21
+================================================================================
+📁 PASTA: apps\documents\models\__init__.py
+📄 ARQUIVO: __init__.py
+📏 TAMANHO: 0.17 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 7
+================================================================================
+
+from apps.documents.models.document import Document
+from apps.documents.models.document_history import DocumentHistory
+
+__all__ = [
+    'Document',
+    'DocumentHistory',
+]
+
+
+
+================================================================================
+ARQUIVO 13 DE 21
+================================================================================
+📁 PASTA: apps\documents\models\document.py
+📄 ARQUIVO: document.py
+📏 TAMANHO: 7.34 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 252
+================================================================================
+
+"""
+Modelo Document.
+
+Representa um arquivo conhecido pelo Clivo.
+
+REGRA ARQUITETURAL
+------------------
+`Document` Ã© o arquivo fÃ­sico + metadados + contexto.
+
+Ele NÃƒO Ã©:
+    - pasta
+    - tag
+    - versÃ£o
+    - comentÃ¡rio
+    - aprovaÃ§Ã£o
+    - OCR
+    - editor de conteÃºdo
+
+`Document` Ã‰:
+    "isto Ã© um arquivo que o Clivo conhece."
+
+SOBRE O CAMPO `file`
+--------------------
+Usamos `FileField` do Django. O storage Ã© decidido pelo projeto
+(`DEFAULT_FILE_STORAGE`). Se o projeto estiver com Cloudinary, usa
+Cloudinary. Se estiver com `MEDIA_ROOT` local, usa local.
+
+Documents NÃƒO amarra lÃ³gica especÃ­fica de Cloudinary, S3 ou qualquer
+provider. Trocar storage Ã© decisÃ£o de infraestrutura, nÃ£o deste mÃ³dulo.
+
+SOBRE `extension` E `mime_type`
+-------------------------------
+NÃ£o hÃ¡ lista de extensÃµes permitidas.
+
+O sistema aceita arquivos de todos os tipos. O que registramos:
+
+    - extension   â†’ extensÃ£o em minÃºsculas (ex: "pdf", "m4a")
+    - mime_type   â†’ MIME type reportado pelo upload
+    - size        â†’ tamanho em bytes
+
+A visualizaÃ§Ã£o depende do tipo. Se o navegador nÃ£o visualizar,
+oferece download. Isso Ã© responsabilidade da camada de apresentaÃ§Ã£o.
+
+SOBRE `name`
+------------
+`name` Ã© o nome SEM extensÃ£o. A extensÃ£o fica em `extension`.
+Isso permite renomear o arquivo sem duplicar a extensÃ£o no nome,
+e permite reconstruir o nome "completo" concatenando os dois campos.
+
+SOBRE `client` E `project_id`
+-----------------------------
+Ambos sÃ£o opcionais. Um documento pode existir:
+    - sem cliente e sem projeto (arquivo solto no workspace)
+    - com cliente e sem projeto
+    - sem cliente e com projeto
+    - com cliente e com projeto
+
+`project_id` Ã© UUIDField solto, NÃƒO Ã© FK, porque o app `projects`
+ainda nÃ£o existe.
+
+    REGRA: este UUID representa `projects.Project.id`.
+    Quando `projects` existir, isso vira ForeignKey.
+
+NÃ£o transformar em `related_object_id`, `context_id` ou qualquer
+nome genÃ©rico de pseudo-polimorfismo.
+
+SOBRE EXCLUSÃƒO
+--------------
+DELETE Ã‰ DELETE. Sem soft delete. Sem lixeira. Sem restore.
+
+Ao excluir um Document:
+    - o arquivo fÃ­sico Ã© removido do storage
+    - o registro em `Document` Ã© removido do banco
+    - um `DocumentHistory` com action='deleted' Ã© criado ANTES da
+      exclusÃ£o, com FK para o documento; apÃ³s a exclusÃ£o, o FK
+      recebe SET_NULL automaticamente.
+"""
+
+import os
+import uuid
+
+from django.conf import settings
+from django.db import models
+from django.utils.translation import gettext_lazy as _
+
+
+class Document(models.Model):
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
+
+    workspace = models.ForeignKey(
+        'workspaces.Workspace',
+        on_delete=models.CASCADE,
+        related_name='documents',
+        help_text=_('Workspace ao qual o arquivo pertence'),
+    )
+
+    name = models.CharField(
+        max_length=255,
+        help_text=_('Nome do arquivo, sem extensÃ£o'),
+    )
+
+    file = models.FileField(
+        upload_to='documents/',
+        max_length=500,
+        help_text=_(
+            'Arquivo fÃ­sico. O storage Ã© definido por '
+            'DEFAULT_FILE_STORAGE no projeto.'
+        ),
+    )
+
+    extension = models.CharField(
+        max_length=20,
+        blank=True,
+        help_text=_('ExtensÃ£o em minÃºsculas, sem ponto (ex: "pdf", "m4a")'),
+    )
+
+    mime_type = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text=_('MIME type reportado pelo upload'),
+    )
+
+    size = models.BigIntegerField(
+        default=0,
+        help_text=_('Tamanho do arquivo em bytes'),
+    )
+
+    client = models.ForeignKey(
+        'clients.Client',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='documents',
+        help_text=_('Cliente associado (opcional)'),
+    )
+
+    project_id = models.UUIDField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=_(
+            'ID de `projects.Project` (UUID solto atÃ© o app `projects` '
+            'existir). NÃƒO usar como campo genÃ©rico de relacionamento.'
+        ),
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_documents',
+        help_text=_('UsuÃ¡rio que subiu o arquivo'),
+    )
+
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='updated_documents',
+        help_text=_('UsuÃ¡rio que fez a Ãºltima alteraÃ§Ã£o'),
+    )
+
+    class Meta:
+        db_table = 'document'
+        verbose_name = _('Arquivo')
+        verbose_name_plural = _('Arquivos')
+        indexes = [
+            models.Index(fields=['workspace', '-created_at']),
+            models.Index(fields=['workspace', 'client']),
+            models.Index(fields=['workspace', 'project_id']),
+            models.Index(fields=['workspace', 'name']),
+            models.Index(fields=['extension']),
+            models.Index(fields=['created_at']),
+        ]
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return self.full_name
+
+    # ------------------------------------------------------------------
+    # HELPERS
+    # ------------------------------------------------------------------
+
+    @property
+    def full_name(self) -> str:
+        """
+        Nome do arquivo com extensÃ£o (ex: "briefing-casa.pdf").
+
+        Se a extensÃ£o for vazia, devolve apenas o nome.
+        """
+        if self.extension:
+            return f"{self.name}.{self.extension}"
+        return self.name
+
+    @property
+    def has_client(self) -> bool:
+        return self.client_id is not None
+
+    @property
+    def has_project(self) -> bool:
+        return self.project_id is not None
+
+    @property
+    def size_display(self) -> str:
+        """
+        Tamanho formatado para exibiÃ§Ã£o (ex: "2.3 MB", "512 KB").
+
+        Mantido aqui para evitar duplicaÃ§Ã£o de lÃ³gica no frontend.
+        """
+        size = self.size or 0
+        if size < 1024:
+            return f"{size} B"
+        if size < 1024 * 1024:
+            return f"{size / 1024:.1f} KB"
+        if size < 1024 * 1024 * 1024:
+            return f"{size / (1024 * 1024):.1f} MB"
+        return f"{size / (1024 * 1024 * 1024):.2f} GB"
+
+    # ------------------------------------------------------------------
+    # EXTRAÃ‡ÃƒO DE METADADOS
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def extract_extension(filename: str) -> str:
+        """
+        Extrai a extensÃ£o de um nome de arquivo.
+
+        Retorna string vazia se nÃ£o houver extensÃ£o.
+        """
+        if not filename:
+            return ''
+        ext = os.path.splitext(filename)[1]
+        return ext.lstrip('.').lower() if ext else ''
+
+    @staticmethod
+    def extract_name(filename: str) -> str:
+        """
+        Extrai o nome SEM extensÃ£o de um nome de arquivo.
+        """
+        if not filename:
+            return ''
+        return os.path.splitext(filename)[0] or filename
+
+
+
+================================================================================
+ARQUIVO 14 DE 21
+================================================================================
+📁 PASTA: apps\documents\models\document_history.py
+📄 ARQUIVO: document_history.py
+📏 TAMANHO: 5.57 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 182
+================================================================================
+
+"""
+Modelo DocumentHistory.
+
+Registra cada alteraÃ§Ã£o feita em um Document.
+
+REGRA ARQUITETURAL
+------------------
+`DocumentHistory` Ã© o registro histÃ³rico do ciclo de vida do arquivo.
+Ele nÃ£o armazena o arquivo. Ele armazena o que aconteceu com ele.
+
+AÃ§Ãµes registradas:
+
+    created               â†’ arquivo foi subido
+    renamed               â†’ nome alterado
+    replaced              â†’ arquivo fÃ­sico substituÃ­do
+    client_associated     â†’ cliente vinculado
+    client_removed        â†’ cliente desvinculado
+    project_associated    â†’ projeto vinculado
+    project_removed       â†’ projeto desvinculado
+    deleted               â†’ arquivo excluÃ­do
+
+Download NÃƒO Ã© registrado como alteraÃ§Ã£o. Download Ã© acesso, nÃ£o
+mudanÃ§a de estado. Se um dia houver necessidade de auditar acesso,
+isso serÃ¡ uma estrutura prÃ³pria (nÃ£o o histÃ³rico de alteraÃ§Ãµes).
+
+SOBRE `previous_value` E `new_value`
+------------------------------------
+Campos JSONField genÃ©ricos, NULLABLE.
+
+Cada aÃ§Ã£o preenche o que fizer sentido:
+
+    renamed
+        previous_value = {"name": "briefing"}
+        new_value      = {"name": "briefing-final"}
+
+    client_associated
+        previous_value = {"client_id": None}
+        new_value      = {"client_id": "<uuid>"}
+
+NÃ£o criamos campos especÃ­ficos por aÃ§Ã£o. previous/new genÃ©ricos
+resolvem todos os casos sem inflar o schema.
+
+SOBRE `document` NULLABLE
+-------------------------
+`document` Ã© FK nullable com SET_NULL.
+
+Quando um Document Ã© excluÃ­do:
+    - o arquivo fÃ­sico Ã© removido
+    - o registro em `Document` Ã© apagado
+    - o FK em `DocumentHistory` recebe NULL
+
+Isso preserva a auditoria (quem excluiu, quando) sem preservar o
+arquivo. O histÃ³rico com `action='deleted'` fica Ã³rfÃ£o de FK mas
+permanece consultÃ¡vel.
+
+SOBRE `user`
+------------
+`user` Ã© FK nullable com SET_NULL.
+
+Se o usuÃ¡rio que fez a aÃ§Ã£o for excluÃ­do do Clivo, o histÃ³rico
+permanece com `user = NULL`. O `timestamp` e a `action` permanecem.
+
+SOBRE IMUTABILIDADE
+-------------------
+`DocumentHistory` Ã© APPEND-ONLY.
+
+NÃ£o existe update. NÃ£o existe delete. Cada linha Ã© um fato
+ocorrido, e fatos nÃ£o mudam.
+
+Views de histÃ³rico sÃ³ permitem leitura.
+"""
+
+import uuid
+
+from django.conf import settings
+from django.db import models
+from django.utils.translation import gettext_lazy as _
+
+
+class DocumentHistory(models.Model):
+
+    # ------------------------------------------------------------------
+    # AÃ‡Ã•ES
+    # ------------------------------------------------------------------
+
+    ACTION_CREATED = 'created'
+    ACTION_RENAMED = 'renamed'
+    ACTION_REPLACED = 'replaced'
+    ACTION_CLIENT_ASSOCIATED = 'client_associated'
+    ACTION_CLIENT_REMOVED = 'client_removed'
+    ACTION_PROJECT_ASSOCIATED = 'project_associated'
+    ACTION_PROJECT_REMOVED = 'project_removed'
+    ACTION_DELETED = 'deleted'
+
+    ACTION_CHOICES = [
+        (ACTION_CREATED, 'Arquivo criado'),
+        (ACTION_RENAMED, 'Renomeado'),
+        (ACTION_REPLACED, 'Arquivo substituÃ­do'),
+        (ACTION_CLIENT_ASSOCIATED, 'Cliente associado'),
+        (ACTION_CLIENT_REMOVED, 'Cliente removido'),
+        (ACTION_PROJECT_ASSOCIATED, 'Projeto associado'),
+        (ACTION_PROJECT_REMOVED, 'Projeto removido'),
+        (ACTION_DELETED, 'ExcluÃ­do'),
+    ]
+
+    # ------------------------------------------------------------------
+    # CAMPOS
+    # ------------------------------------------------------------------
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
+
+    document = models.ForeignKey(
+        'documents.Document',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='history',
+        help_text=_(
+            'Documento ao qual este registro se refere. '
+            'NULL quando o documento jÃ¡ foi excluÃ­do.'
+        ),
+    )
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='document_history_entries',
+        help_text=_('UsuÃ¡rio que executou a aÃ§Ã£o'),
+    )
+
+    action = models.CharField(
+        max_length=30,
+        choices=ACTION_CHOICES,
+        db_index=True,
+        help_text=_('AÃ§Ã£o executada sobre o documento'),
+    )
+
+    timestamp = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        help_text=_('Momento em que a aÃ§Ã£o ocorreu'),
+    )
+
+    previous_value = models.JSONField(
+        null=True,
+        blank=True,
+        help_text=_(
+            'Estado anterior (quando aplicÃ¡vel). '
+            'NULL para aÃ§Ãµes que nÃ£o possuem estado anterior.'
+        ),
+    )
+
+    new_value = models.JSONField(
+        null=True,
+        blank=True,
+        help_text=_(
+            'Estado novo (quando aplicÃ¡vel). '
+            'NULL para aÃ§Ãµes que nÃ£o geram novo estado.'
+        ),
+    )
+
+    class Meta:
+        db_table = 'document_history'
+        verbose_name = _('HistÃ³rico de Arquivo')
+        verbose_name_plural = _('HistÃ³ricos de Arquivo')
+        indexes = [
+            models.Index(fields=['document', '-timestamp']),
+            models.Index(fields=['action', '-timestamp']),
+            models.Index(fields=['user', '-timestamp']),
+            models.Index(fields=['-timestamp']),
+        ]
+        ordering = ['-timestamp']
+
+    def __str__(self):
+        doc_label = str(self.document) if self.document else 'documento excluÃ­do'
+        return f"{self.action} Â· {doc_label}"
+
+
+
+================================================================================
+ARQUIVO 15 DE 21
+================================================================================
+📁 PASTA: apps\documents\queries\__init__.py
+📄 ARQUIVO: __init__.py
+📏 TAMANHO: 0.11 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 5
+================================================================================
+
+from apps.documents.queries.document_queries import DocumentQueries
+
+__all__ = [
+    'DocumentQueries',
+]
+
+
+
+================================================================================
+ARQUIVO 16 DE 21
+================================================================================
+📁 PASTA: apps\documents\queries\document_queries.py
+📄 ARQUIVO: document_queries.py
+📏 TAMANHO: 2.35 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 79
+================================================================================
+
+"""
+Queries otimizadas para Document.
+
+REGRA MULTI-TENANT:
+    Toda consulta nasce SEMPRE da combinaÃ§Ã£o (workspace, ...).
+    Nunca de "document depois checar workspace".
+"""
+
+from apps.documents.models import Document
+
+
+class DocumentQueries:
+
+    # ------------------------------------------------------------------
+    # LISTAGEM
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def list_for_workspace(workspace):
+        """
+        Lista TODOS os documentos do workspace, sem filtro.
+
+        OrdenaÃ§Ã£o: mais recentes primeiro.
+        """
+        return (
+            Document.objects
+            .filter(workspace=workspace)
+            .select_related('client', 'created_by', 'updated_by')
+            .order_by('-created_at')
+        )
+
+    @staticmethod
+    def list_for_client(workspace, client):
+        """
+        Lista documentos associados a um cliente especÃ­fico
+        dentro de um workspace.
+        """
+        return (
+            Document.objects
+            .filter(workspace=workspace, client=client)
+            .select_related('client', 'created_by', 'updated_by')
+            .order_by('-created_at')
+        )
+
+    @staticmethod
+    def list_for_project(workspace, project_id):
+        """
+        Lista documentos associados a um projeto especÃ­fico
+        dentro de um workspace.
+
+        `project_id` Ã© o UUID solto (atÃ© `projects` existir).
+        """
+        return (
+            Document.objects
+            .filter(workspace=workspace, project_id=project_id)
+            .select_related('client', 'created_by', 'updated_by')
+            .order_by('-created_at')
+        )
+
+    # ------------------------------------------------------------------
+    # LEITURA
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def get_by_id_in_workspace(document_id, workspace):
+        """
+        Resolve um Document por id DENTRO de um workspace.
+
+        Retorna o Document ou None.
+        """
+        try:
+            return (
+                Document.objects
+                .select_related('client', 'created_by', 'updated_by', 'workspace')
+                .filter(id=document_id, workspace=workspace)
+                .first()
+            )
+        except (ValueError, TypeError):
+            return None
+
+
+
+================================================================================
+ARQUIVO 17 DE 21
+================================================================================
+📁 PASTA: apps\documents\services\__init__.py
+📄 ARQUIVO: __init__.py
+📏 TAMANHO: 0.21 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 7
+================================================================================
+
+from apps.documents.services.document_service import DocumentService
+from apps.documents.services.history_service import DocumentHistoryService
+
+__all__ = [
+    'DocumentService',
+    'DocumentHistoryService',
+]
+
+
+
+================================================================================
+ARQUIVO 18 DE 21
+================================================================================
+📁 PASTA: apps\documents\services\document_service.py
+📄 ARQUIVO: document_service.py
+📏 TAMANHO: 17.41 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 538
+================================================================================
+
+"""
+DocumentService â€” ciclo de vida completo do Document.
+
+REGRA ARQUITETURAL
+------------------
+Este service Ã© o ÃšNICO ponto autorizado a:
+
+    - criar Document
+    - renomear Document
+    - substituir o arquivo fÃ­sico
+    - associar/desassociar cliente
+    - associar/desassociar projeto
+    - excluir Document
+
+Toda alteraÃ§Ã£o gera um registro em `DocumentHistory` via
+`DocumentHistoryService.log()`.
+
+A regra de escrita Ã©: SEMPRE evento correspondente. Nenhuma
+alteraÃ§Ã£o passa em branco.
+
+SOBRE O STORAGE
+---------------
+Usamos `file.save(name, content, save=True)` do Django. O storage
+Ã© decidido pelo projeto. NÃ£o tocamos em Cloudinary, S3, nem
+MEDIA_ROOT diretamente.
+
+SOBRE NOMES DUPLICADOS
+----------------------
+Documents NÃƒO bloqueia nomes duplicados no P0.
+
+Dois arquivos podem ter o mesmo nome no mesmo contexto, ou em
+contextos diferentes. Cabe ao arquiteto decidir.
+
+SOBRE EXCLUSÃƒO
+--------------
+DELETE Ã‰ DELETE.
+
+SequÃªncia:
+    1. registra `DocumentHistory(action='deleted')` com o document
+       vivo (FK preservada)
+    2. apaga o arquivo fÃ­sico do storage â€” se falhar, LEVANTA
+       `DocumentStorageError` e NÃƒO prossegue
+    3. apaga o registro Document do banco
+    â†’ o FK em DocumentHistory recebe SET_NULL automaticamente
+
+Se a etapa 2 falhar, o Document permanece Ã­ntegro no banco e pode
+ser excluÃ­do novamente. Nunca deixamos um registro Ã³rfÃ£o de arquivo.
+
+Sem soft delete. Sem lixeira. Sem restore.
+"""
+
+import logging
+import mimetypes
+from typing import Optional
+
+from django.db import transaction
+
+from apps.documents.models import Document, DocumentHistory
+from apps.documents.exceptions import (
+    DocumentNotFoundError,
+    DocumentFileMissingError,
+    DocumentInvalidUploadError,
+    DocumentClientNotFoundError,
+    DocumentProjectNotFoundError,
+    DocumentStorageError,
+)
+from apps.documents.queries import DocumentQueries
+from apps.documents.services.history_service import DocumentHistoryService
+
+logger = logging.getLogger('documents')
+
+
+class DocumentService:
+
+    # ------------------------------------------------------------------
+    # CRIAÃ‡ÃƒO
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    @transaction.atomic
+    def upload(
+        *,
+        workspace,
+        uploaded_file,
+        name: Optional[str] = None,
+        client=None,
+        project_id=None,
+        created_by=None,
+    ) -> Document:
+        """
+        Cria um novo Document a partir de um arquivo enviado.
+
+        ParÃ¢metros:
+            workspace      â†’ workspace de destino (obrigatÃ³rio)
+            uploaded_file  â†’ `InMemoryUploadedFile` ou `TemporaryUploadedFile`
+            name           â†’ nome sem extensÃ£o. Se vazio, usa o do arquivo.
+            client         â†’ Client opcional
+            project_id     â†’ UUID opcional (projects.Project.id)
+            created_by     â†’ User opcional
+        """
+        DocumentService._validate_uploaded_file(uploaded_file)
+
+        original_name = uploaded_file.name or ''
+        resolved_name = (name or Document.extract_name(original_name)).strip()
+        if not resolved_name:
+            raise DocumentInvalidUploadError(
+                'NÃ£o foi possÃ­vel determinar o nome do arquivo.'
+            )
+
+        extension = Document.extract_extension(original_name)
+        mime_type = (
+            uploaded_file.content_type
+            or mimetypes.guess_type(original_name)[0]
+            or ''
+        )
+        size = getattr(uploaded_file, 'size', 0) or 0
+
+        if client is not None:
+            DocumentService._validate_client(workspace, client)
+
+        document = Document(
+            workspace=workspace,
+            name=resolved_name,
+            extension=extension,
+            mime_type=mime_type,
+            size=size,
+            client=client,
+            project_id=project_id,
+            created_by=created_by,
+            updated_by=created_by,
+        )
+
+        try:
+            document.file.save(original_name, uploaded_file, save=False)
+        except Exception as exc:
+            logger.exception('Falha ao salvar arquivo no storage')
+            raise DocumentStorageError(
+                'Falha ao salvar o arquivo no storage.'
+            ) from exc
+
+        document.save()
+
+        DocumentHistoryService.log(
+            document=document,
+            action=DocumentHistory.ACTION_CREATED,
+            user=created_by,
+            previous_value=None,
+            new_value={
+                'name': document.name,
+                'extension': document.extension,
+                'mime_type': document.mime_type,
+                'size': document.size,
+                'client_id': str(document.client_id) if document.client_id else None,
+                'project_id': str(document.project_id) if document.project_id else None,
+            },
+        )
+
+        logger.info(
+            'Document criado: workspace=%s document=%s name=%s',
+            workspace.pk, document.pk, document.full_name,
+        )
+        return document
+
+    # ------------------------------------------------------------------
+    # LEITURA
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def get_or_raise(document_id, workspace) -> Document:
+        """
+        Resolve o Document dentro do workspace.
+        Levanta `DocumentNotFoundError` se nÃ£o existir.
+        """
+        document = DocumentQueries.get_by_id_in_workspace(document_id, workspace)
+        if document is None:
+            raise DocumentNotFoundError('Arquivo nÃ£o encontrado.')
+        return document
+
+    # ------------------------------------------------------------------
+    # RENOMEAR
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    @transaction.atomic
+    def rename(
+        *,
+        document: Document,
+        new_name: str,
+        actor=None,
+    ) -> Document:
+        """
+        Altera o nome do documento (sem extensÃ£o).
+        """
+        new_name = (new_name or '').strip()
+        if not new_name:
+            raise DocumentInvalidUploadError('O nome nÃ£o pode ser vazio.')
+
+        if new_name == document.name:
+            return document
+
+        previous_name = document.name
+        document.name = new_name
+        document.updated_by = actor
+        document.save(update_fields=['name', 'updated_by', 'updated_at'])
+
+        DocumentHistoryService.log(
+            document=document,
+            action=DocumentHistory.ACTION_RENAMED,
+            user=actor,
+            previous_value={'name': previous_name},
+            new_value={'name': new_name},
+        )
+        return document
+
+    # ------------------------------------------------------------------
+    # SUBSTITUIR ARQUIVO FÃSICO
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    @transaction.atomic
+    def replace_file(
+        *,
+        document: Document,
+        uploaded_file,
+        actor=None,
+    ) -> Document:
+        """
+        Substitui o arquivo fÃ­sico.
+
+        Atualiza `extension`, `mime_type` e `size`. MantÃ©m `name`.
+
+        O arquivo antigo NÃƒO Ã© preservado. Versionamento real de
+        arquivo nÃ£o existe na V1. O histÃ³rico registra que houve
+        substituiÃ§Ã£o.
+        """
+        DocumentService._validate_uploaded_file(uploaded_file)
+
+        original_name = uploaded_file.name or ''
+        previous_extension = document.extension
+        previous_mime = document.mime_type
+        previous_size = document.size
+
+        new_extension = Document.extract_extension(original_name)
+        new_mime = (
+            uploaded_file.content_type
+            or mimetypes.guess_type(original_name)[0]
+            or ''
+        )
+        new_size = getattr(uploaded_file, 'size', 0) or 0
+
+        try:
+            if document.file:
+                document.file.delete(save=False)
+        except Exception:
+            logger.warning(
+                'Falha ao remover arquivo antigo do storage: document=%s',
+                document.pk,
+            )
+
+        try:
+            document.file.save(original_name, uploaded_file, save=False)
+        except Exception as exc:
+            logger.exception('Falha ao salvar arquivo substituto')
+            raise DocumentStorageError(
+                'Falha ao salvar o arquivo substituto no storage.'
+            ) from exc
+
+        document.extension = new_extension
+        document.mime_type = new_mime
+        document.size = new_size
+        document.updated_by = actor
+        document.save(update_fields=[
+            'file', 'extension', 'mime_type', 'size',
+            'updated_by', 'updated_at',
+        ])
+
+        DocumentHistoryService.log(
+            document=document,
+            action=DocumentHistory.ACTION_REPLACED,
+            user=actor,
+            previous_value={
+                'extension': previous_extension,
+                'mime_type': previous_mime,
+                'size': previous_size,
+            },
+            new_value={
+                'extension': new_extension,
+                'mime_type': new_mime,
+                'size': new_size,
+            },
+        )
+        return document
+
+    # ------------------------------------------------------------------
+    # ASSOCIAÃ‡ÃƒO DE CLIENTE
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    @transaction.atomic
+    def associate_client(
+        *,
+        document: Document,
+        client,
+        actor=None,
+    ) -> Document:
+        """
+        Vincula o documento a um cliente.
+
+        Se jÃ¡ estiver vinculado ao mesmo cliente, Ã© no-op.
+        """
+        DocumentService._validate_client(document.workspace, client)
+
+        if document.client_id == client.id:
+            return document
+
+        previous_client_id = str(document.client_id) if document.client_id else None
+        document.client = client
+        document.updated_by = actor
+        document.save(update_fields=['client', 'updated_by', 'updated_at'])
+
+        DocumentHistoryService.log(
+            document=document,
+            action=DocumentHistory.ACTION_CLIENT_ASSOCIATED,
+            user=actor,
+            previous_value={'client_id': previous_client_id},
+            new_value={'client_id': str(client.id)},
+        )
+        return document
+
+    @staticmethod
+    @transaction.atomic
+    def dissociate_client(
+        *,
+        document: Document,
+        actor=None,
+    ) -> Document:
+        """
+        Remove o vÃ­nculo com o cliente.
+        """
+        if document.client_id is None:
+            return document
+
+        previous_client_id = str(document.client_id)
+        document.client = None
+        document.updated_by = actor
+        document.save(update_fields=['client', 'updated_by', 'updated_at'])
+
+        DocumentHistoryService.log(
+            document=document,
+            action=DocumentHistory.ACTION_CLIENT_REMOVED,
+            user=actor,
+            previous_value={'client_id': previous_client_id},
+            new_value={'client_id': None},
+        )
+        return document
+
+    # ------------------------------------------------------------------
+    # ASSOCIAÃ‡ÃƒO DE PROJETO
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    @transaction.atomic
+    def associate_project(
+        *,
+        document: Document,
+        project_id,
+        actor=None,
+    ) -> Document:
+        """
+        Vincula o documento a um projeto (UUID solto).
+        """
+        if project_id is None:
+            raise DocumentInvalidUploadError(
+                'project_id Ã© obrigatÃ³rio para associaÃ§Ã£o.'
+            )
+
+        if document.project_id == project_id:
+            return document
+
+        previous = str(document.project_id) if document.project_id else None
+        document.project_id = project_id
+        document.updated_by = actor
+        document.save(update_fields=['project_id', 'updated_by', 'updated_at'])
+
+        DocumentHistoryService.log(
+            document=document,
+            action=DocumentHistory.ACTION_PROJECT_ASSOCIATED,
+            user=actor,
+            previous_value={'project_id': previous},
+            new_value={'project_id': str(project_id)},
+        )
+        return document
+
+    @staticmethod
+    @transaction.atomic
+    def dissociate_project(
+        *,
+        document: Document,
+        actor=None,
+    ) -> Document:
+        """
+        Remove o vÃ­nculo com o projeto.
+        """
+        if document.project_id is None:
+            return document
+
+        previous = str(document.project_id)
+        document.project_id = None
+        document.updated_by = actor
+        document.save(update_fields=['project_id', 'updated_by', 'updated_at'])
+
+        DocumentHistoryService.log(
+            document=document,
+            action=DocumentHistory.ACTION_PROJECT_REMOVED,
+            user=actor,
+            previous_value={'project_id': previous},
+            new_value={'project_id': None},
+        )
+        return document
+
+    # ------------------------------------------------------------------
+    # INTEGRIDADE DO ARQUIVO
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def ensure_file_present(document: Document) -> None:
+        """
+        Verifica se o arquivo fÃ­sico existe no storage.
+        Levanta `DocumentFileMissingError` se estiver ausente.
+        """
+        try:
+            if not document.file or not document.file.storage.exists(document.file.name):
+                raise DocumentFileMissingError(
+                    'O arquivo fÃ­sico nÃ£o foi encontrado no storage.'
+                )
+        except DocumentFileMissingError:
+            raise
+        except Exception as exc:
+            raise DocumentStorageError(
+                'Falha ao verificar a presenÃ§a do arquivo no storage.'
+            ) from exc
+
+    # ------------------------------------------------------------------
+    # EXCLUSÃƒO
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    @transaction.atomic
+    def delete(document: Document, actor=None) -> None:
+        """
+        Exclui o documento.
+
+        SequÃªncia:
+            1. registra histÃ³rico `deleted` com o document vivo
+               (FK preservada nesse momento)
+            2. remove o arquivo fÃ­sico do storage â€” se falhar, LEVANTA
+               `DocumentStorageError` e NÃƒO prossegue com a exclusÃ£o
+               do registro
+            3. apaga o registro Document do banco
+            â†’ DocumentHistory.document recebe SET_NULL automaticamente
+
+        Se a etapa 2 falhar, o Document permanece Ã­ntegro e pode
+        ser excluÃ­do novamente. Nunca deixamos um registro no banco
+        sem o arquivo fÃ­sico correspondente.
+
+        O histÃ³rico sobrevive. O arquivo nÃ£o.
+        """
+        document_id = document.pk
+        document_label = document.full_name
+        workspace_id = document.workspace_id
+
+        # 1. histÃ³rico primeiro â€” o document ainda existe
+        DocumentHistoryService.log(
+            document=document,
+            action=DocumentHistory.ACTION_DELETED,
+            user=actor,
+            previous_value={
+                'name': document.name,
+                'extension': document.extension,
+                'mime_type': document.mime_type,
+                'size': document.size,
+            },
+            new_value=None,
+        )
+
+        # 2. remove arquivo fÃ­sico â€” se falhar, aborta
+        try:
+            if document.file:
+                document.file.delete(save=False)
+        except Exception as exc:
+            logger.exception(
+                'Falha ao remover arquivo fÃ­sico do storage: document=%s',
+                document_id,
+            )
+            raise DocumentStorageError(
+                'Falha ao remover o arquivo fÃ­sico do storage.'
+            ) from exc
+
+        # 3. apaga o registro
+        document.delete()
+
+        logger.info(
+            'Document excluÃ­do: workspace=%s document=%s name=%s',
+            workspace_id, document_id, document_label,
+        )
+
+    # ------------------------------------------------------------------
+    # HELPERS INTERNOS
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _validate_uploaded_file(uploaded_file) -> None:
+        if uploaded_file is None:
+            raise DocumentInvalidUploadError('Nenhum arquivo foi enviado.')
+
+        name = getattr(uploaded_file, 'name', None)
+        if not name:
+            raise DocumentInvalidUploadError(
+                'O arquivo enviado nÃ£o possui nome.'
+            )
+
+        size = getattr(uploaded_file, 'size', None)
+        if size is None or size <= 0:
+            raise DocumentInvalidUploadError(
+                'O arquivo enviado estÃ¡ vazio.'
+            )
+
+    @staticmethod
+    def _validate_client(workspace, client) -> None:
+        """
+        Garante que o cliente pertence ao mesmo workspace.
+        """
+        if client is None:
+            return
+        if getattr(client, 'workspace_id', None) != workspace.id:
+            raise DocumentClientNotFoundError(
+                'Cliente nÃ£o encontrado neste workspace.'
+            )
+
+
+
+================================================================================
+ARQUIVO 19 DE 21
+================================================================================
+📁 PASTA: apps\documents\services\history_service.py
+📄 ARQUIVO: history_service.py
+📏 TAMANHO: 2.43 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 75
+================================================================================
+
+"""
+DocumentHistoryService â€” porta Ãºnica de escrita no histÃ³rico.
+
+REGRA ARQUITETURAL
+------------------
+Nenhum ponto do cÃ³digo escreve em `DocumentHistory` diretamente.
+SÃ³ este service escreve.
+
+Isso garante:
+    - formato consistente de `previous_value` / `new_value`
+    - um Ãºnico lugar para auditar "o que Ã© registrado"
+    - facilidade para adicionar novos eventos depois
+
+DocumentHistory Ã© APPEND-ONLY.
+Este service NÃƒO expÃµe update nem delete.
+"""
+
+from typing import Optional, Any
+
+from apps.documents.models import Document, DocumentHistory
+
+
+class DocumentHistoryService:
+
+    # ------------------------------------------------------------------
+    # ESCRITA (Ãºnica porta)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def log(
+        *,
+        document: Optional[Document],
+        action: str,
+        user=None,
+        previous_value: Optional[Any] = None,
+        new_value: Optional[Any] = None,
+    ) -> DocumentHistory:
+        """
+        Registra um evento no histÃ³rico.
+
+        `document` Ã© opcional apenas para o caso de `deleted` â€” quando
+        o documento estÃ¡ prestes a ser (ou jÃ¡ foi) excluÃ­do, o service
+        ainda passa a instÃ¢ncia para preservar a FK no momento da
+        criaÃ§Ã£o. Depois, o prÃ³prio Django aplica SET_NULL quando o
+        Document for apagado.
+
+        Nunca chame este mÃ©todo fora dos services de documento.
+        """
+        return DocumentHistory.objects.create(
+            document=document,
+            user=user if (user and getattr(user, 'is_authenticated', False)) else None,
+            action=action,
+            previous_value=previous_value,
+            new_value=new_value,
+        )
+
+    # ------------------------------------------------------------------
+    # CONSULTAS
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def list_for_document(document: Document):
+        """
+        Lista o histÃ³rico de um documento vivo, mais recente primeiro.
+
+        SÃ³ funciona enquanto o documento existe. Depois da exclusÃ£o,
+        o histÃ³rico permanece no banco (com `document = NULL`), mas
+        nÃ£o Ã© acessÃ­vel por este mÃ©todo.
+        """
+        return (
+            DocumentHistory.objects
+            .filter(document=document)
+            .select_related('user')
+            .order_by('-timestamp')
+        )
+
+
+
+================================================================================
+ARQUIVO 20 DE 21
+================================================================================
+📁 PASTA: apps\documents\urls.py
+📄 ARQUIVO: urls.py
+📏 TAMANHO: 0.87 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 38
+================================================================================
+
+"""
+URLs do mÃ³dulo documents.
+"""
+
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+
+from apps.documents.api.views import DocumentViewSet
+from apps.documents.api.views.document_views import DocumentPublicPreviewView
+from apps.documents.views import DocumentsView
+
+
+router = DefaultRouter()
+router.register(
+    r'documents',
+    DocumentViewSet,
+    basename='document',
+)
+
+
+urlpatterns = [
+    # ===== PÃGINAS =====
+    path(
+        'documents/',
+        DocumentsView.as_view(),
+        name='documents-page',
+    ),
+
+    # ===== ROTA PÃšBLICA (token assinado, para Office Viewer) =====
+    path(
+        'api/documents/public-preview/<str:token>/',
+        DocumentPublicPreviewView.as_view(),
+        name='document-public-preview',
+    ),
+
+    # ===== APIs =====
+    path('api/', include(router.urls)),
+]
+
+
+
+================================================================================
+ARQUIVO 21 DE 21
+================================================================================
+📁 PASTA: apps\documents\views.py
+📄 ARQUIVO: views.py
+📏 TAMANHO: 0.93 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 35
+================================================================================
+
+"""
+Views HTML do mÃ³dulo documents.
+
+PÃ¡gina servida pelo shell (sidebar.html):
+    /documents/  â†’ DocumentsView
+
+A pÃ¡gina consome a API do prÃ³prio mÃ³dulo:
+    GET    /api/documents/
+    POST   /api/documents/
+    GET    /api/documents/<id>/
+    PATCH  /api/documents/<id>/
+    DELETE /api/documents/<id>/
+    POST   /api/documents/<id>/replace/
+    GET    /api/documents/<id>/download/
+    GET    /api/documents/<id>/history/
+    POST   /api/documents/<id>/associate-client/
+    POST   /api/documents/<id>/associate-project/
+"""
+
+from django.shortcuts import render, redirect
+from django.views import View
+
+
+class DocumentsView(View):
+    """
+    PÃ¡gina de Arquivos.
+
+    Exige login. O shell (sidebar.html) resolve o resto no client-side.
+    """
+
+    def get(self, request):
+        if not request.user.is_authenticated:
+            return redirect('/login/')
+
+        return render(request, 'documents.html')
+
+
+
+================================================================================
+FIM DA LISTAGEM
+================================================================================
+Total de arquivos: 21
+Total de linhas: 2644
+Tamanho total: 0.19 MB
+Arquivo gerado em: 02/10/2026 11:31:41
+================================================================================

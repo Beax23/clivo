@@ -1,0 +1,226 @@
+﻿================================================================================
+LISTAGEM COMPLETA DO MÓDULO core
+Clivo Platform - Refatoração Arquitetural
+Gerado em: 02/10/2026 11:43:30
+Total de arquivos: 6
+================================================================================
+
+
+================================================================================
+ARQUIVO 1 DE 6
+================================================================================
+📁 PASTA: core\__init__.py
+📄 ARQUIVO: __init__.py
+📏 TAMANHO: 0 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 0
+================================================================================
+
+
+
+
+================================================================================
+ARQUIVO 2 DE 6
+================================================================================
+📁 PASTA: core\exceptions.py
+📄 ARQUIVO: exceptions.py
+📏 TAMANHO: 0.55 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 19
+================================================================================
+
+from rest_framework.views import exception_handler
+from rest_framework.response import Response
+from rest_framework import status
+
+
+def custom_exception_handler(exc, context):
+    """
+    Custom exception handler para o Clivo.
+    """
+    response = exception_handler(exc, context)
+    
+    if response is not None:
+        # Adiciona estrutura consistente de erro
+        response.data = {
+            'error': response.data.get('detail', str(response.data)),
+            'status_code': response.status_code
+        }
+    
+    return response
+
+
+
+================================================================================
+ARQUIVO 3 DE 6
+================================================================================
+📁 PASTA: core\integrations\allauth_adapter.py
+📄 ARQUIVO: allauth_adapter.py
+📏 TAMANHO: 2.4 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 72
+================================================================================
+
+from allauth.socialaccount.adapter import DefaultSocialAccountAdapter
+from allauth.account.adapter import DefaultAccountAdapter
+from django.core.exceptions import ValidationError
+from django.utils.translation import gettext_lazy as _
+from django.db import transaction
+
+from apps.accounts.services.account import AccountService
+
+
+class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
+    """
+    Adapter para SocialAccount (Google OAuth).
+    """
+    
+    def pre_social_login(self, request, sociallogin):
+        from allauth.socialaccount.models import SocialAccount
+        
+        email = sociallogin.account.extra_data.get('email')
+        email_verified = sociallogin.account.extra_data.get('email_verified', False)
+        
+        if not email:
+            raise ValidationError(_('Email nÃ£o fornecido pelo Google'))
+        
+        email = AccountService.normalize_email(email)
+        
+        existing_social = SocialAccount.objects.filter(
+            provider=sociallogin.account.provider,
+            uid=sociallogin.account.uid
+        ).first()
+        
+        if existing_social:
+            return
+        
+        user = AccountService.get_user_by_email(email)
+        
+        if user:
+            if not email_verified:
+                raise ValidationError(_('Email nÃ£o verificado pelo Google'))
+            
+            other_social = SocialAccount.objects.filter(
+                user=user,
+                provider=sociallogin.account.provider
+            ).first()
+            
+            if other_social:
+                raise ValidationError(_('Conta Google jÃ¡ vinculada a este usuÃ¡rio'))
+            
+            with transaction.atomic():
+                sociallogin.connect(request, user)
+            return
+    
+    def save_user(self, request, sociallogin, form=None):
+        user = super().save_user(request, sociallogin, form)
+        
+        user_data = sociallogin.account.extra_data
+        
+        if 'given_name' in user_data:
+            user.first_name = user_data['given_name']
+        if 'family_name' in user_data:
+            user.last_name = user_data['family_name']
+        if 'picture' in user_data:
+            user.avatar = user_data['picture']
+        
+        user.save()
+        return user
+
+
+class CustomAccountAdapter(DefaultAccountAdapter):
+    """
+    Adapter para Account (Email/Password).
+    """
+    pass
+
+
+
+================================================================================
+ARQUIVO 4 DE 6
+================================================================================
+📁 PASTA: core\middleware\__init__.py
+📄 ARQUIVO: __init__.py
+📏 TAMANHO: 0.2 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 7
+================================================================================
+
+from core.middleware.correlation_id import CorrelationIdMiddleware
+from core.middleware.security import SecurityMiddleware
+
+__all__ = [
+    'CorrelationIdMiddleware',
+    'SecurityMiddleware',
+]
+
+
+
+================================================================================
+ARQUIVO 5 DE 6
+================================================================================
+📁 PASTA: core\middleware\correlation_id.py
+📄 ARQUIVO: correlation_id.py
+📏 TAMANHO: 0.68 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 20
+================================================================================
+
+import uuid
+from django.utils.deprecation import MiddlewareMixin
+
+
+class CorrelationIdMiddleware(MiddlewareMixin):
+    """
+    Middleware para adicionar correlation_id Ã s requisiÃ§Ãµes.
+    """
+    
+    def process_request(self, request):
+        correlation_id = request.headers.get('X-Correlation-ID')
+        if not correlation_id:
+            correlation_id = str(uuid.uuid4())
+        request.correlation_id = correlation_id
+        request.META['CORRELATION_ID'] = correlation_id
+    
+    def process_response(self, request, response):
+        if hasattr(request, 'correlation_id'):
+            response['X-Correlation-ID'] = request.correlation_id
+        return response
+
+
+
+================================================================================
+ARQUIVO 6 DE 6
+================================================================================
+📁 PASTA: core\middleware\security.py
+📄 ARQUIVO: security.py
+📏 TAMANHO: 0.45 KB
+📝 EXTENSÃO: .py
+📊 LINHAS: 14
+================================================================================
+
+from django.utils.deprecation import MiddlewareMixin
+
+
+class SecurityMiddleware(MiddlewareMixin):
+    """
+    Middleware para seguranÃ§a adicional.
+    """
+    
+    def process_response(self, request, response):
+        # Headers de seguranÃ§a adicionais
+        response['X-Content-Type-Options'] = 'nosniff'
+        response['X-Frame-Options'] = 'DENY'
+        response['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+        return response
+
+
+
+================================================================================
+FIM DA LISTAGEM
+================================================================================
+Total de arquivos: 6
+Total de linhas: 132
+Tamanho total: 0.01 MB
+Arquivo gerado em: 02/10/2026 11:43:30
+================================================================================
