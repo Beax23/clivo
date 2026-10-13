@@ -181,10 +181,16 @@ SOCIALACCOUNT_PROVIDERS = {
             'secret': GOOGLE_CLIENT_SECRET,
             'key': ''
         },
+        # Apenas escopos básicos de identidade (openid/email/profile).
+        # Estes NÃO exigem verificação do Google — qualquer pessoa
+        # consegue fazer login sem ver a tela de "app não verificado".
+        #
+        # Se um dia for necessário ler o Google Drive, adicione o escopo
+        # 'https://www.googleapis.com/auth/drive.readonly' aqui — mas
+        # saiba que isso dispara a verificação obrigatória (CASA) do Google.
         'SCOPE': [
             'profile',
             'email',
-            'https://www.googleapis.com/auth/drive.readonly',
         ],
         'AUTH_PARAMS': {
             'access_type': 'offline',
