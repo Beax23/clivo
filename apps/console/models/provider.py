@@ -2,13 +2,34 @@
 Models de Provider, ProviderConnection e ProviderContract.
 
 Separação conceitual:
-    Provider            → quem fornece o recurso (OpenAI, Cloudinary, Resend)
+    Provider            → quem fornece o recurso (OpenAI, Backblaze B2, Resend)
     ProviderConnection  → como o Clivo acessa o provider (Production, Test)
     ProviderContract    → o que o Clivo contratou com o provider
 
 REGRA ARQUITETURAL:
     Provider NÃO determina Plan. Plan referencia UsageMetric, nunca Provider.
     Contract é sobre a economia do CLIVO, não sobre o que o Workspace recebe.
+
+SOBRE `included_storage_bytes`:
+    Capacidade de armazenamento associada a este contrato, em bytes.
+
+    É uma configuração OPERACIONAL, cadastrada manualmente pelo Console.
+    NÃO é lida automaticamente da API do provider — o Backblaze B2, por
+    exemplo, não expõe o "Daily Storage Cap" via API S3-compatible. O
+    operador vê o cap no console web do B2 (Caps & Alerts) e cadastra
+    o valor aqui.
+
+    Semântica de NULL:
+        NULL = "teto operacional não cadastrado para este contrato".
+        NÃO significa "ilimitado". O sistema nunca presume capacidade
+        infinita a partir de NULL — apenas ausência de dado.
+
+    Tipos e propósito:
+        - É um número em BYTES (nunca GB, nunca MB).
+        - Serve para o Console mostrar "quanto o Clivo contratou no B2".
+        - NÃO determina o orçamento operacional do Clivo (isso vive em
+          StorageBudget) nem a quota de um plano (isso vive em
+          PlanFeatureLimit). São três grandezas distintas.
 """
 
 import uuid
@@ -22,7 +43,7 @@ class Provider(models.Model):
     Empresa/serviço externo que o Clivo utiliza.
 
     Exemplos:
-        OpenAI, Cloudinary, Resend, Stripe, Render, Neon, Sentry, etc.
+        OpenAI, Backblaze B2, Resend, Stripe, Render, Neon, Sentry, etc.
 
     Não possui preço, plano ou limite. Apenas identifica o fornecedor.
     """
@@ -37,7 +58,7 @@ class Provider(models.Model):
     key = models.SlugField(
         max_length=50,
         unique=True,
-        help_text=_('Chave estável (ex: "openai", "cloudinary", "resend")')
+        help_text=_('Chave estável (ex: "openai", "backblaze_b2", "resend")')
     )
 
     name = models.CharField(
@@ -199,13 +220,40 @@ class ProviderContract(models.Model):
     Contrato/capacidade que o Clivo contratou com um Provider.
 
     Exemplos:
-        OpenAI       → budget US$ 500/mês
-        Cloudinary   → 500 GB storage + 5 TB bandwidth
-        Resend       → 100.000 emails/mês
+        OpenAI        → budget US$ 500/mês
+        Backblaze B2  → 500 GB storage
+        Resend        → 100.000 emails/mês
 
     REGRA IMPORTANTE:
         Este contrato é sobre a economia do CLIVO com o fornecedor.
         NÃO determina o que um Workspace recebe — isso é Plan.
+
+    SOBRE `included_storage_bytes`:
+        Teto operacional de armazenamento associado a este contrato,
+        em BYTES. Cadastrado manualmente pelo operador.
+
+        Por que manual e não automático:
+            A API S3-compatible do Backblaze B2 (única exposta para
+            integração programática) NÃO devolve o "Daily Storage Cap"
+            da conta. Esse valor vive apenas no console web do B2,
+            em "Caps & Alerts". Não há endpoint para lê-lo.
+
+            Cadastrar aqui significa: "o operador viu o cap no console
+            do B2 e registrou no Clivo". O valor fica auditável (quem
+            cadastrou, quando) e permite reconciliar com o uso físico
+            que o `sync_b2_usage` mede.
+
+        Semântica:
+            NULL = teto operacional não cadastrado. NÃO significa
+            ilimitado. O sistema nunca presume capacidade infinita
+            a partir de NULL.
+
+        Não confundir com:
+            StorageBudget.total_budget_bytes  → orçamento do Clivo
+                                                 (decisão operacional
+                                                 independente do B2)
+            PlanFeatureLimit.limit_value      → quota por workspace,
+                                                 derivada do plano
     """
 
     BILLING_PERIOD_CHOICES = [
@@ -282,6 +330,17 @@ class ProviderContract(models.Model):
         help_text=_('Moeda do custo')
     )
 
+    included_storage_bytes = models.BigIntegerField(
+        null=True,
+        blank=True,
+        help_text=_(
+            'Teto operacional de armazenamento associado a este contrato, '
+            'em bytes. Cadastrado manualmente — a API S3 do Backblaze B2 '
+            'não expõe o Daily Storage Cap. NULL = não cadastrado '
+            '(NÃO significa ilimitado).'
+        )
+    )
+
     started_at = models.DateField(
         help_text=_('Data de início do contrato')
     )
@@ -340,6 +399,17 @@ class ProviderContract(models.Model):
         if self.fixed_cost is not None and self.fixed_cost < 0:
             raise ValidationError({
                 'fixed_cost': _('O custo fixo não pode ser negativo')
+            })
+
+        # Capacidade
+        if (
+            self.included_storage_bytes is not None
+            and self.included_storage_bytes < 0
+        ):
+            raise ValidationError({
+                'included_storage_bytes': _(
+                    'O teto de armazenamento não pode ser negativo.'
+                )
             })
 
     def save(self, *args, **kwargs):

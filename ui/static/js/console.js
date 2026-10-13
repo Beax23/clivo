@@ -90,6 +90,7 @@
     // LOADING BUTTONS
     // =========================================================================
     function setLoading(button, loading) {
+        if (!button) return;
         if (loading) {
             button.disabled = true;
             button.dataset.originalText = button.innerHTML;
@@ -97,11 +98,12 @@
         } else {
             button.disabled = false;
             button.innerHTML = button.dataset.originalText || button.textContent;
-            lucide.createIcons();
+            if (typeof lucide !== 'undefined') lucide.createIcons();
         }
     }
 
     function setLoadingSm(button, loading) {
+        if (!button) return;
         if (loading) {
             button.disabled = true;
             button.dataset.originalText = button.innerHTML;
@@ -109,7 +111,7 @@
         } else {
             button.disabled = false;
             button.innerHTML = button.dataset.originalText || button.textContent;
-            lucide.createIcons();
+            if (typeof lucide !== 'undefined') lucide.createIcons();
         }
     }
 
@@ -136,7 +138,10 @@
         if (!response.ok) {
             const msg = (data && (data.error || data.detail || (data.non_field_errors && data.non_field_errors[0])))
                 || 'Erro na requisição';
-            throw new Error(msg);
+            const err = new Error(msg);
+            err.status = response.status;
+            err.data = data;
+            throw err;
         }
         return data;
     }
@@ -168,6 +173,43 @@
         } catch (e) {
             return '—';
         }
+    }
+
+    function formatDateTime(iso) {
+        if (!iso) return '—';
+        try {
+            const d = new Date(iso);
+            const datePart = d.toLocaleDateString('pt-BR', {
+                day: '2-digit', month: '2-digit', year: 'numeric'
+            });
+            const timePart = d.toLocaleTimeString('pt-BR', {
+                hour: '2-digit', minute: '2-digit'
+            });
+            return datePart + ' ' + timePart;
+        } catch (e) {
+            return '—';
+        }
+    }
+
+    function humanizeBytes(numBytes) {
+        if (numBytes === null || numBytes === undefined) return null;
+        const n = Number(numBytes);
+        if (isNaN(n)) return null;
+        if (n === 0) return '0 B';
+        const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+        let size = n;
+        let i = 0;
+        while (size >= 1024 && i < units.length - 1) {
+            size /= 1024;
+            i += 1;
+        }
+        return size.toFixed(2) + ' ' + units[i];
+    }
+
+    function splitHumanized(human) {
+        if (!human) return { value: '—', unit: '' };
+        const parts = human.split(' ');
+        return { value: parts[0], unit: parts[1] || '' };
     }
 
     // =========================================================================
@@ -295,15 +337,21 @@
     let features = [];
     let selectedFeatureId = null;
 
-    let providers = [];
-    let selectedProviderId = null;
-    let connections = [];
-
     let teamMembers = [];
     let deleteTarget = null;
 
     let adminWorkspaces = [];
     let adminUsers = [];
+
+    // Storage
+    let storageProviders = [];
+    let activeProviderKey = null;
+    let activeProviderCap = null;
+    let activeProviderContracts = [];
+    let activeProviderConnections = [];
+    let activeBudget = null;
+    let activeBreakdown = null;
+    let activeBudgetHistory = [];
 
     // =========================================================================
     // GOVERNANÇAS
@@ -788,6 +836,28 @@
         btn.disabled = !enabled;
     }
 
+    function extractPlanStorageQuota(plan) {
+        if (!plan || !plan.features || !Array.isArray(plan.features)) {
+            return { quota_bytes: null, has_quota: false, is_unlimited: false };
+        }
+        for (const feat of plan.features) {
+            if (!feat.limits || !Array.isArray(feat.limits)) continue;
+            for (const lim of feat.limits) {
+                if (lim.metric_key === 'storage.bytes') {
+                    if (lim.limit_value === null || lim.limit_value === undefined) {
+                        return { quota_bytes: null, has_quota: true, is_unlimited: true };
+                    }
+                    return {
+                        quota_bytes: parseInt(lim.limit_value, 10),
+                        has_quota: true,
+                        is_unlimited: false,
+                    };
+                }
+            }
+        }
+        return { quota_bytes: null, has_quota: false, is_unlimited: false };
+    }
+
     function renderPlans() {
         const tbody = document.getElementById('plansTableBody');
         if (!tbody) return;
@@ -796,7 +866,7 @@
         if (!plans.length) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="5" style="text-align:center; color:var(--text-tertiary); padding:30px 0; font-size:12.5px;">
+                    <td colspan="6" style="text-align:center; color:var(--text-tertiary); padding:30px 0; font-size:12.5px;">
                         Nenhum plano criado
                     </td>
                 </tr>
@@ -816,6 +886,22 @@
                 ? '<span class="plan-default-badge"><i class="lucide" data-lucide="star" style="width:10px; height:10px;"></i> Inicial</span>'
                 : '<span class="plan-default-badge empty">—</span>';
 
+            const quota = extractPlanStorageQuota(p);
+            let quotaHtml = '';
+            if (!quota.has_quota) {
+                quotaHtml = '<span class="plan-quota-cell unconfigured">Não configurada</span>';
+            } else if (quota.is_unlimited) {
+                quotaHtml = '<span class="plan-quota-cell unlimited">Ilimitada</span>';
+            } else {
+                const human = humanizeBytes(quota.quota_bytes) || '—';
+                quotaHtml = `
+                    <div class="plan-quota-cell">
+                        <span class="quota-human">${escapeHtml(human)}</span>
+                        <span class="quota-bytes">${quota.quota_bytes} B</span>
+                    </div>
+                `;
+            }
+
             html += `
                 <tr class="${isSelected}" data-id="${p.id}">
                     <td>
@@ -825,8 +911,9 @@
                         </div>
                     </td>
                     <td style="font-size:12px;color:var(--text-secondary);">
-                        ${p.currency} ${price} / ${p.billing_period}
+                        ${escapeHtml(p.currency)} ${price} / ${escapeHtml(p.billing_period)}
                     </td>
+                    <td>${quotaHtml}</td>
                     <td style="text-align:center;">
                         <span class="plan-ws-count ${wsCount === 0 ? 'zero' : ''}">${wsCount}</span>
                     </td>
@@ -1113,6 +1200,7 @@
                     renderPlanFeatures();
                     const card2 = document.querySelector('.plan-feature-card[data-pf-id="' + pfId + '"]');
                     if (card2) card2.classList.add('expanded');
+                    await loadPlans();
                 } catch (err) {
                     showToast(err.message || 'Erro ao salvar limites', 'error');
                 } finally {
@@ -1167,6 +1255,7 @@
             showToast('Feature adicionada ao plano', 'success');
             select.value = '';
             await selectPlan(selectedPlanId);
+            await loadPlans();
         } catch (e) {
             showToast(e.message || 'Erro ao adicionar feature', 'error');
         } finally {
@@ -1480,281 +1569,513 @@
     });
 
     // =========================================================================
-    // PROVIDERS
+    // ARMAZENAMENTO
     // =========================================================================
-    async function loadProviders() {
+
+    function showStorageLoading(show) {
+        const el = document.getElementById('storageLoading');
+        if (el) el.style.display = show ? 'flex' : 'none';
+    }
+
+    function showStorageContent(show) {
+        const el = document.getElementById('storageContent');
+        if (el) el.style.display = show ? 'flex' : 'none';
+    }
+
+    function showStorageEmpty(show) {
+        const el = document.getElementById('storageEmptyState');
+        if (el) el.style.display = show ? 'block' : 'none';
+    }
+
+    function renderStorageEmptyState() {
+        const el = document.getElementById('storageEmptyState');
+        if (!el) return;
+        el.innerHTML = `
+            <i class="lucide" data-lucide="hard-drive" style="width:44px; height:44px;"></i>
+            <p>Nenhum provider de armazenamento cadastrado</p>
+            <span>Cadastre um provider para começar a administrar a capacidade operacional.</span>
+        `;
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+
+    async function loadStorageView() {
+        const switchEl = document.getElementById('storageProviderSwitch');
+        if (switchEl) switchEl.style.display = 'none';
+        showStorageEmpty(false);
+        showStorageContent(false);
+        showStorageLoading(true);
+
         try {
             const data = await apiRequest('/api/console/providers/', 'GET');
-            providers = unwrapList(data);
-            renderProviders();
+            storageProviders = unwrapList(data);
         } catch (e) {
-            showToast('Erro ao carregar providers', 'error');
+            storageProviders = [];
         }
-    }
 
-    function renderProviders() {
-        const tbody = document.getElementById('providersTableBody');
-        if (!tbody) return;
-        document.getElementById('providerCount').textContent = providers.length;
+        let visible = storageProviders.filter(p => p.category === 'storage');
+        if (visible.length === 0) {
+            const b2 = storageProviders.find(p => p.key === 'backblaze_b2');
+            if (b2) visible = [b2];
+        }
 
-        if (!providers.length) {
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="3" style="text-align:center; color:var(--text-tertiary); padding:30px 0; font-size:12.5px;">
-                        Nenhum provider criado
-                    </td>
-                </tr>
-            `;
+        showStorageLoading(false);
+
+        if (visible.length === 0) {
+            renderStorageEmptyState();
+            showStorageEmpty(true);
             return;
         }
 
-        let html = '';
+        if (visible.length > 1) {
+            renderStorageProviderSwitch(visible);
+        } else if (switchEl) {
+            switchEl.style.display = 'none';
+        }
+
+        if (!activeProviderKey || !visible.some(p => p.key === activeProviderKey)) {
+            const b2 = visible.find(p => p.key === 'backblaze_b2');
+            activeProviderKey = b2 ? b2.key : visible[0].key;
+        }
+
+        await loadProviderData();
+
+        showStorageContent(true);
+        renderStorageAll();
+    }
+
+    function renderStorageProviderSwitch(providers) {
+        const el = document.getElementById('storageProviderSwitch');
+        if (!el) return;
+        el.style.display = 'inline-flex';
+
+        let options = '';
         providers.forEach(p => {
-            const isSelected = p.id === selectedProviderId ? 'selected' : '';
-            const initial = (p.name || '?').charAt(0).toUpperCase();
-            html += `
-                <tr class="${isSelected}" data-id="${p.id}">
-                    <td>
-                        <div class="gov-name-cell">
-                            <div class="gov-icon-sm">${initial}</div>
-                            <span class="gov-name-text">${escapeHtml(p.name)}</span>
-                        </div>
-                    </td>
-                    <td style="text-align:center; font-size:12px; color:var(--text-secondary);">
-                        ${p.connections_count} · ${p.contracts_count}
-                    </td>
-                    <td class="gov-actions-cell">
-                        <div class="gov-actions">
-                            <button class="edit-provider-btn" data-id="${p.id}" title="Editar">
-                                <i class="lucide" data-lucide="pencil"></i>
-                            </button>
-                            <button class="delete-provider-btn apple-danger" data-id="${p.id}" title="Excluir">
-                                <i class="lucide" data-lucide="trash-2"></i>
-                            </button>
-                        </div>
-                    </td>
-                </tr>
-            `;
-        });
-        tbody.innerHTML = html;
-        lucide.createIcons();
-
-        tbody.querySelectorAll('tr[data-id]').forEach(row => {
-            row.addEventListener('click', function(e) {
-                if (e.target.closest('button')) return;
-                const id = this.dataset.id;
-                if (selectedProviderId === id) deselectProvider();
-                else selectProvider(id);
-            });
+            const sel = p.key === activeProviderKey ? 'selected' : '';
+            options += `<option value="${escapeHtml(p.key)}" ${sel}>${escapeHtml(p.name)}</option>`;
         });
 
-        tbody.querySelectorAll('.edit-provider-btn').forEach(btn => {
-            btn.addEventListener('click', function(e) {
-                e.stopPropagation();
-                const p = providers.find(x => x.id === this.dataset.id);
-                if (p) fillProviderForm(p);
-            });
-        });
+        el.innerHTML = `
+            <i class="lucide" data-lucide="database" style="width:14px; height:14px; opacity:0.5;"></i>
+            <select id="storageProviderSelect" aria-label="Provider de armazenamento">
+                ${options}
+            </select>
+        `;
+        if (typeof lucide !== 'undefined') lucide.createIcons();
 
-        tbody.querySelectorAll('.delete-provider-btn').forEach(btn => {
-            btn.addEventListener('click', function(e) {
-                e.stopPropagation();
-                const p = providers.find(x => x.id === this.dataset.id);
-                if (!p) return;
-                deleteTarget = { id: p.id, name: p.name, type: 'provider' };
-                document.getElementById('deleteTargetName').textContent = `"${p.name}"`;
-                document.getElementById('confirmDeleteModal').classList.add('active');
+        const select = document.getElementById('storageProviderSelect');
+        if (select) {
+            select.addEventListener('change', function() {
+                const key = this.value;
+                if (key === activeProviderKey) return;
+                activeProviderKey = key;
+                activeProviderCap = null;
+                activeProviderContracts = [];
+                activeProviderConnections = [];
+                activeBudget = null;
+                activeBreakdown = null;
+                activeBudgetHistory = [];
+                loadProviderData().then(() => renderStorageAll());
             });
-        });
+        }
     }
 
-    function fillProviderForm(p) {
-        document.getElementById('editProviderId').value = p.id;
-        document.getElementById('providerName').value = p.name;
-        document.getElementById('providerCategory').value = p.category || '';
-        document.getElementById('providerDescription').value = p.description || '';
-        document.getElementById('providerIsActive').checked = p.is_active;
-
-        document.getElementById('cancelProviderBtn').style.display = 'inline-flex';
-        document.getElementById('saveProviderBtn').innerHTML =
-            '<i class="lucide" data-lucide="check" style="width:14px; height:14px;"></i> Atualizar';
-        lucide.createIcons();
-        document.getElementById('providerFormWrapper').scrollIntoView({ behavior: 'smooth' });
-    }
-
-    async function selectProvider(id) {
-        selectedProviderId = id;
-        const p = providers.find(x => x.id === id);
-        if (!p) return;
-        document.getElementById('selectedProviderName').textContent = p.name;
-        document.getElementById('addConnectionBtn').disabled = false;
+    async function loadProviderData() {
+        const provider = storageProviders.find(p => p.key === activeProviderKey);
+        if (!provider) return;
 
         try {
-            const data = await apiRequest('/api/console/providers/' + id + '/connections/', 'GET');
-            connections = unwrapList(data);
+            const cap = await apiRequest(
+                '/api/console/storage/provider-cap/?provider_key=' + encodeURIComponent(provider.key),
+                'GET'
+            );
+            activeProviderCap = cap;
         } catch (e) {
-            connections = [];
+            activeProviderCap = null;
         }
-        renderConnections();
 
-        document.querySelectorAll('#providersTableBody tr').forEach(row => {
-            row.classList.toggle('selected', row.dataset.id === id);
-        });
+        try {
+            const contracts = await apiRequest(
+                '/api/console/providers/' + provider.id + '/contracts/',
+                'GET'
+            );
+            activeProviderContracts = unwrapList(contracts);
+        } catch (e) {
+            activeProviderContracts = [];
+        }
+
+        try {
+            const conns = await apiRequest(
+                '/api/console/providers/' + provider.id + '/connections/',
+                'GET'
+            );
+            activeProviderConnections = unwrapList(conns);
+        } catch (e) {
+            activeProviderConnections = [];
+        }
+
+        try {
+            const budget = await apiRequest('/api/console/storage/budget/', 'GET');
+            activeBudget = { ok: true, data: budget };
+        } catch (e) {
+            if (e.status === 404) {
+                activeBudget = { ok: false, reason: 'not_configured', error: e.message };
+            } else if (e.status === 409) {
+                activeBudget = {
+                    ok: false,
+                    reason: (e.data && e.data.code) || 'conflict',
+                    error: e.message,
+                };
+            } else {
+                activeBudget = { ok: false, reason: 'error', error: e.message };
+            }
+        }
+
+        try {
+            const breakdown = await apiRequest('/api/console/storage/budget/breakdown/', 'GET');
+            activeBreakdown = { ok: true, data: breakdown };
+        } catch (e) {
+            activeBreakdown = { ok: false, error: e.message };
+        }
+
+        try {
+            const history = await apiRequest('/api/console/storage/budget/history/?limit=20', 'GET');
+            activeBudgetHistory = unwrapList(history);
+        } catch (e) {
+            activeBudgetHistory = [];
+        }
     }
 
-    function deselectProvider() {
-        selectedProviderId = null;
-        connections = [];
-        document.getElementById('selectedProviderName').textContent = 'Selecione um provider';
-        document.getElementById('addConnectionBtn').disabled = true;
-        renderConnections();
-        document.querySelectorAll('#providersTableBody tr').forEach(row => row.classList.remove('selected'));
+    function renderStorageAll() {
+        const provider = storageProviders.find(p => p.key === activeProviderKey);
+        renderStorageCapSection(provider);
+        if (typeof lucide !== 'undefined') lucide.createIcons();
     }
 
-    function renderConnections() {
-        const container = document.getElementById('connectionsList');
-        if (!container) return;
-        const countEl = document.getElementById('selectedConnCount');
-        if (countEl) countEl.textContent = connections.length;
+    // ---- PAINEL ÚNICO EXPANDIDO ----
+    function renderStorageCapSection(provider) {
+        const el = document.getElementById('storageCapSection');
+        if (!el) return;
 
-        if (!selectedProviderId) {
-            container.innerHTML = `
-                <div class="apple-empty">
-                    <i class="lucide" data-lucide="server" style="width:32px; height:32px; opacity:0.3; margin-bottom:8px;"></i>
-                    <p>Selecione um provider</p>
-                    <span>As conexões aparecerão aqui</span>
-                </div>
-            `;
-            lucide.createIcons();
+        if (!provider) {
+            el.innerHTML = '';
             return;
         }
 
-        if (!connections.length) {
-            container.innerHTML = `
-                <div class="apple-empty">
-                    <i class="lucide" data-lucide="plug" style="width:32px; height:32px; opacity:0.3; margin-bottom:8px;"></i>
-                    <p>Nenhuma conexão</p>
-                    <span>Adicione uma conexão para este provider</span>
-                </div>
-            `;
-            lucide.createIcons();
-            return;
+        const cap = activeProviderCap;
+
+        const includedRaw = cap ? cap.included_storage_bytes : null;
+        const usageBytes = cap ? cap.usage_bytes : null;
+        const isConfigured = !!(cap && cap.is_configured);
+        const includedHuman = humanizeBytes(includedRaw);
+        const usageHuman = humanizeBytes(usageBytes);
+
+        // Coluna do teto
+        let capFigureHtml;
+        if (!isConfigured) {
+            capFigureHtml = `<span class="storage-hero-figure-value muted">Não cadastrado</span>`;
+        } else {
+            const capSplit = splitHumanized(includedHuman);
+            capFigureHtml = `<span class="storage-hero-figure-value">${escapeHtml(capSplit.value)}<span class="unit">${escapeHtml(capSplit.unit)}</span></span>`;
         }
 
-        let html = '';
-        connections.forEach(c => {
-            html += `
-                <div class="connection-card" data-id="${c.id}">
-                    <div class="connection-card-header">
-                        <div class="connection-card-title">
-                            <i class="lucide" data-lucide="link" style="width:14px; height:14px; opacity:0.6;"></i>
-                            <span>${escapeHtml(c.name)}</span>
-                        </div>
-                        <span class="connection-card-env ${c.environment}">${c.environment}</span>
-                        <div class="connection-card-actions">
-                            <button class="delete-connection-btn apple-danger" data-id="${c.id}" title="Remover">
-                                <i class="lucide" data-lucide="trash-2"></i>
-                            </button>
+        // Coluna do uso
+        let usageFigureHtml;
+        if (usageBytes === null || usageBytes === undefined) {
+            usageFigureHtml = `<span class="storage-hero-figure-value muted">Desconhecido</span>`;
+        } else {
+            const usageSplit = splitHumanized(usageHuman);
+            usageFigureHtml = `<span class="storage-hero-figure-value">${escapeHtml(usageSplit.value)}<span class="unit">${escapeHtml(usageSplit.unit)}</span></span>`;
+        }
+
+        // Barra de uso — só quando temos teto E uso
+        let usageBarHtml = '';
+        if (isConfigured && includedRaw && includedRaw > 0 && usageBytes !== null && usageBytes !== undefined) {
+            const pct = Math.min(100, (usageBytes / includedRaw) * 100);
+            const pctRaw = (usageBytes / includedRaw) * 100;
+            let fillCls = '';
+            let pctCls = '';
+            if (pctRaw >= 100) { fillCls = 'is-blocked'; pctCls = 'is-blocked'; }
+            else if (pctRaw >= 80) { fillCls = 'is-warning'; pctCls = 'is-warning'; }
+
+            usageBarHtml = `
+                <div class="storage-usage-block">
+                    <div class="storage-usage-track">
+                        <div class="storage-usage-fill ${fillCls}" style="width:${pct}%;"></div>
+                    </div>
+                    <div class="storage-usage-meta">
+                        <span>Uso em relação ao teto</span>
+                        <span class="usage-percent ${pctCls}">${pctRaw.toFixed(1)}%</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Aviso de sincronização
+        let syncNoteHtml = '';
+        if (cap && cap.last_snapshot_fetched_at) {
+            const isStale = !!cap.usage_is_stale;
+            const lastStatus = cap.last_snapshot_status || '';
+            if (lastStatus === 'error' && cap.last_snapshot_error) {
+                syncNoteHtml = `
+                    <div class="storage-note error">
+                        <i class="lucide" data-lucide="alert-circle"></i>
+                        <div>Última tentativa de sincronização falhou: ${escapeHtml(cap.last_snapshot_error)}</div>
+                    </div>
+                `;
+            } else if (isStale) {
+                syncNoteHtml = `
+                    <div class="storage-note warning">
+                        <i class="lucide" data-lucide="clock"></i>
+                        <div>O último snapshot de uso está desatualizado.</div>
+                    </div>
+                `;
+            }
+        }
+
+        // Nota quando há versões antigas contabilizadas
+        // (a API do B2 cobra por todas as versões, não só a ativa)
+        let versionsNoteHtml = '';
+        if (cap && cap.last_snapshot_payload) {
+            const totalVersions = cap.last_snapshot_payload.total_versions_count;
+            const activeVersions = cap.last_snapshot_payload.active_versions_count;
+            if (
+                typeof totalVersions === 'number' &&
+                typeof activeVersions === 'number' &&
+                totalVersions > activeVersions
+            ) {
+                const extras = totalVersions - activeVersions;
+                versionsNoteHtml = `
+                    <div class="storage-note info">
+                        <i class="lucide" data-lucide="layers"></i>
+                        <div>
+                            ${extras} versão${extras === 1 ? '' : 'ões'} antiga${extras === 1 ? '' : 's'}
+                            ${extras === 1 ? 'está' : 'estão'} sendo contabilizada${extras === 1 ? '' : 's'}
+                            no uso — o Backblaze B2 cobra por todas as versões, não só a ativa.
                         </div>
                     </div>
-                    ${c.credential_ref ? `<div class="connection-card-meta">${escapeHtml(c.credential_ref)}</div>` : ''}
+                `;
+            }
+        }
+
+        // Nota quando o teto não foi cadastrado
+        let notConfiguredNote = '';
+        if (!isConfigured) {
+            notConfiguredNote = `
+                <div class="storage-note info">
+                    <i class="lucide" data-lucide="info"></i>
+                    <div>
+                        Cadastre o <strong>teto operacional</strong> no contrato ativo do provider.
+                        A API do Backblaze B2 não expõe este valor — ele é preenchido manualmente
+                        a partir do console web (Caps &amp; Alerts).
+                    </div>
                 </div>
             `;
-        });
-        container.innerHTML = html;
-        lucide.createIcons();
+        }
 
-        container.querySelectorAll('.delete-connection-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const c = connections.find(x => x.id === this.dataset.id);
-                if (!c) return;
-                deleteTarget = { id: c.id, name: c.name, type: 'connection' };
-                document.getElementById('deleteTargetName').textContent = `"${c.name}"`;
-                document.getElementById('confirmDeleteModal').classList.add('active');
+        // Última sincronização (texto auxiliar embaixo do "Em uso")
+        let lastSyncHint = '';
+        if (cap && cap.last_snapshot_fetched_at) {
+            const when = formatDateTime(cap.last_snapshot_fetched_at);
+            const lastStatus = cap.last_snapshot_status || '';
+            let stateText = 'ok';
+            if (lastStatus === 'error') stateText = 'falhou';
+            else if (lastStatus === 'unavailable') stateText = 'indisponível';
+            lastSyncHint = `Sincronizado em ${escapeHtml(when)} · ${escapeHtml(stateText)}`;
+        } else {
+            lastSyncHint = 'Nunca sincronizado';
+        }
+
+        // Botão de contrato
+        const contract = activeProviderContracts
+            .filter(c => c.is_active)
+            .sort((a, b) => (b.started_at || '').localeCompare(a.started_at || ''))[0];
+
+        let actionBtn;
+        if (contract) {
+            actionBtn = `
+                <button class="apple-btn apple-btn-secondary" id="storageEditContractBtn">
+                    <i class="lucide" data-lucide="pencil" style="width:12px; height:12px;"></i>
+                    Editar contrato
+                </button>
+            `;
+        } else {
+            actionBtn = `
+                <button class="apple-btn apple-btn-secondary" id="storageCreateContractBtn">
+                    <i class="lucide" data-lucide="plus" style="width:12px; height:12px;"></i>
+                    Cadastrar contrato
+                </button>
+            `;
+        }
+
+        el.innerHTML = `
+            <div class="storage-section-head">
+                <div class="storage-section-head-left">
+                    <span class="storage-section-title">
+                        <i class="lucide" data-lucide="hard-drive"></i>
+                        ${escapeHtml(provider.name)}
+                    </span>
+                    <span class="storage-section-subtitle">
+                        Teto contratado e quanto já foi usado dele.
+                    </span>
+                </div>
+                <div class="storage-section-actions">
+                    ${actionBtn}
+                </div>
+            </div>
+
+            <div class="storage-hero">
+                <div class="storage-hero-figure">
+                    <span class="storage-hero-figure-label">Teto</span>
+                    ${capFigureHtml}
+                    <span class="storage-hero-figure-hint">Capacidade contratada</span>
+                </div>
+                <div class="storage-hero-divider"></div>
+                <div class="storage-hero-figure">
+                    <span class="storage-hero-figure-label">Em uso</span>
+                    ${usageFigureHtml}
+                    <span class="storage-hero-figure-hint">${escapeHtml(lastSyncHint)}</span>
+                </div>
+            </div>
+
+            ${usageBarHtml}
+            ${syncNoteHtml}
+            ${versionsNoteHtml}
+            ${notConfiguredNote}
+        `;
+
+        const btnEdit = document.getElementById('storageEditContractBtn');
+        if (btnEdit && contract) {
+            btnEdit.addEventListener('click', function() {
+                openContractModal(contract, provider);
             });
-        });
+        }
+        const btnCreate = document.getElementById('storageCreateContractBtn');
+        if (btnCreate) {
+            btnCreate.addEventListener('click', function() {
+                openContractModal(null, provider);
+            });
+        }
+
+        if (typeof lucide !== 'undefined') lucide.createIcons();
     }
 
-    document.getElementById('providerForm').addEventListener('submit', async function(e) {
+    // =========================================================================
+    // CONTRACT MODAL
+    // =========================================================================
+
+    function openContractModal(contract, provider) {
+        const modal = document.getElementById('contractModal');
+        const isEdit = !!contract;
+
+        document.getElementById('contractModalTitle').textContent =
+            isEdit ? 'Editar contrato' : 'Novo contrato';
+
+        document.getElementById('contractEditId').value = isEdit ? contract.id : '';
+        document.getElementById('contractProviderId').value = provider ? provider.id : '';
+        document.getElementById('contractName').value = isEdit ? contract.name : '';
+        document.getElementById('contractBillingPeriod').value =
+            isEdit && contract.billing_period ? contract.billing_period : 'monthly';
+        document.getElementById('contractCurrency').value =
+            isEdit && contract.currency ? contract.currency : 'BRL';
+        document.getElementById('contractFixedCost').value =
+            isEdit && contract.fixed_cost !== null && contract.fixed_cost !== undefined
+                ? contract.fixed_cost : '';
+        document.getElementById('contractStartedAt').value =
+            isEdit && contract.started_at ? contract.started_at : '';
+        document.getElementById('contractEndsAt').value =
+            isEdit && contract.ends_at ? contract.ends_at : '';
+        document.getElementById('contractExternalReference').value =
+            isEdit && contract.external_reference ? contract.external_reference : '';
+        document.getElementById('contractIncludedStorageBytes').value =
+            isEdit && contract.included_storage_bytes !== null &&
+            contract.included_storage_bytes !== undefined
+                ? contract.included_storage_bytes : '';
+        document.getElementById('contractNotes').value =
+            isEdit && contract.notes ? contract.notes : '';
+        document.getElementById('contractIsActive').checked =
+            isEdit ? !!contract.is_active : true;
+
+        updateContractStorageHint();
+        modal.classList.add('active');
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+
+    function updateContractStorageHint() {
+        const input = document.getElementById('contractIncludedStorageBytes');
+        const hint = document.getElementById('contractIncludedStorageHint');
+        if (!input || !hint) return;
+
+        const raw = input.value.trim();
+        if (raw === '') { hint.textContent = ''; return; }
+        const n = parseInt(raw, 10);
+        if (isNaN(n) || n < 0) { hint.textContent = ''; return; }
+        const human = humanizeBytes(n);
+        hint.textContent = human ? '≈ ' + human : '';
+    }
+
+    document.getElementById('contractIncludedStorageBytes').addEventListener('input', updateContractStorageHint);
+
+    document.getElementById('contractForm').addEventListener('submit', async function(e) {
         e.preventDefault();
-        const id = document.getElementById('editProviderId').value;
+
+        const id = document.getElementById('contractEditId').value;
+        const providerId = document.getElementById('contractProviderId').value;
+        const name = document.getElementById('contractName').value.trim();
+        if (!name) { showToast('Preencha o nome do contrato', 'error'); return; }
+
+        const startedAt = document.getElementById('contractStartedAt').value;
+        if (!startedAt) { showToast('Preencha a data de início', 'error'); return; }
+
+        const storageRaw = document.getElementById('contractIncludedStorageBytes').value.trim();
+        let storageBytes = null;
+        if (storageRaw !== '') {
+            const n = parseInt(storageRaw, 10);
+            if (isNaN(n) || n < 0) {
+                showToast('Teto de armazenamento inválido', 'error');
+                return;
+            }
+            storageBytes = n;
+        }
+
+        const fixedCostRaw = document.getElementById('contractFixedCost').value.trim();
+        const fixedCost = fixedCostRaw === '' ? null : fixedCostRaw;
+        const endsAt = document.getElementById('contractEndsAt').value || null;
+
         const payload = {
-            name: document.getElementById('providerName').value.trim(),
-            category: document.getElementById('providerCategory').value.trim(),
-            description: document.getElementById('providerDescription').value.trim(),
-            is_active: document.getElementById('providerIsActive').checked,
+            provider: providerId,
+            name: name,
+            billing_period: document.getElementById('contractBillingPeriod').value,
+            currency: document.getElementById('contractCurrency').value,
+            fixed_cost: fixedCost,
+            included_storage_bytes: storageBytes,
+            external_reference: document.getElementById('contractExternalReference').value.trim(),
+            started_at: startedAt,
+            ends_at: endsAt,
+            notes: document.getElementById('contractNotes').value.trim(),
+            is_active: document.getElementById('contractIsActive').checked,
         };
 
-        if (!payload.name) { showToast('Preencha o nome do provider', 'error'); return; }
-
-        const btn = document.getElementById('saveProviderBtn');
+        const btn = document.getElementById('contractSubmitBtn');
         setLoading(btn, true);
+
         try {
             if (id) {
-                await apiRequest('/api/console/providers/' + id + '/', 'PATCH', payload);
-                showToast('Provider atualizado', 'success');
+                await apiRequest('/api/console/contracts/' + id + '/', 'PATCH', payload);
+                showToast('Contrato atualizado', 'success');
             } else {
-                await apiRequest('/api/console/providers/', 'POST', payload);
-                showToast('Provider criado', 'success');
+                await apiRequest(
+                    '/api/console/providers/' + providerId + '/contracts/',
+                    'POST',
+                    payload
+                );
+                showToast('Contrato criado', 'success');
             }
-            resetProviderForm();
-            await loadProviders();
-        } catch (e) {
-            showToast(e.message || 'Erro ao salvar provider', 'error');
-        } finally {
-            setLoading(btn, false);
-        }
-    });
+            document.getElementById('contractModal').classList.remove('active');
 
-    function resetProviderForm() {
-        document.getElementById('editProviderId').value = '';
-        document.getElementById('providerName').value = '';
-        document.getElementById('providerCategory').value = '';
-        document.getElementById('providerDescription').value = '';
-        document.getElementById('providerIsActive').checked = true;
-        document.getElementById('cancelProviderBtn').style.display = 'none';
-        document.getElementById('saveProviderBtn').innerHTML =
-            '<i class="lucide" data-lucide="check" style="width:14px; height:14px;"></i> Salvar';
-        lucide.createIcons();
-    }
-
-    document.getElementById('cancelProviderBtn').addEventListener('click', function() {
-        resetProviderForm();
-        showToast('Edição cancelada', 'info');
-    });
-
-    document.getElementById('addConnectionBtn').addEventListener('click', function() {
-        if (!selectedProviderId) return;
-        document.getElementById('addConnectionForm').reset();
-        document.getElementById('addConnectionModal').classList.add('active');
-    });
-
-    document.getElementById('addConnectionForm').addEventListener('submit', async function(e) {
-        e.preventDefault();
-        if (!selectedProviderId) return;
-
-        const payload = {
-            name: document.getElementById('connectionName').value.trim(),
-            environment: document.getElementById('connectionEnvironment').value,
-            credential_ref: document.getElementById('connectionCredentialRef').value.trim(),
-            config: {}
-        };
-
-        if (!payload.name) { showToast('Preencha o nome', 'error'); return; }
-
-        const btn = document.getElementById('addConnectionSubmitBtn');
-        setLoading(btn, true);
-        try {
-            await apiRequest(
-                '/api/console/providers/' + selectedProviderId + '/connections/',
-                'POST',
-                payload
-            );
-            showToast('Conexão criada', 'success');
-            document.getElementById('addConnectionModal').classList.remove('active');
-            await selectProvider(selectedProviderId);
-        } catch (e) {
-            showToast(e.message || 'Erro ao criar conexão', 'error');
+            await loadProviderData();
+            renderStorageAll();
+        } catch (err) {
+            showToast(err.message || 'Erro ao salvar contrato', 'error');
         } finally {
             setLoading(btn, false);
         }
@@ -1793,7 +2114,7 @@
         if (!list.length) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="5" style="text-align:center; color:var(--text-tertiary); padding:30px 0; font-size:12.5px;">
+                    <td colspan="6" style="text-align:center; color:var(--text-tertiary); padding:30px 0; font-size:12.5px;">
                         ${adminWorkspaces.length === 0 ? 'Nenhum workspace criado' : 'Nenhum workspace encontrado'}
                     </td>
                 </tr>
@@ -1828,12 +2149,103 @@
                     <td style="text-align:center;font-size:12.5px;font-weight:500;">${w.members_count || 0}</td>
                     <td style="font-size:12px;color:var(--text-secondary);">${escapeHtml(location)}</td>
                     <td style="text-align:center;font-size:12px;color:var(--text-tertiary);">${formatDate(w.created_at)}</td>
+                    <td style="text-align:right;">
+                        <button class="ws-change-plan-btn" data-id="${w.id}" title="Mudar plano">
+                            <i class="lucide" data-lucide="repeat" style="width:12px; height:12px;"></i>
+                            Mudar plano
+                        </button>
+                    </td>
                 </tr>
             `;
         });
         tbody.innerHTML = html;
         if (typeof lucide !== 'undefined') lucide.createIcons();
+
+        tbody.querySelectorAll('.ws-change-plan-btn').forEach(btn => {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const wsId = this.dataset.id;
+                openChangePlanModal(wsId);
+            });
+        });
     }
+
+    async function openChangePlanModal(workspaceId) {
+        const ws = adminWorkspaces.find(x => x.id === workspaceId);
+        if (!ws) {
+            showToast('Workspace não encontrado', 'error');
+            return;
+        }
+
+        document.getElementById('changePlanWorkspaceId').value = ws.id;
+        document.getElementById('changePlanWorkspaceName').textContent = ws.name;
+        document.getElementById('changePlanCurrentPlan').textContent = ws.plan_name
+            ? `Plano atual: ${ws.plan_name}`
+            : 'Sem plano ativo';
+
+        const select = document.getElementById('changePlanSelect');
+        select.innerHTML = '<option value="">Selecione um plano...</option>';
+
+        const currentKey = ws.plan_key || null;
+        const availablePlans = plans.filter(p => p.is_active && p.key !== currentKey);
+
+        if (availablePlans.length === 0) {
+            const opt = document.createElement('option');
+            opt.value = '';
+            opt.disabled = true;
+            opt.textContent = currentKey
+                ? 'Nenhum outro plano ativo disponível'
+                : 'Nenhum plano ativo cadastrado';
+            select.appendChild(opt);
+            document.getElementById('changePlanSubmitBtn').disabled = true;
+        } else {
+            availablePlans.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p.key;
+                opt.textContent = `${p.name} — ${p.currency} ${parseFloat(p.price).toFixed(2)} / ${p.billing_period}`;
+                select.appendChild(opt);
+            });
+            document.getElementById('changePlanSubmitBtn').disabled = false;
+        }
+
+        document.getElementById('changePlanReason').value = 'manual';
+        document.getElementById('changePlanModal').classList.add('active');
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+
+    document.getElementById('changePlanForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const workspaceId = document.getElementById('changePlanWorkspaceId').value;
+        const planKey = document.getElementById('changePlanSelect').value;
+        const reason = document.getElementById('changePlanReason').value;
+
+        if (!workspaceId) { showToast('Workspace inválido', 'error'); return; }
+        if (!planKey) { showToast('Escolha um plano', 'error'); return; }
+
+        const btn = document.getElementById('changePlanSubmitBtn');
+        setLoading(btn, true);
+
+        try {
+            const result = await apiRequest(
+                '/api/console/workspaces/' + workspaceId + '/change-plan/',
+                'POST',
+                { plan_key: planKey, reason: reason }
+            );
+
+            const planName = result.plan_name || planKey;
+            showToast(`Plano alterado para "${planName}"`, 'success');
+
+            document.getElementById('changePlanModal').classList.remove('active');
+
+            await loadWorkspacesAdmin();
+            await loadPlans();
+        } catch (err) {
+            showToast(err.message || 'Erro ao trocar plano', 'error');
+        } finally {
+            setLoading(btn, false);
+        }
+    });
 
     // =========================================================================
     // USERS (ADMIN)
@@ -1899,7 +2311,6 @@
         if (typeof lucide !== 'undefined') lucide.createIcons();
     }
 
-    // Busca em workspaces e usuários
     document.getElementById('workspaceSearch')?.addEventListener('input', renderWorkspacesAdmin);
     document.getElementById('userSearch')?.addEventListener('input', renderUsersAdmin);
 
@@ -2039,15 +2450,6 @@
                 if (selectedFeatureId === deleteTarget.id) deselectFeature();
                 await loadFeatures();
                 showToast('Feature removida', 'success');
-            } else if (deleteTarget.type === 'provider') {
-                await apiRequest('/api/console/providers/' + deleteTarget.id + '/', 'DELETE');
-                if (selectedProviderId === deleteTarget.id) deselectProvider();
-                await loadProviders();
-                showToast('Provider removido', 'success');
-            } else if (deleteTarget.type === 'connection') {
-                await apiRequest('/api/console/connections/' + deleteTarget.id + '/', 'DELETE');
-                if (selectedProviderId) await selectProvider(selectedProviderId);
-                showToast('Conexão removida', 'success');
             } else if (deleteTarget.type === 'team') {
                 await apiRequest('/api/console/members/' + deleteTarget.id + '/', 'DELETE');
                 await loadTeamData();
@@ -2085,12 +2487,12 @@
     // NAVEGAÇÃO
     // =========================================================================
     function switchView(viewName) {
-        const views = ['governances', 'plans', 'features', 'providers', 'workspaces', 'users', 'team'];
+        const views = ['governances', 'plans', 'features', 'storage', 'workspaces', 'users', 'team'];
         const titles = {
             governances: 'Governanças',
             plans: 'Planos',
             features: 'Features',
-            providers: 'Providers',
+            storage: 'Armazenamento',
             workspaces: 'Workspaces',
             users: 'Usuários',
             team: 'Equipe',
@@ -2111,8 +2513,11 @@
         if (viewName === 'governances') { loadGovernances(); loadCapabilities(); }
         if (viewName === 'plans') { loadPlans(); loadMetrics(); loadAllFeatures(); }
         if (viewName === 'features') { loadFeatures(); loadPlans(); }
-        if (viewName === 'providers') { loadProviders(); }
-        if (viewName === 'workspaces') { loadWorkspacesAdmin(); }
+        if (viewName === 'storage') { loadStorageView(); }
+        if (viewName === 'workspaces') {
+            loadPlans();
+            loadWorkspacesAdmin();
+        }
         if (viewName === 'users') { loadUsersAdmin(); }
         if (viewName === 'team') { loadTeamData(); }
     }
@@ -2186,12 +2591,16 @@
                 } else if (activeNav === 'features') {
                     document.getElementById('featureFormWrapper').scrollIntoView({ behavior: 'smooth' });
                     document.getElementById('featureName').focus();
-                } else if (activeNav === 'providers') {
-                    document.getElementById('providerFormWrapper').scrollIntoView({ behavior: 'smooth' });
-                    document.getElementById('providerName').focus();
                 } else if (activeNav === 'governances') {
                     document.getElementById('governanceFormWrapper').scrollIntoView({ behavior: 'smooth' });
                     document.getElementById('govName').focus();
+                } else if (activeNav === 'storage') {
+                    const provider = storageProviders.find(p => p.key === activeProviderKey);
+                    if (provider) {
+                        openContractModal(null, provider);
+                    } else {
+                        showToast('Selecione um provider primeiro', 'info');
+                    }
                 }
             });
             document.getElementById('searchBtn').addEventListener('click', function() {
@@ -2242,6 +2651,19 @@
         },
         selectGovernance: function(id) { return selectGovernance(id); },
         deselectGovernance: function() { return deselectGovernance(); },
+        getWorkspaces: function() { return adminWorkspaces.slice(); },
+        openChangePlan: function(id) { return openChangePlanModal(id); },
+        getStorageProviders: function() { return storageProviders.slice(); },
+        getActiveProviderKey: function() { return activeProviderKey; },
+        getActiveProviderCap: function() { return activeProviderCap; },
+        getActiveBudget: function() { return activeBudget; },
+        getActiveBreakdown: function() { return activeBreakdown; },
+        getActiveBudgetHistory: function() { return activeBudgetHistory.slice(); },
+        reloadStorage: function() { return loadStorageView(); },
+        openContractModal: function(contract) {
+            const provider = storageProviders.find(p => p.key === activeProviderKey);
+            return openContractModal(contract || null, provider);
+        },
     };
     console.log('[console.js] Debug disponível em window.__clivo');
 

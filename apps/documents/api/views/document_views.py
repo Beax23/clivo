@@ -1,5 +1,13 @@
 """
 DocumentViewSet — CRUD + actions de negócio.
+
+REGRA DE CONTEXTO
+-----------------
+Todos os serializers de leitura (List/Detail) recebem
+`context={'request': request}`. Isso garante que `file_url` e
+`preview_url` sejam devolvidos como URLs ABSOLUTAS, o que é
+obrigatório quando o storage é local (`/media/...` seria relativo
+ao path da página).
 """
 
 import logging
@@ -17,7 +25,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 
-from apps.documents.models import Document
+from apps.documents.models import Document, DocumentFolder
 from apps.documents.api.serializers import (
     DocumentListSerializer,
     DocumentDetailSerializer,
@@ -26,11 +34,17 @@ from apps.documents.api.serializers import (
     DocumentReplaceSerializer,
     DocumentAssociateClientSerializer,
     DocumentAssociateProjectSerializer,
+    MoveDocumentSerializer,
+    DocumentVisibilitySerializer,
     DocumentHistorySerializer,
     GDriveImportSerializer,
 )
-from apps.documents.services import DocumentService, DocumentHistoryService
-from apps.documents.services.gdrive_service import GDriveService
+from apps.documents.services import (
+    DocumentService,
+    DocumentHistoryService,
+    GDriveService,
+    DocumentFolderService,
+)
 from apps.documents.exceptions import (
     DocumentError,
     DocumentNotFoundError,
@@ -38,6 +52,7 @@ from apps.documents.exceptions import (
     DocumentInvalidUploadError,
     DocumentClientNotFoundError,
     DocumentProjectNotFoundError,
+    DocumentFolderNotFoundError,
     DocumentStorageError,
 )
 from apps.clients.models import Client
@@ -141,7 +156,7 @@ class DocumentViewSet(viewsets.ModelViewSet):
         qs = (
             Document.objects
             .filter(workspace=workspace)
-            .select_related('client', 'created_by', 'updated_by')
+            .select_related('client', 'created_by', 'updated_by', 'folder')
             .order_by('-created_at')
         )
 
@@ -157,7 +172,19 @@ class DocumentViewSet(viewsets.ModelViewSet):
         if source:
             qs = qs.filter(source=source)
 
-        # Filtro de contexto (novo)
+        visibility = self.request.query_params.get('visible_to_client')
+        if visibility is not None and visibility != '':
+            if visibility.lower() in ('1', 'true', 'yes'):
+                qs = qs.filter(visible_to_client=True)
+            elif visibility.lower() in ('0', 'false', 'no'):
+                qs = qs.filter(visible_to_client=False)
+
+        folder_param = self.request.query_params.get('folder')
+        if folder_param == 'none':
+            qs = qs.filter(folder__isnull=True)
+        elif folder_param:
+            qs = qs.filter(folder_id=folder_param)
+
         context = self.request.query_params.get('context')
         if context == 'with_client':
             qs = qs.filter(client__isnull=False)
@@ -178,7 +205,9 @@ class DocumentViewSet(viewsets.ModelViewSet):
             return None
         return Document.objects.filter(
             id=document_id, workspace=workspace
-        ).select_related('client', 'created_by', 'updated_by', 'workspace').first()
+        ).select_related(
+            'client', 'created_by', 'updated_by', 'workspace', 'folder'
+        ).first()
 
     # ------------------------------------------------------------------
     # SERIALIZER
@@ -195,6 +224,10 @@ class DocumentViewSet(viewsets.ModelViewSet):
             return DocumentAssociateClientSerializer
         if self.action == 'associate_project':
             return DocumentAssociateProjectSerializer
+        if self.action == 'move':
+            return MoveDocumentSerializer
+        if self.action == 'set_visibility':
+            return DocumentVisibilitySerializer
         if self.action == 'gdrive_import':
             return GDriveImportSerializer
         if self.action == 'list':
@@ -209,6 +242,8 @@ class DocumentViewSet(viewsets.ModelViewSet):
     def _handle_domain_error(exc):
         if isinstance(exc, DocumentNotFoundError):
             return Response({'error': str(exc) or 'Arquivo não encontrado.'}, status=404)
+        if isinstance(exc, DocumentFolderNotFoundError):
+            return Response({'error': str(exc)}, status=400)
         if isinstance(exc, DocumentFileMissingError):
             return Response({'error': str(exc)}, status=410)
         if isinstance(exc, DocumentInvalidUploadError):
@@ -237,7 +272,9 @@ class DocumentViewSet(viewsets.ModelViewSet):
             return err
 
         qs = self.get_queryset()
-        serializer = DocumentListSerializer(qs, many=True)
+        serializer = DocumentListSerializer(
+            qs, many=True, context={'request': request},
+        )
         return Response(serializer.data)
 
     # ------------------------------------------------------------------
@@ -261,7 +298,20 @@ class DocumentViewSet(viewsets.ModelViewSet):
         if client_id:
             client = Client.objects.filter(id=client_id, workspace=workspace).first()
             if client is None:
-                return Response({'error': 'Cliente não encontrado neste workspace.'}, status=400)
+                return Response(
+                    {'error': 'Cliente não encontrado neste workspace.'},
+                    status=400,
+                )
+
+        folder = None
+        folder_id = serializer.validated_data.get('folder_id')
+        if folder_id:
+            folder = DocumentFolder.objects.filter(id=folder_id, workspace=workspace).first()
+            if folder is None:
+                return Response(
+                    {'error': 'Pasta não encontrada neste workspace.'},
+                    status=400,
+                )
 
         try:
             document = DocumentService.upload(
@@ -270,18 +320,28 @@ class DocumentViewSet(viewsets.ModelViewSet):
                 name=serializer.validated_data.get('name', ''),
                 client=client,
                 project_id=serializer.validated_data.get('project_id'),
+                folder=folder,
                 created_by=request.user,
                 source=serializer.validated_data.get('source', Document.SOURCE_UPLOAD),
                 source_url=serializer.validated_data.get('source_url', ''),
+                visible_to_client=serializer.validated_data.get('visible_to_client', False),
             )
         except Exception as exc:
             handled = self._handle_domain_error(exc)
             if handled is not None:
                 return handled
             logger.exception('Erro inesperado ao subir arquivo')
-            return Response({'error': 'Erro inesperado ao subir o arquivo.'}, status=500)
+            return Response(
+                {'error': 'Erro inesperado ao subir o arquivo.'},
+                status=500,
+            )
 
-        return Response(DocumentDetailSerializer(document).data, status=201)
+        return Response(
+            DocumentDetailSerializer(
+                document, context={'request': request},
+            ).data,
+            status=201,
+        )
 
     # ------------------------------------------------------------------
     # RETRIEVE
@@ -296,7 +356,11 @@ class DocumentViewSet(viewsets.ModelViewSet):
         if err is not None:
             return err
 
-        return Response(DocumentDetailSerializer(document).data)
+        return Response(
+            DocumentDetailSerializer(
+                document, context={'request': request},
+            ).data
+        )
 
     # ------------------------------------------------------------------
     # UPDATE
@@ -327,9 +391,16 @@ class DocumentViewSet(viewsets.ModelViewSet):
             if handled is not None:
                 return handled
             logger.exception('Erro inesperado ao renomear arquivo')
-            return Response({'error': 'Erro inesperado ao renomear o arquivo.'}, status=500)
+            return Response(
+                {'error': 'Erro inesperado ao renomear o arquivo.'},
+                status=500,
+            )
 
-        return Response(DocumentDetailSerializer(document).data)
+        return Response(
+            DocumentDetailSerializer(
+                document, context={'request': request},
+            ).data
+        )
 
     # ------------------------------------------------------------------
     # DESTROY
@@ -351,7 +422,10 @@ class DocumentViewSet(viewsets.ModelViewSet):
             if handled is not None:
                 return handled
             logger.exception('Erro inesperado ao excluir arquivo')
-            return Response({'error': 'Erro inesperado ao excluir o arquivo.'}, status=500)
+            return Response(
+                {'error': 'Erro inesperado ao excluir o arquivo.'},
+                status=500,
+            )
 
         return Response(status=204)
 
@@ -383,10 +457,135 @@ class DocumentViewSet(viewsets.ModelViewSet):
             if handled is not None:
                 return handled
             logger.exception('Erro inesperado ao substituir arquivo')
-            return Response({'error': 'Erro inesperado ao substituir o arquivo.'}, status=500)
+            return Response(
+                {'error': 'Erro inesperado ao substituir o arquivo.'},
+                status=500,
+            )
 
         document.refresh_from_db()
-        return Response(DocumentDetailSerializer(document).data)
+        return Response(
+            DocumentDetailSerializer(
+                document, context={'request': request},
+            ).data
+        )
+
+    # ------------------------------------------------------------------
+    # ACTION: move (mover para pasta)
+    # ------------------------------------------------------------------
+
+    @action(detail=True, methods=['post'], url_path='move')
+    def move(self, request, id=None):
+        document = self._get_document_or_404(id)
+        if document is None:
+            return Response({'error': 'Arquivo não encontrado'}, status=404)
+
+        err = self._require_capability(document.workspace, 'documents.document.move')
+        if err is not None:
+            return err
+
+        serializer = MoveDocumentSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        folder_id = serializer.validated_data.get('folder_id')
+
+        folder = None
+        if folder_id:
+            folder = DocumentFolder.objects.filter(
+                id=folder_id, workspace=document.workspace
+            ).first()
+            if folder is None:
+                return Response(
+                    {'error': 'Pasta não encontrada neste workspace.'},
+                    status=400,
+                )
+
+        try:
+            document = DocumentService.move_to_folder(
+                document=document,
+                folder=folder,
+                actor=request.user,
+            )
+        except Exception as exc:
+            handled = self._handle_domain_error(exc)
+            if handled is not None:
+                return handled
+            logger.exception('Erro inesperado ao mover arquivo')
+            return Response(
+                {'error': 'Erro inesperado ao mover o arquivo.'},
+                status=500,
+            )
+
+        return Response(
+            DocumentDetailSerializer(
+                document, context={'request': request},
+            ).data
+        )
+
+    # ------------------------------------------------------------------
+    # ACTION: set_visibility
+    # ------------------------------------------------------------------
+
+    @action(detail=True, methods=['post'], url_path='visibility')
+    def set_visibility(self, request, id=None):
+        document = self._get_document_or_404(id)
+        if document is None:
+            return Response({'error': 'Arquivo não encontrado'}, status=404)
+
+        err = self._require_capability(
+            document.workspace, 'documents.document.toggle_visibility'
+        )
+        if err is not None:
+            return err
+
+        serializer = DocumentVisibilitySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            document = DocumentService.set_visibility(
+                document=document,
+                visible_to_client=serializer.validated_data['visible_to_client'],
+                actor=request.user,
+            )
+        except Exception as exc:
+            handled = self._handle_domain_error(exc)
+            if handled is not None:
+                return handled
+            logger.exception('Erro inesperado ao alterar visibilidade')
+            return Response(
+                {'error': 'Erro inesperado ao alterar a visibilidade.'},
+                status=500,
+            )
+
+        return Response(
+            DocumentDetailSerializer(
+                document, context={'request': request},
+            ).data
+        )
+
+    # ------------------------------------------------------------------
+    # ACTION: storage_usage
+    # ------------------------------------------------------------------
+
+    @action(detail=False, methods=['get'], url_path='storage-usage')
+    def storage_usage(self, request):
+        workspace = self._current_workspace()
+        if workspace is None:
+            return Response({'error': 'Nenhum workspace ativo'}, status=400)
+
+        err = self._require_capability(workspace, 'documents.document.view')
+        if err is not None:
+            return err
+
+        try:
+            stats = DocumentService.storage_usage(workspace)
+        except Exception:
+            logger.exception('Erro ao calcular uso de armazenamento')
+            return Response(
+                {'error': 'Erro ao calcular o uso de armazenamento.'},
+                status=500,
+            )
+
+        return Response(stats)
 
     # ------------------------------------------------------------------
     # ACTION: associate_client
@@ -398,7 +597,9 @@ class DocumentViewSet(viewsets.ModelViewSet):
         if document is None:
             return Response({'error': 'Arquivo não encontrado'}, status=404)
 
-        err = self._require_capability(document.workspace, 'documents.document.associate_client')
+        err = self._require_capability(
+            document.workspace, 'documents.document.associate_client'
+        )
         if err is not None:
             return err
 
@@ -409,9 +610,14 @@ class DocumentViewSet(viewsets.ModelViewSet):
 
         try:
             if client_id:
-                client = Client.objects.filter(id=client_id, workspace=document.workspace).first()
+                client = Client.objects.filter(
+                    id=client_id, workspace=document.workspace
+                ).first()
                 if client is None:
-                    return Response({'error': 'Cliente não encontrado neste workspace.'}, status=400)
+                    return Response(
+                        {'error': 'Cliente não encontrado neste workspace.'},
+                        status=400,
+                    )
                 document = DocumentService.associate_client(
                     document=document, client=client, actor=request.user,
                 )
@@ -424,9 +630,16 @@ class DocumentViewSet(viewsets.ModelViewSet):
             if handled is not None:
                 return handled
             logger.exception('Erro inesperado ao associar cliente')
-            return Response({'error': 'Erro inesperado ao associar cliente.'}, status=500)
+            return Response(
+                {'error': 'Erro inesperado ao associar cliente.'},
+                status=500,
+            )
 
-        return Response(DocumentDetailSerializer(document).data)
+        return Response(
+            DocumentDetailSerializer(
+                document, context={'request': request},
+            ).data
+        )
 
     # ------------------------------------------------------------------
     # ACTION: associate_project
@@ -438,7 +651,9 @@ class DocumentViewSet(viewsets.ModelViewSet):
         if document is None:
             return Response({'error': 'Arquivo não encontrado'}, status=404)
 
-        err = self._require_capability(document.workspace, 'documents.document.associate_project')
+        err = self._require_capability(
+            document.workspace, 'documents.document.associate_project'
+        )
         if err is not None:
             return err
 
@@ -461,9 +676,16 @@ class DocumentViewSet(viewsets.ModelViewSet):
             if handled is not None:
                 return handled
             logger.exception('Erro inesperado ao associar projeto')
-            return Response({'error': 'Erro inesperado ao associar projeto.'}, status=500)
+            return Response(
+                {'error': 'Erro inesperado ao associar projeto.'},
+                status=500,
+            )
 
-        return Response(DocumentDetailSerializer(document).data)
+        return Response(
+            DocumentDetailSerializer(
+                document, context={'request': request},
+            ).data
+        )
 
     # ------------------------------------------------------------------
     # ACTION: download
@@ -475,7 +697,9 @@ class DocumentViewSet(viewsets.ModelViewSet):
         if document is None:
             return Response({'error': 'Arquivo não encontrado'}, status=404)
 
-        err = self._require_capability(document.workspace, 'documents.document.download')
+        err = self._require_capability(
+            document.workspace, 'documents.document.download'
+        )
         if err is not None:
             return err
 
@@ -486,7 +710,10 @@ class DocumentViewSet(viewsets.ModelViewSet):
             if handled is not None:
                 return handled
             logger.exception('Erro inesperado ao verificar arquivo')
-            return Response({'error': 'Erro inesperado ao verificar o arquivo.'}, status=500)
+            return Response(
+                {'error': 'Erro inesperado ao verificar o arquivo.'},
+                status=500,
+            )
 
         try:
             response = FileResponse(
@@ -496,12 +723,15 @@ class DocumentViewSet(viewsets.ModelViewSet):
             )
             response['Content-Type'] = _content_type_for(document)
             return response
-        except Exception as exc:
+        except Exception:
             logger.exception('Erro inesperado ao servir arquivo')
-            return Response({'error': 'Erro inesperado ao servir o arquivo.'}, status=500)
+            return Response(
+                {'error': 'Erro inesperado ao servir o arquivo.'},
+                status=500,
+            )
 
     # ------------------------------------------------------------------
-    # ACTION: preview (inline)
+    # ACTION: preview
     # ------------------------------------------------------------------
 
     @action(detail=True, methods=['get'], url_path='preview')
@@ -522,7 +752,10 @@ class DocumentViewSet(viewsets.ModelViewSet):
             if handled is not None:
                 return handled
             logger.exception('Erro inesperado ao verificar arquivo')
-            return Response({'error': 'Erro inesperado ao verificar o arquivo.'}, status=500)
+            return Response(
+                {'error': 'Erro inesperado ao verificar o arquivo.'},
+                status=500,
+            )
 
         try:
             file_handle = document.file.open('rb')
@@ -536,9 +769,12 @@ class DocumentViewSet(viewsets.ModelViewSet):
             response['Pragma'] = 'no-cache'
             response['Expires'] = '0'
             return response
-        except Exception as exc:
+        except Exception:
             logger.exception('Erro inesperado ao servir preview')
-            return Response({'error': 'Erro inesperado ao servir o preview.'}, status=500)
+            return Response(
+                {'error': 'Erro inesperado ao servir o preview.'},
+                status=500,
+            )
 
     # ------------------------------------------------------------------
     # ACTION: public_preview_link
@@ -596,19 +832,11 @@ class DocumentViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
     # ------------------------------------------------------------------
-    # ACTION: gdrive_list (listar arquivos do Drive)
+    # ACTION: gdrive_list
     # ------------------------------------------------------------------
 
     @action(detail=False, methods=['get'], url_path='gdrive/list')
     def gdrive_list(self, request):
-        """
-        Lista arquivos do Google Drive do usuário autenticado.
-
-        Query params:
-            q → busca por nome (opcional)
-
-        Retorna a lista de arquivos disponíveis para importação.
-        """
         workspace = self._current_workspace()
         if workspace is None:
             return Response({'error': 'Nenhum workspace ativo'}, status=400)
@@ -639,25 +867,6 @@ class DocumentViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'], url_path='gdrive/import')
     def gdrive_import(self, request):
-        """
-        Importa arquivos do Google Drive para o Clivo.
-
-        Body (JSON):
-            {
-                "files": [
-                    {"id": "...", "name": "...", "mimeType": "...", "webViewLink": "..."},
-                    ...
-                ],
-                "client_id": "...",   // opcional
-                "project_id": "..."   // opcional
-            }
-
-        Retorna:
-            {
-                "imported": [Document...],
-                "errors": [{"name": "...", "error": "..."}, ...]
-            }
-        """
         workspace = self._current_workspace()
         if workspace is None:
             return Response({'error': 'Nenhum workspace ativo'}, status=400)
@@ -679,14 +888,39 @@ class DocumentViewSet(viewsets.ModelViewSet):
                     status=400,
                 )
 
+        folder = None
+        folder_id = serializer.validated_data.get('folder_id')
+        if folder_id:
+            folder = DocumentFolder.objects.filter(id=folder_id, workspace=workspace).first()
+            if folder is None:
+                return Response(
+                    {'error': 'Pasta não encontrada neste workspace.'},
+                    status=400,
+                )
+
         try:
-            result = GDriveService.import_files(
-                workspace=workspace,
-                user=request.user,
-                files_meta=serializer.validated_data['files'],
-                client=client,
-                project_id=serializer.validated_data.get('project_id'),
-            )
+            imported = []
+            errors = []
+            for meta in serializer.validated_data['files']:
+                try:
+                    doc = GDriveService.import_file(
+                        workspace=workspace,
+                        user=request.user,
+                        file_meta=meta,
+                        client=client,
+                        project_id=serializer.validated_data.get('project_id'),
+                    )
+                    if folder is not None:
+                        doc = DocumentService.move_to_folder(
+                            document=doc, folder=folder, actor=request.user,
+                        )
+                    imported.append(doc)
+                except Exception as e:
+                    logger.exception('Falha ao importar arquivo do Drive')
+                    errors.append({
+                        'name': meta.get('name') or 'arquivo',
+                        'error': str(e),
+                    })
         except Exception as exc:
             handled = self._handle_domain_error(exc)
             if handled is not None:
@@ -698,8 +932,10 @@ class DocumentViewSet(viewsets.ModelViewSet):
             )
 
         return Response({
-            'imported': DocumentDetailSerializer(result['imported'], many=True).data,
-            'errors': result['errors'],
+            'imported': DocumentDetailSerializer(
+                imported, many=True, context={'request': request},
+            ).data,
+            'errors': errors,
         }, status=201)
 
     # ------------------------------------------------------------------
@@ -709,30 +945,47 @@ class DocumentViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='gdrive/status')
     def gdrive_status(self, request):
         """
-        Verifica se o usuário tem conta Google conectada.
-
-        Usado pelo frontend para decidir se abre o modal do Drive
-        ou se redireciona para o login OAuth.
+        Informa se o usuário tem conta Google conectada COM refresh token.
         """
         try:
-            from allauth.socialaccount.models import SocialAccount
-            connected = SocialAccount.objects.filter(
-                user=request.user, provider='google'
-            ).exists()
-        except Exception:
-            connected = False
+            from allauth.socialaccount.models import SocialAccount, SocialToken
+        except ImportError:
+            return Response({
+                'connected': False,
+                'has_refresh': False,
+                'needs_reconnect': False,
+                'user_email': None,
+            })
 
-        return Response({'connected': connected})
+        sa = SocialAccount.objects.filter(
+            user=request.user, provider='google'
+        ).first()
+
+        if not sa:
+            return Response({
+                'connected': False,
+                'has_refresh': False,
+                'needs_reconnect': False,
+                'user_email': None,
+            })
+
+        st = SocialToken.objects.filter(account=sa).first()
+        has_token = bool(st and st.token)
+        has_refresh = bool(st and st.token_secret)
+
+        return Response({
+            'connected': has_token and has_refresh,
+            'has_refresh': has_refresh,
+            'needs_reconnect': has_token and not has_refresh,
+            'user_email': sa.user.email,
+        })
 
 
 # =========================================================================
-# VIEW PÚBLICA (Office Online Viewer)
+# VIEW PÚBLICA
 # =========================================================================
 
 class DocumentPublicPreviewView(View):
-    """
-    Serve o arquivo para o Office Online Viewer via token assinado.
-    """
 
     def get(self, request, token):
         try:
@@ -770,6 +1023,6 @@ class DocumentPublicPreviewView(View):
             response['Access-Control-Allow-Origin'] = '*'
             response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
             return response
-        except Exception as exc:
+        except Exception:
             logger.exception('Erro ao servir public preview')
             raise Http404('Erro ao servir arquivo.')

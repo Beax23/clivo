@@ -41,7 +41,14 @@ class AdminWorkspaceSerializer(serializers.ModelSerializer):
         return obj.memberships.count()
 
     def _get_subscription(self, obj):
-        return getattr(obj, 'subscription', None)
+        """
+        Assinatura ATIVA do workspace.
+
+        Usa `active_subscription` (property), que filtra `is_active=True`.
+        O nome antigo `subscription` não existe mais como atributo direto
+        — o relacionamento reverso passou a ser `subscriptions`.
+        """
+        return getattr(obj, 'active_subscription', None)
 
     def get_plan_name(self, obj):
         sub = self._get_subscription(obj)

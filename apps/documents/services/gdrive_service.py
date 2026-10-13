@@ -23,6 +23,20 @@ Para isso funcionar, `SOCIALACCOUNT_STORE_TOKENS` precisa ser `True`
 no settings. Sem isso, o AllAuth autentica mas não guarda o token
 e a Drive API não pode ser chamada.
 
+Para o refresh funcionar (access token expira em 1h), é OBRIGATÓRIO
+que o settings tenha:
+
+    'AUTH_PARAMS': {
+        'access_type': 'offline',
+        'prompt': 'consent',
+    },
+
+Sem isso, o Google só devolve access_token e o `token_secret` (refresh)
+fica vazio. Quando o access expira, a renovação falha com:
+
+    RefreshError: The credentials do not contain the necessary fields
+    need to refresh the access token.
+
 Escopos necessários:
     - https://www.googleapis.com/auth/drive.readonly
     (ou drive.file, para acesso somente aos arquivos escolhidos pelo usuário)
@@ -52,6 +66,36 @@ DRIVE_SCOPES = [
 ]
 
 
+# Mensagens padronizadas para o frontend exibir com clareza.
+MSG_NO_SOCIAL = (
+    'Sua conta não está conectada ao Google. '
+    'Faça login com Google novamente.'
+)
+MSG_NO_TOKEN = (
+    'O Clivo não tem permissão para acessar seu Google Drive. '
+    'Faça login com Google novamente para autorizar.'
+)
+MSG_NO_REFRESH = (
+    'Sua conexão com o Google está incompleta. '
+    'Por favor, reconecte sua conta Google para permitir '
+    'que o Clivo acesse seu Drive.'
+)
+MSG_NO_LIBS = (
+    'Integração com Google Drive indisponível no servidor. '
+    'Contate o suporte.'
+)
+MSG_BUILD_FAIL = (
+    'Falha ao conectar ao Google Drive. Tente novamente.'
+)
+MSG_LIST_FAIL = (
+    'Falha ao listar arquivos do Google Drive. '
+    'Verifique se a permissão de leitura foi concedida.'
+)
+MSG_DOWNLOAD_FAIL = (
+    'Falha ao baixar o arquivo do Google Drive.'
+)
+
+
 class GDriveService:
 
     # ------------------------------------------------------------------
@@ -64,6 +108,14 @@ class GDriveService:
         Recupera as credenciais OAuth do Google Drive para o usuário.
 
         Retorna um objeto `google.oauth2.credentials.Credentials` ou None.
+
+        Retorna None em qualquer condição que impeça o refresh:
+            - allauth ausente
+            - SocialAccount ausente
+            - SocialToken ausente/vazio
+            - token_secret (refresh_token) ausente
+            - client_id/client_secret ausentes no settings
+            - google-auth não instalado
         """
         try:
             from allauth.socialaccount.models import SocialAccount, SocialToken
@@ -75,15 +127,26 @@ class GDriveService:
             user=user, provider='google'
         ).first()
         if not social:
+            logger.info('GDrive: usuário %s sem SocialAccount Google.', user.pk)
             return None
 
-        token = SocialToken.objects.filter(
-            account=social
-        ).first()
+        token = SocialToken.objects.filter(account=social).first()
         if not token or not token.token:
             logger.info(
                 'GDrive: SocialToken ausente para user=%s. '
                 'SOCIALACCOUNT_STORE_TOKENS está True?',
+                user.pk,
+            )
+            return None
+
+        # Diagnóstico explícito: sem refresh token não dá para renovar
+        refresh_token = token.token_secret or None
+        if not refresh_token:
+            logger.warning(
+                'GDrive: usuário %s tem access token mas SEM refresh_token. '
+                'Isso significa que o OAuth não foi feito com '
+                'access_type=offline + prompt=consent. '
+                'O usuário precisa reconectar a conta Google.',
                 user.pk,
             )
             return None
@@ -94,7 +157,6 @@ class GDriveService:
             logger.warning('google-auth não instalado')
             return None
 
-        # Recupera o client_id/secret do settings para permitir refresh
         try:
             from django.conf import settings
             client_id = getattr(settings, 'GOOGLE_CLIENT_ID', '') or ''
@@ -103,9 +165,16 @@ class GDriveService:
             client_id = ''
             client_secret = ''
 
+        if not client_id or not client_secret:
+            logger.warning(
+                'GDrive: GOOGLE_CLIENT_ID ou GOOGLE_CLIENT_SECRET ausente '
+                'no settings. O refresh token não funciona sem isso.'
+            )
+            return None
+
         creds = Credentials(
             token=token.token,
-            refresh_token=token.token_secret or None,
+            refresh_token=refresh_token,
             token_uri='https://oauth2.googleapis.com/token',
             client_id=client_id,
             client_secret=client_secret,
@@ -117,7 +186,6 @@ class GDriveService:
     def _get_service(user):
         """
         Cria o cliente da Google Drive API v3 para o usuário.
-        Retorna None se não for possível autenticar.
 
         Erros são distinguidos para dar mensagem clara ao frontend.
         """
@@ -133,43 +201,33 @@ class GDriveService:
             user=user, provider='google'
         ).first()
         if not social:
-            raise DocumentInvalidUploadError(
-                'Sua conta não está conectada ao Google. '
-                'Faça login com Google novamente.'
-            )
+            raise DocumentInvalidUploadError(MSG_NO_SOCIAL)
 
         token = SocialToken.objects.filter(account=social).first()
         if not token or not token.token:
-            raise DocumentInvalidUploadError(
-                'O Clivo não tem permissão para acessar seu Google Drive. '
-                'Faça login com Google novamente para autorizar.'
-            )
+            raise DocumentInvalidUploadError(MSG_NO_TOKEN)
 
-        # 2. Bibliotecas instaladas?
+        # 2. Tem refresh token? (sem ele, a 1ª expiração derruba tudo)
+        if not token.token_secret:
+            raise DocumentInvalidUploadError(MSG_NO_REFRESH)
+
+        # 3. Bibliotecas instaladas?
         try:
             from google.oauth2.credentials import Credentials
             from googleapiclient.discovery import build
         except ImportError:
             logger.exception('google-auth/google-api-python-client não instalados')
-            raise DocumentInvalidUploadError(
-                'Integração com Google Drive indisponível no servidor. '
-                'Contate o suporte.'
-            )
+            raise DocumentInvalidUploadError(MSG_NO_LIBS)
 
         creds = GDriveService._get_credentials(user)
         if creds is None:
-            raise DocumentInvalidUploadError(
-                'Não foi possível usar sua credencial do Google. '
-                'Faça login com Google novamente.'
-            )
+            raise DocumentInvalidUploadError(MSG_NO_REFRESH)
 
         try:
             return build('drive', 'v3', credentials=creds, cache_discovery=False)
         except Exception as exc:
             logger.exception('Falha ao construir cliente do Drive: %s', exc)
-            raise DocumentInvalidUploadError(
-                'Falha ao conectar ao Google Drive. Tente novamente.'
-            )
+            raise DocumentInvalidUploadError(MSG_BUILD_FAIL)
 
     # ------------------------------------------------------------------
     # LISTAGEM
@@ -200,10 +258,7 @@ class GDriveService:
             ).execute()
         except Exception as exc:
             logger.exception('Falha ao listar arquivos do Drive: %s', exc)
-            raise DocumentInvalidUploadError(
-                'Falha ao listar arquivos do Google Drive. '
-                'Verifique se a permissão de leitura foi concedida.'
-            )
+            raise DocumentInvalidUploadError(MSG_LIST_FAIL)
 
         files = response.get('files', []) or []
 

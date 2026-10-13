@@ -16,6 +16,7 @@ from apps.console.models import (
     PlanFeature,
     PlanFeatureLimit,
     Feature,
+    StorageProviderSnapshot,
 )
 
 
@@ -251,3 +252,49 @@ class ProviderLogAdmin(admin.ModelAdmin):
 
     def has_change_permission(self, request, obj=None):
         return False
+
+
+# =========================================================================
+# CONSOLE V1 — ARMAZENAMENTO (snapshot read-only)
+# =========================================================================
+
+@admin.register(StorageProviderSnapshot)
+class StorageProviderSnapshotAdmin(admin.ModelAdmin):
+    """
+    Admin read-only do snapshot.
+
+    Snapshot é histórico — não faz sentido editar. Se um snapshot foi
+    gravado errado, o correto é apagar a linha (auditoria) e rodar
+    a sincronização de novo.
+    """
+
+    list_display = [
+        'provider_key', 'status', 'plan_name',
+        'storage_usage_bytes', 'credits_usage', 'credits_limit',
+        'credits_used_percent', 'fetched_at',
+    ]
+    list_filter = ['provider_key', 'status', 'plan_name']
+    search_fields = ['provider_key', 'plan_name', 'error_message']
+    readonly_fields = [
+        'id', 'provider_key', 'status', 'plan_name', 'raw_payload',
+        'storage_usage_bytes', 'storage_credits_usage',
+        'bandwidth_usage_bytes', 'bandwidth_credits_usage',
+        'transformations_usage', 'transformations_credits_usage',
+        'credits_usage', 'credits_limit', 'credits_used_percent',
+        'objects_count', 'resources_count', 'derived_resources_count',
+        'media_limits', 'rate_limit_remaining', 'rate_limit_reset_at',
+        'error_message', 'fetched_at', 'created_at',
+    ]
+    ordering = ['-fetched_at']
+    date_hierarchy = 'fetched_at'
+
+    def has_add_permission(self, request):
+        # Snapshot só é criado via service.
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    # Permite apagar linhas antigas/erradas — auditoria
+    def has_delete_permission(self, request, obj=None):
+        return True

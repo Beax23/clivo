@@ -75,6 +75,10 @@ class ProviderContractSerializer(serializers.ModelSerializer):
         source='connection.name', read_only=True, allow_null=True
     )
 
+    # Campo derivado: formatação humana do teto em bytes.
+    # Não é persistido. É conveniência para o frontend.
+    included_storage_display = serializers.SerializerMethodField()
+
     class Meta:
         model = ProviderContract
         fields = [
@@ -82,11 +86,24 @@ class ProviderContractSerializer(serializers.ModelSerializer):
             'connection', 'connection_name',
             'name', 'external_reference',
             'billing_period', 'fixed_cost', 'currency',
+            'included_storage_bytes', 'included_storage_display',
             'started_at', 'ends_at',
             'is_active', 'notes',
             'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def get_included_storage_display(self, obj):
+        """
+        Formatação humana do teto em bytes, ou None quando não cadastrado.
+
+        Retorna None (não string vazia) quando `included_storage_bytes`
+        é NULL, para o frontend distinguir claramente "não cadastrado"
+        de "0 bytes".
+        """
+        if obj.included_storage_bytes is None:
+            return None
+        return _humanize_bytes(obj.included_storage_bytes)
 
 
 class ProviderContractWriteSerializer(serializers.ModelSerializer):
@@ -96,9 +113,26 @@ class ProviderContractWriteSerializer(serializers.ModelSerializer):
             'provider', 'connection',
             'name', 'external_reference',
             'billing_period', 'fixed_cost', 'currency',
+            'included_storage_bytes',
             'started_at', 'ends_at',
             'is_active', 'notes',
         ]
+
+    def validate_included_storage_bytes(self, value):
+        """
+        Validação explícita para deixar o contrato claro:
+
+            - None é válido (teto não cadastrado).
+            - 0 é válido (teto zero, cadastrado explicitamente).
+            - Negativo é inválido.
+        """
+        if value is None:
+            return None
+        if value < 0:
+            raise serializers.ValidationError(
+                _('O teto de armazenamento não pode ser negativo.')
+            )
+        return value
 
     def validate(self, attrs):
         starts = attrs.get(
@@ -242,3 +276,25 @@ class ProviderUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Provider
         fields = ['name', 'category', 'description', 'is_active']
+
+
+# =========================================================================
+# HELPERS
+# =========================================================================
+
+def _humanize_bytes(num_bytes: int) -> str:
+    """
+    Formata bytes em uma string legível (B, KB, MB, GB, TB).
+
+    Usado apenas para apresentação. O valor persistido continua sendo
+    o inteiro em bytes.
+    """
+    if num_bytes == 0:
+        return '0 B'
+    units = ['B', 'KB', 'MB', 'GB', 'TB']
+    size = float(num_bytes)
+    i = 0
+    while size >= 1024 and i < len(units) - 1:
+        size /= 1024.0
+        i += 1
+    return f'{size:.2f} {units[i]}'

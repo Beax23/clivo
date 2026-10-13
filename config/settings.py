@@ -46,6 +46,27 @@ def is_production():
     return False
 
 
+def _is_running_tests():
+    """
+    Detecta se o Django está sendo executado em modo de teste.
+
+    Cobre três casos:
+        - `python manage.py test ...`  → 'test' em sys.argv
+        - `pytest ...`                  → 'pytest' em sys.argv[:2]
+        - `python -m pytest ...`        → 'pytest' em sys.modules
+
+    Usado para forçar SQLite em memória durante testes, evitando que
+    o Django tente criar um banco de teste no Neon (`test_neondb`).
+    """
+    if 'test' in sys.argv:
+        return True
+    if any('pytest' in arg for arg in sys.argv[:2]):
+        return True
+    if 'pytest' in sys.modules:
+        return True
+    return False
+
+
 SECRET_KEY = os.getenv("SECRET_KEY")
 DEBUG = os.getenv("DEBUG", "False") == "True"
 ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "").split(",")
@@ -54,12 +75,12 @@ CSRF_TRUSTED_ORIGINS = os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",")
 
 if is_production():
     FRONTEND_URL = os.getenv("FRONTEND_URL", "https://clivoos.com")
-    print(f"🚀 AMBIENTE DE PRODUCAO DETECTADO")
-    print(f"📍 FRONTEND_URL: {FRONTEND_URL}")
+    print("🚀 Ambiente de PRODUÇÃO")
+    print(f"   FRONTEND_URL: {FRONTEND_URL}")
 else:
     FRONTEND_URL = os.getenv("FRONTEND_URL_DEV", "http://localhost:9000")
-    print(f"💻 AMBIENTE DE DESENVOLVIMENTO DETECTADO")
-    print(f"📍 FRONTEND_URL: {FRONTEND_URL}")
+    print("🔧 Ambiente de DESENVOLVIMENTO")
+    print(f"   FRONTEND_URL: {FRONTEND_URL}")
 
 
 INSTALLED_APPS = [
@@ -77,20 +98,20 @@ INSTALLED_APPS = [
     'allauth.account',
     'allauth.socialaccount',
     'allauth.socialaccount.providers.google',
+    'allauth.socialaccount.providers.pinterest',
 
     # Django REST Framework
     'rest_framework',
     'rest_framework.authtoken',
 
-    # Utilitários
+    # Utilitarios
     'corsheaders',
     'channels',
     'sslserver',
     'django_extensions',
 
-    # Armazenamento
-    'cloudinary',
-    'cloudinary_storage',
+    # Storage S3-compatible (B2 / R2)
+    'storages',
 
     # Seus apps
     'apps.accounts',
@@ -98,7 +119,7 @@ INSTALLED_APPS = [
     'apps.workspaces',
     'apps.clients',
     'apps.documents',
-    #'apps.references',
+    'apps.references',
     'apps.briefings',
     'apps.projects',
     'apps.timeline',
@@ -150,6 +171,9 @@ SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT = True
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 
+PINTEREST_CLIENT_ID = os.getenv("PINTEREST_CLIENT_ID", "")
+PINTEREST_CLIENT_SECRET = os.getenv("PINTEREST_CLIENT_SECRET", "")
+
 SOCIALACCOUNT_PROVIDERS = {
     'google': {
         'APP': {
@@ -160,15 +184,31 @@ SOCIALACCOUNT_PROVIDERS = {
         'SCOPE': [
             'profile',
             'email',
-            'openid',
+            'https://www.googleapis.com/auth/drive.readonly',
         ],
         'AUTH_PARAMS': {
-            'access_type': 'online',
-            'prompt': 'select_account',
+            'access_type': 'offline',
+            'prompt': 'consent',
         },
         'OAUTH_PKCE_ENABLED': True,
         'VERIFIED_EMAIL': True,
         'EMAIL_AUTHENTICATION': True,
+    },
+    'pinterest': {
+        'APP': {
+            'client_id': PINTEREST_CLIENT_ID,
+            'secret': PINTEREST_CLIENT_SECRET,
+            'key': ''
+        },
+        'SCOPE': [
+            'pins:read',
+            'boards:read',
+        ],
+        'AUTH_PARAMS': {
+            'prompt': 'consent',
+        },
+        'VERIFIED_EMAIL': False,
+        'EMAIL_AUTHENTICATION': False,
     }
 }
 
@@ -208,11 +248,6 @@ REST_FRAMEWORK = {
 
 
 # ============ MIDDLEWARE ============
-# Nota: o middleware 'core.middleware.security.SecurityMiddleware' foi
-# removido. Ele sobrescrevia X-Frame-Options: DENY em todas as respostas,
-# quebrando o preview inline de PDF e o iframe do Office Viewer.
-# O XFrameOptionsMiddleware do Django + @xframe_options_sameorigin na view
-# de preview cobrem o caso corretamente.
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
@@ -247,6 +282,7 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'django.template.context_processors.media',
                 'django.template.context_processors.static',
+                'apps.workspaces.context.workspace_public_id',
             ],
         },
     },
@@ -257,7 +293,7 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 
 # ============ DATABASE ============
-if 'test' in sys.argv:
+if _is_running_tests():
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
@@ -319,21 +355,127 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [
     BASE_DIR / 'Ui' / 'static',
 ]
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 
-# ============ CLOUDINARY ============
-CLOUDINARY_STORAGE = {
-    'CLOUD_NAME': os.getenv('CLOUDINARY_CLOUD_NAME'),
-    'API_KEY': os.getenv('CLOUDINARY_API_KEY'),
-    'API_SECRET': os.getenv('CLOUDINARY_API_SECRET'),
+# ============ STORAGE S3-COMPATIBLE ============
+#
+# Dois provedores suportados, em ordem de prioridade:
+#
+#   1. Backblaze B2  (ativo — usa credenciais B2_*)
+#   2. Cloudflare R2 (reservado — usa credenciais CLOUDFLARE_R2_*)
+#   3. Local         (fallback de desenvolvimento)
+#
+# A prioridade é decidida pela presença das variáveis de ambiente.
+# B2 vence se estiver configurado. Se não, R2. Se nenhum, local.
+#
+# Para trocar de volta para R2, basta remover as variáveis B2_* do .env.
+# Para desativar os dois, remover todas.
+
+# --- Backblaze B2 ---
+B2_KEY_ID = os.getenv('B2_KEY_ID', '')
+B2_APPLICATION_KEY = os.getenv('B2_APPLICATION_KEY', '')
+B2_BUCKET_NAME = os.getenv('B2_BUCKET_NAME', '')
+B2_ENDPOINT = os.getenv('B2_ENDPOINT', '')
+B2_REGION = os.getenv('B2_REGION', '')
+
+B2_CONFIGURED = all([
+    B2_KEY_ID,
+    B2_APPLICATION_KEY,
+    B2_BUCKET_NAME,
+    B2_ENDPOINT,
+    B2_REGION,
+])
+
+# --- Cloudflare R2 ---
+R2_ACCOUNT_ID = os.getenv('CLOUDFLARE_R2_ACCOUNT_ID', '')
+R2_ACCESS_KEY_ID = os.getenv('CLOUDFLARE_R2_ACCESS_KEY_ID', '')
+R2_SECRET_ACCESS_KEY = os.getenv('CLOUDFLARE_R2_SECRET_ACCESS_KEY', '')
+R2_BUCKET_NAME = os.getenv('CLOUDFLARE_R2_BUCKET_NAME', '')
+R2_ENDPOINT = os.getenv('CLOUDFLARE_R2_ENDPOINT', '')
+R2_CUSTOM_DOMAIN = os.getenv('CLOUDFLARE_R2_CUSTOM_DOMAIN', '')
+R2_API_TOKEN = os.getenv('CLOUDFLARE_API_TOKEN', '')
+
+R2_CONFIGURED = all([
+    R2_ACCOUNT_ID,
+    R2_ACCESS_KEY_ID,
+    R2_SECRET_ACCESS_KEY,
+    R2_BUCKET_NAME,
+    R2_ENDPOINT,
+])
+
+# --- Resolução da prioridade ---
+if B2_CONFIGURED:
+    _active_storage = 'b2'
+    AWS_ACCESS_KEY_ID = B2_KEY_ID
+    AWS_SECRET_ACCESS_KEY = B2_APPLICATION_KEY
+    AWS_STORAGE_BUCKET_NAME = B2_BUCKET_NAME
+    AWS_S3_ENDPOINT_URL = B2_ENDPOINT
+    AWS_S3_REGION_NAME = B2_REGION
+    AWS_S3_SIGNATURE_VERSION = 's3v4'
+    AWS_S3_ADDRESSING_STYLE = 'virtual'
+    AWS_DEFAULT_ACL = None
+    AWS_QUERYSTRING_AUTH = True
+    AWS_QUERYSTRING_EXPIRE = 3600
+    AWS_S3_FILE_OVERWRITE = False
+    AWS_S3_OBJECT_PARAMETERS = {
+        'CacheControl': 'max-age=86400',
+    }
+    _default_storage_backend = 'storages.backends.s3.S3Storage'
+    print(f"💾 Backblaze B2 ativo")
+    print(f"   bucket: {B2_BUCKET_NAME}")
+    print(f"   endpoint: {B2_ENDPOINT}")
+    print(f"   região: {B2_REGION}")
+
+elif R2_CONFIGURED:
+    _active_storage = 'r2'
+    AWS_ACCESS_KEY_ID = R2_ACCESS_KEY_ID
+    AWS_SECRET_ACCESS_KEY = R2_SECRET_ACCESS_KEY
+    AWS_STORAGE_BUCKET_NAME = R2_BUCKET_NAME
+    AWS_S3_ENDPOINT_URL = R2_ENDPOINT
+    AWS_S3_REGION_NAME = 'auto'
+    AWS_S3_SIGNATURE_VERSION = 's3v4'
+    AWS_S3_ADDRESSING_STYLE = 'virtual'
+    AWS_DEFAULT_ACL = None
+    AWS_QUERYSTRING_AUTH = True
+    AWS_QUERYSTRING_EXPIRE = 3600
+    AWS_S3_FILE_OVERWRITE = False
+    AWS_S3_OBJECT_PARAMETERS = {
+        'CacheControl': 'max-age=86400',
+    }
+    if R2_CUSTOM_DOMAIN:
+        AWS_S3_CUSTOM_DOMAIN = R2_CUSTOM_DOMAIN
+        AWS_QUERYSTRING_AUTH = False
+    _default_storage_backend = 'storages.backends.s3.S3Storage'
+    print(f"💾 Cloudflare R2 ativo")
+    print(f"   bucket: {R2_BUCKET_NAME}")
+    print(f"   endpoint: {R2_ENDPOINT}")
+    if R2_CUSTOM_DOMAIN:
+        print(f"   custom domain: {R2_CUSTOM_DOMAIN}")
+    else:
+        print(f"   URLs assinadas (querystring auth)")
+else:
+    _active_storage = 'local'
+    _default_storage_backend = 'django.core.files.storage.FileSystemStorage'
+    print("⚠️  Nenhum storage remoto configurado — usando LOCAL")
+
+print(f"   storage backend: {_default_storage_backend}")
+
+
+# ============ STORAGES (Django 6) ============
+STORAGES = {
+    "default": {
+        "BACKEND": _default_storage_backend,
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
 }
 
-
-SITE_NAME = os.getenv("SITE_NAME", "Clivo")
+# Compat: manter em sincronia para codigo legado.
+DEFAULT_FILE_STORAGE = _default_storage_backend
 
 
 # ============ WORKSPACE PUBLIC ID ============
@@ -361,14 +503,14 @@ INFRASTRUCTURE_ENCRYPTION_KEY = os.getenv("PROVIDER_ENCRYPTION_KEY")
 
 
 # ============ CACHE ============
-if 'test' in sys.argv:
+if _is_running_tests():
     CACHES = {
         'default': {
             'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
             'LOCATION': 'test-cache',
         }
     }
-    print("🧪 Usando LocMemCache para testes")
+    print("🧪 Cache: LocMemCache (testes)")
 else:
     CACHES = {
         'default': {
@@ -389,7 +531,7 @@ else:
             }
         }
     }
-    print(f"🔴 Redis configurado com pool de conexões (max: 20)")
+    print("🔴 Cache: Redis (pool 20 conexões)")
 
 
 # ============ CORS ============
@@ -531,6 +673,32 @@ LOGGING = {
             'level': 'DEBUG' if DEBUG else 'INFO',
             'propagate': False,
         },
+        'references': {
+            'handlers': ['console', 'file'],
+            'level': 'DEBUG' if DEBUG else 'INFO',
+            'propagate': False,
+        },
+        # Bibliotecas de storage/S3 — extremamente verbosas em DEBUG
+        'botocore': {
+            'handlers': ['console', 'file'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+        'boto3': {
+            'handlers': ['console', 'file'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+        's3transfer': {
+            'handlers': ['console', 'file'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+        'urllib3': {
+            'handlers': ['console', 'file'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
     },
 }
 
@@ -550,9 +718,6 @@ CSRF_HEADER_NAME = 'HTTP_X_CSRFTOKEN'
 
 
 # ============ SECURITY ============
-# SAMEORIGIN permite que nossos próprios templates embutam PDFs
-# via <embed>/<iframe> de /api/documents/<id>/preview/.
-# Views específicas que precisam bloquear usam @xframe_options_deny.
 X_FRAME_OPTIONS = 'SAMEORIGIN'
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_BROWSER_XSS_FILTER = True
@@ -565,7 +730,6 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 RESEND_API_KEY = os.getenv("RESEND_API_KEY")
 
 if RESEND_API_KEY and RESEND_API_KEY != '':
-    print(f"✉️ Usando Resend como provedor de email")
     EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
     EMAIL_HOST = 'smtp.resend.com'
     EMAIL_PORT = 587
@@ -574,9 +738,10 @@ if RESEND_API_KEY and RESEND_API_KEY != '':
     EMAIL_HOST_PASSWORD = RESEND_API_KEY
     EMAIL_USE_SSL = False
     EMAIL_TIMEOUT = 60
+    print("📧 Email: Resend (SMTP)")
 else:
-    print(f"📝 RESEND_API_KEY nao configurada. Usando console para email.")
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+    print("📧 Email: console (sem RESEND_API_KEY)")
 
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "Clivo <suporte@clivoos.com>")
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "suporte@clivoos.com")
@@ -589,12 +754,7 @@ MAX_WORKSPACE_USERS = 100
 ENABLE_GOOGLE_LOGIN = True
 ENABLE_MICROSOFT_LOGIN = os.getenv("ENABLE_MICROSOFT_LOGIN", "False") == "True"
 ENABLE_GITHUB_LOGIN = os.getenv("ENABLE_GITHUB_LOGIN", "False") == "True"
-
-
-print(f"✉️ EMAIL_BACKEND: {EMAIL_BACKEND}")
-print(f"✉️ DEFAULT_FROM_EMAIL: {DEFAULT_FROM_EMAIL}")
-print(f"📍 FRONTEND_URL FINAL: {FRONTEND_URL}")
-print(f"🌍 AMBIENTE: {'PRODUCAO' if not DEBUG else 'DESENVOLVIMENTO'}")
+ENABLE_PINTEREST_LOGIN = bool(PINTEREST_CLIENT_ID and PINTEREST_CLIENT_SECRET)
 
 
 # ============ RESEND INIT ============
@@ -603,13 +763,10 @@ try:
     RESEND_API_KEY = os.getenv("RESEND_API_KEY")
     if RESEND_API_KEY:
         resend.api_key = RESEND_API_KEY
-        print("✅ Resend API inicializada com sucesso")
-    else:
-        print("⚠️ RESEND_API_KEY nao configurada para API")
 except ImportError:
-    print("ℹ️ Módulo resend não disponível")
+    pass
 except Exception as e:
-    print(f"❌ Erro ao inicializar Resend: {e}")
+    print(f"⚠️  Erro ao inicializar Resend: {e}")
 
 
 # ============ ENVIRONMENT OVERRIDES ============
@@ -638,9 +795,7 @@ if not os.getenv('RENDER'):
         'https://clivo-mvp.onrender.com',
         'https://clivo.onrender.com'
     ]
-    print("💻 FORCANDO AMBIENTE DE DESENVOLVIMENTO LOCAL")
-    print(f"🐛 DEBUG: {DEBUG}")
-    print(f"🌐 ALLOWED_HOSTS: {ALLOWED_HOSTS}")
+    print("🔧 Overrides locais aplicados (DEBUG=True)")
 
 
 if is_production():
@@ -654,36 +809,7 @@ if is_production():
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
     SECURE_SSL_REDIRECT = True
-    print("🔒 CONFIGURACOES DE PRODUCAO APLICADAS")
-    print(f"🔒 CSRF_COOKIE_SECURE: {CSRF_COOKIE_SECURE}")
-    print(f"🔒 CSRF_COOKIE_HTTPONLY: {CSRF_COOKIE_HTTPONLY}")
-    print(f"🔒 SESSION_COOKIE_SECURE: {SESSION_COOKIE_SECURE}")
-
-
-# ============ CLOUDINARY STORAGE ============
-# IMPORTANTE: usamos SmartMediaCloudinaryStorage em vez do
-# MediaCloudinaryStorage padrão. A versão padrão envia TUDO como
-# `resource_type='image'`, o que faz o Cloudinary transformar `.docx`,
-# `.xlsx`, `.pptx` e `.zip` em JPEG, corrompendo o arquivo original.
-#
-# A nossa subclasse decide o resource_type pela extensão: `raw` para
-# documentos/binários, `image` para imagens/PDFs.
-CLOUDINARY_CONFIGURED = all([
-    os.getenv('CLOUDINARY_CLOUD_NAME'),
-    os.getenv('CLOUDINARY_API_KEY'),
-    os.getenv('CLOUDINARY_API_SECRET'),
-])
-
-if CLOUDINARY_CONFIGURED:
-    DEFAULT_FILE_STORAGE = 'core.storage.SmartMediaCloudinaryStorage'
-    print(f"☁️ Cloudinary configurado: {os.getenv('CLOUDINARY_CLOUD_NAME')}")
-    print(f"   🔑 API Key: {os.getenv('CLOUDINARY_API_KEY')}")
-    print(f"   📁 DEFAULT_FILE_STORAGE: core.storage.SmartMediaCloudinaryStorage")
-    print(f"   🗂️  Documentos (.docx/.xlsx/etc) → resource_type='raw'")
-else:
-    DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
-    print("💻 Usando armazenamento LOCAL")
-    print(f"   📁 DEFAULT_FILE_STORAGE: django.core.files.storage.FileSystemStorage")
+    print("🔒 Configurações de produção aplicadas")
 
 
 # ============ AI & INTEGRATIONS ============
@@ -707,15 +833,65 @@ STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
 RENDER_API_KEY = os.getenv("RENDER_API_KEY")
 
 
+# ============ DOCUMENTS ============
+DOCUMENTS_STORAGE_QUOTA_BYTES = int(
+    os.getenv("DOCUMENTS_STORAGE_QUOTA_BYTES", 5 * 1024 ** 3)  # 5 GB
+)
+
+
+# ============ REFERENCES ============
+REFERENCES_STORAGE_QUOTA_BYTES = int(
+    os.getenv("REFERENCES_STORAGE_QUOTA_BYTES", 5 * 1024 ** 3)  # 5 GB
+)
+
+REFERENCES_REQUIRE_PILLOW = (
+    os.getenv("REFERENCES_REQUIRE_PILLOW", "True") == "True"
+)
+
+REFERENCES_MAX_IMAGE_SIZE_BYTES = int(
+    os.getenv("REFERENCES_MAX_IMAGE_SIZE_BYTES", 25 * 1024 * 1024)
+)
+
+REFERENCES_MAX_IMAGE_PIXELS = int(
+    os.getenv("REFERENCES_MAX_IMAGE_PIXELS", 100_000_000)
+)
+
+
+# ============ DIAGNÓSTICO FINAL ============
+try:
+    import PIL
+    _pillow_ok = True
+    _pillow_version = getattr(PIL, '__version__', '?')
+except ImportError:
+    _pillow_ok = False
+    _pillow_version = None
+
+print("")
 print("=" * 60)
-print("✅ SETTINGS CARREGADOS COM SUCESSO")
-print(f"☁️ Cloudinary: {'✅ CONFIGURADO' if CLOUDINARY_CONFIGURED else '❌ NÃO CONFIGURADO'}")
-print(f"📁 Storage: {DEFAULT_FILE_STORAGE}")
-print(f"🤖 OpenAI: {'✅ CONFIGURADO' if OPENAI_API_KEY else '❌ NÃO CONFIGURADO'}")
-print(f"🖼️ Unsplash: {'✅ CONFIGURADO' if UNSPLASH_ACCESS_KEY else '❌ NÃO CONFIGURADO'}")
-print(f"📌 Pinterest: {'✅ CONFIGURADO' if PINTEREST_ACCESS_TOKEN else '❌ NÃO CONFIGURADO'}")
-print(f"🔑 Google Auth: {'✅ CONFIGURADO' if GOOGLE_CLIENT_ID else '❌ NÃO CONFIGURADO'}")
-print(f"🔐 Email Verification: {'🔒 MANDATORY' if ACCOUNT_EMAIL_VERIFICATION == 'mandatory' else '📝 OPTIONAL'}")
-print(f"🔗 Workspace Public ID: {'✅ Salt configurado' if WORKSPACE_PUBLIC_ID_SALT else '❌ Salt ausente'}")
-print(f"🔒 Encryption Key: {'✅ Configurada' if INFRASTRUCTURE_ENCRYPTION_KEY else '❌ AUSENTE — gere PROVIDER_ENCRYPTION_KEY no .env'}")
+print("📋 DIAGNÓSTICO FINAL")
 print("=" * 60)
+
+if _is_running_tests():
+    print("Modo:                 TESTES (SQLite em memória)")
+    print(f"Cache:                LocMemCache")
+
+print(f"Storage ativo:        {_active_storage.upper()}")
+print(f"Storage backend:      {_default_storage_backend}")
+print(f"B2 configurado:       {'✅' if B2_CONFIGURED else '❌'}")
+print(f"R2 configurado:       {'✅' if R2_CONFIGURED else '❌'}")
+print(f"OpenAI:               {'✅' if OPENAI_API_KEY else '❌'}")
+print(f"Unsplash:             {'✅' if UNSPLASH_ACCESS_KEY else '❌'}")
+print(f"Pinterest API:        {'✅' if PINTEREST_ACCESS_TOKEN else '❌'}")
+print(f"Google Auth:          {'✅' if GOOGLE_CLIENT_ID else '❌'}")
+print(f"Pinterest Auth:       {'✅' if ENABLE_PINTEREST_LOGIN else '❌'}")
+print(f"Email Verification:   {ACCOUNT_EMAIL_VERIFICATION}")
+print(f"Workspace Public ID:  {'✅ salt configurado' if WORKSPACE_PUBLIC_ID_SALT else '❌ salt ausente'}")
+print(f"Encryption Key:       {'✅' if INFRASTRUCTURE_ENCRYPTION_KEY else '❌ ausente'}")
+print(f"Cota Arquivos:        {DOCUMENTS_STORAGE_QUOTA_BYTES // (1024 ** 3)} GB por workspace")
+print(f"Cota Referências:     {REFERENCES_STORAGE_QUOTA_BYTES // (1024 ** 3)} GB por workspace")
+print(f"Pillow:               {'✅ v' + _pillow_version if _pillow_ok else '❌ ausente'}")
+print(f"Require Pillow:       {'✅' if REFERENCES_REQUIRE_PILLOW else '❌'}")
+print(f"Max imagem:           {REFERENCES_MAX_IMAGE_SIZE_BYTES // (1024 ** 2)} MB")
+print(f"Max pixels:           {REFERENCES_MAX_IMAGE_PIXELS:,}".replace(',', '.'))
+print("=" * 60)
+print("")

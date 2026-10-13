@@ -1,27 +1,42 @@
 """
 Serializers de Document.
 
-SEPARAÇÃO DE RESPONSABILIDADES
-------------------------------
-    DocumentListSerializer           → listagem leve
-    DocumentDetailSerializer         → detalhe completo
-    DocumentUploadSerializer         → criação (multipart)
-    DocumentUpdateSerializer         → renomear (PATCH simples)
-    DocumentReplaceSerializer        → substituir arquivo físico
-    DocumentAssociateClientSerializer  → associar/desassociar cliente
-    DocumentAssociateProjectSerializer → associar/desassociar projeto
-
-REGRA DE SEGURANÇA
-------------------
-`workspace`, `created_by`, `updated_by`, `created_at`, `updated_at`,
-`extension`, `mime_type` e `size` são sempre read-only.
-
-Nunca vêm do body. São extraídos do upload pelo service.
+REGRA DE URL
+-----------
+Toda URL de arquivo devolvida ao cliente passa por `_absolute_url`.
+Isso garante:
+    - Se o storage for S3/B2/R2 (URL assinada absoluta) → devolve como está.
+    - Se o storage for local (`/media/...`) → constrói URL absoluta com
+      `request`, para o frontend conseguir exibir de qualquer rota.
 """
 
 from rest_framework import serializers
 
 from apps.documents.models import Document
+
+
+# =========================================================================
+# HELPERS
+# =========================================================================
+
+def _absolute_url(request, url):
+    """
+    Retorna URL absoluta quando possível.
+
+    B2/R2 com `AWS_QUERYSTRING_AUTH=True` já devolvem URLs assinadas
+    absolutas. Local devolve `/media/...` — precisa do request para
+    virar absoluta.
+    """
+    if not url:
+        return ''
+    if url.startswith(('http://', 'https://')):
+        return url
+    if request is not None:
+        try:
+            return request.build_absolute_uri(url)
+        except Exception:
+            return url
+    return url
 
 
 # =========================================================================
@@ -31,14 +46,12 @@ from apps.documents.models import Document
 class DocumentListSerializer(serializers.ModelSerializer):
     """
     Serializer leve para listagem.
-
-    Expõe apenas o necessário para a lista de arquivos:
-    nome, extensão, tamanho, contexto, origem e rastreabilidade.
     """
 
     full_name = serializers.CharField(read_only=True)
     size_display = serializers.CharField(read_only=True)
     file_url = serializers.SerializerMethodField()
+    preview_url = serializers.SerializerMethodField()
 
     source_display = serializers.CharField(
         source='get_source_display', read_only=True
@@ -46,6 +59,10 @@ class DocumentListSerializer(serializers.ModelSerializer):
 
     client_name = serializers.CharField(
         source='client.name', read_only=True, allow_null=True
+    )
+
+    folder_name = serializers.CharField(
+        source='folder.name', read_only=True, allow_null=True
     )
 
     created_by_name = serializers.CharField(
@@ -62,14 +79,17 @@ class DocumentListSerializer(serializers.ModelSerializer):
             'name',
             'full_name',
             'file_url',
+            'preview_url',
             'extension',
             'mime_type',
             'size',
             'size_display',
             'client', 'client_name',
             'project_id',
+            'folder', 'folder_name',
             'source', 'source_display',
             'source_url',
+            'visible_to_client',
             'created_by', 'created_by_name',
             'updated_by', 'updated_by_name',
             'created_at',
@@ -81,9 +101,21 @@ class DocumentListSerializer(serializers.ModelSerializer):
         if not obj.file:
             return ''
         try:
-            return obj.file.url
+            url = obj.file.url
         except Exception:
             return ''
+        request = self.context.get('request')
+        return _absolute_url(request, url)
+
+    def get_preview_url(self, obj):
+        """
+        No módulo documents, `preview_url` é a mesma URL do arquivo.
+
+        Existe para padronizar com o módulo `briefings` (que usa
+        o mesmo nome de campo em opções de pergunta). Se um dia
+        houver thumbnail separada, ela vive aqui.
+        """
+        return self.get_file_url(obj)
 
 
 class DocumentDetailSerializer(serializers.ModelSerializer):
@@ -94,6 +126,7 @@ class DocumentDetailSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(read_only=True)
     size_display = serializers.CharField(read_only=True)
     file_url = serializers.SerializerMethodField()
+    preview_url = serializers.SerializerMethodField()
 
     workspace_id = serializers.UUIDField(source='workspace.id', read_only=True)
 
@@ -103,6 +136,10 @@ class DocumentDetailSerializer(serializers.ModelSerializer):
 
     client_name = serializers.CharField(
         source='client.name', read_only=True, allow_null=True
+    )
+
+    folder_name = serializers.CharField(
+        source='folder.name', read_only=True, allow_null=True
     )
 
     created_by_name = serializers.CharField(
@@ -126,14 +163,17 @@ class DocumentDetailSerializer(serializers.ModelSerializer):
             'name',
             'full_name',
             'file_url',
+            'preview_url',
             'extension',
             'mime_type',
             'size',
             'size_display',
             'client', 'client_name',
             'project_id',
+            'folder', 'folder_name',
             'source', 'source_display',
             'source_url',
+            'visible_to_client',
             'created_by', 'created_by_name', 'created_by_email',
             'updated_by', 'updated_by_name', 'updated_by_email',
             'created_at',
@@ -145,12 +185,14 @@ class DocumentDetailSerializer(serializers.ModelSerializer):
             'name',
             'full_name',
             'file_url',
+            'preview_url',
             'extension',
             'mime_type',
             'size',
             'size_display',
             'client',
             'project_id',
+            'folder', 'folder_name',
             'source', 'source_display',
             'source_url',
             'created_by', 'created_by_name', 'created_by_email',
@@ -163,9 +205,14 @@ class DocumentDetailSerializer(serializers.ModelSerializer):
         if not obj.file:
             return ''
         try:
-            return obj.file.url
+            url = obj.file.url
         except Exception:
             return ''
+        request = self.context.get('request')
+        return _absolute_url(request, url)
+
+    def get_preview_url(self, obj):
+        return self.get_file_url(obj)
 
 
 # =========================================================================
@@ -175,15 +222,6 @@ class DocumentDetailSerializer(serializers.ModelSerializer):
 class DocumentUploadSerializer(serializers.Serializer):
     """
     Criação de Document via upload.
-
-    Multipart form-data:
-        file        → arquivo (obrigatório)
-        name        → opcional (se vazio, extraído do filename)
-        client_id   → opcional
-        project_id  → opcional
-        source      → opcional (padrão 'upload')
-
-    `workspace` e `created_by` vêm do contexto autenticado.
     """
 
     file = serializers.FileField(required=True)
@@ -196,6 +234,9 @@ class DocumentUploadSerializer(serializers.Serializer):
     project_id = serializers.UUIDField(
         required=False, allow_null=True,
     )
+    folder_id = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True,
+    )
     source = serializers.ChoiceField(
         choices=[c[0] for c in Document.SOURCE_CHOICES],
         required=False,
@@ -204,18 +245,27 @@ class DocumentUploadSerializer(serializers.Serializer):
     source_url = serializers.URLField(
         required=False, allow_blank=True, max_length=1000,
     )
+    visible_to_client = serializers.BooleanField(
+        required=False, default=False,
+    )
+    # Aceita `kind` como no-op (compatibilidade com o fluxo de opções
+    # de pergunta, que envia `kind=image`). Não é persistido.
+    kind = serializers.CharField(
+        required=False, allow_blank=True, max_length=32,
+    )
 
     def validate_name(self, value):
         if value is None:
             return ''
         return value.strip()
 
+    def validate_visible_to_client(self, value):
+        return bool(value)
+
 
 class DocumentUpdateSerializer(serializers.Serializer):
     """
-    Atualização parcial do Document.
-
-    No P0, o único campo editável via PATCH é `name`.
+    Atualização parcial do Document. No P0, só `name`.
     """
 
     name = serializers.CharField(
@@ -259,6 +309,24 @@ class DocumentAssociateProjectSerializer(serializers.Serializer):
     )
 
 
+class MoveDocumentSerializer(serializers.Serializer):
+    """
+    Body para mover um documento para uma pasta.
+    """
+
+    folder_id = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True,
+    )
+
+
+class DocumentVisibilitySerializer(serializers.Serializer):
+    """
+    Body para alterar visibilidade do documento.
+    """
+
+    visible_to_client = serializers.BooleanField(required=True)
+
+
 # =========================================================================
 # GOOGLE DRIVE
 # =========================================================================
@@ -266,9 +334,6 @@ class DocumentAssociateProjectSerializer(serializers.Serializer):
 class GDriveImportSerializer(serializers.Serializer):
     """
     Body para importar arquivos do Google Drive.
-
-    Recebe uma lista de arquivos com id + metadados básicos.
-    O backend baixa cada um e cria um Document.
     """
 
     files = serializers.ListField(
@@ -281,4 +346,7 @@ class GDriveImportSerializer(serializers.Serializer):
     )
     project_id = serializers.UUIDField(
         required=False, allow_null=True,
+    )
+    folder_id = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True,
     )

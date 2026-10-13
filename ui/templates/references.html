@@ -1,0 +1,639 @@
+{% extends "sidebar.html" %}
+{% load static %}
+
+{% block title %}Referências · Clivo{% endblock %}
+{% block page_name %}referencias{% endblock %}
+
+{% block page_css %}
+<link rel="stylesheet" href="{% static 'css/references.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="rf-page" id="rfPage">
+    <div class="rf-body">
+
+        <section class="rf-main" id="rfMain">
+
+            <header class="rf-header">
+                <div class="rf-header-left">
+                    <div class="rf-header-title-row">
+                        <h1>Referências</h1>
+                        <span class="rf-header-dot" aria-hidden="true">·</span>
+                        <p class="rf-header-sub">Biblioteca visual do escritório.</p>
+                    </div>
+                </div>
+
+                <div class="rf-header-right">
+                    <button class="btn-integration btn-pinterest-brand"
+                            id="rfPinterestBtn" type="button">
+                        <span class="btn-integration-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" width="14" height="14">
+                                <path fill="#E60023" d="M12 0C5.373 0 0 5.372 0 12c0 5.084 3.163 9.426 7.627 11.174-.105-.949-.2-2.405.042-3.441.218-.937 1.407-5.965 1.407-5.965s-.359-.719-.359-1.782c0-1.668.967-2.914 2.171-2.914 1.023 0 1.518.769 1.518 1.69 0 1.029-.655 2.568-.994 3.995-.283 1.194.599 2.169 1.777 2.169 2.133 0 3.772-2.249 3.772-5.495 0-2.873-2.064-4.882-5.012-4.882-3.414 0-5.418 2.561-5.418 5.207 0 1.031.397 2.138.893 2.738.098.119.112.224.083.345l-.333 1.36c-.053.22-.174.267-.402.161-1.499-.698-2.436-2.889-2.436-4.649 0-3.785 2.75-7.262 7.929-7.262 4.163 0 7.398 2.967 7.398 6.931 0 4.136-2.607 7.464-6.227 7.464-1.216 0-2.359-.631-2.75-1.378l-.748 2.853c-.271 1.043-1.002 2.35-1.492 3.146C9.57 23.812 10.763 24 12 24c6.627 0 12-5.373 12-12 0-6.628-5.373-12-12-12z"/>
+                            </svg>
+                        </span>
+                        <span>Pinterest</span>
+                    </button>
+
+                    <button class="btn-integration" id="rfDriveBtn" type="button">
+                        <span class="btn-integration-icon" aria-hidden="true">
+                            <svg viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg" width="14" height="14">
+                                <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/>
+                                <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#00ac47"/>
+                                <path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335"/>
+                                <path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/>
+                                <path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/>
+                                <path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/>
+                            </svg>
+                        </span>
+                        <span>Google Drive</span>
+                        <span class="btn-integration-spinner" aria-hidden="true"></span>
+                    </button>
+                </div>
+            </header>
+
+            <div class="rf-toolbar">
+                <div class="rf-search-row">
+                    <div class="rf-search">
+                        <i data-lucide="search"></i>
+                        <input type="text" id="rfSearchInput" placeholder="Buscar referências...">
+                    </div>
+
+                    <label class="rf-select is-compact">
+                        <i data-lucide="folder" class="rf-select-lead"></i>
+                        <select id="rfFilterFolder" aria-label="Pasta">
+                            <option value="">Pastas</option>
+                            <option value="none">Soltas</option>
+                        </select>
+                        <i data-lucide="chevron-down"></i>
+                    </label>
+
+                    <label class="rf-select is-compact">
+                        <i data-lucide="tag" class="rf-select-lead"></i>
+                        <select id="rfFilterCategory" aria-label="Categoria">
+                            <option value="">Categorias</option>
+                        </select>
+                        <i data-lucide="chevron-down"></i>
+                    </label>
+
+                    <div class="rf-toolbar-actions">
+                        <button class="rf-icon-btn" id="rfManageCategoriesBtn"
+                                title="Gerenciar categorias" type="button">
+                            <i data-lucide="tags"></i>
+                        </button>
+
+                        <button class="rf-icon-btn rf-icon-btn-danger hidden" id="rfDeleteSelectedBtn"
+                                title="Excluir selecionadas" type="button">
+                            <i data-lucide="trash-2"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="rf-scroll" id="rfScroll">
+                <div class="rf-breadcrumb hidden" id="rfBreadcrumb">
+                    <button class="rf-breadcrumb-back" id="rfBreadcrumbBack" type="button">
+                        <i data-lucide="chevron-left"></i>
+                        <span class="rf-breadcrumb-name" id="rfBreadcrumbName">—</span>
+                    </button>
+                </div>
+
+                <section class="rf-block" id="rfFoldersBlock">
+                    <header class="rf-block-head">
+                        <div class="rf-block-head-left">
+                            <h2 class="rf-block-title">Pastas</h2>
+                            <span class="rf-section-count" id="rfFoldersCount">0</span>
+                        </div>
+                        <div class="rf-block-head-right">
+                            <button class="btn-minimal btn-minimal-dark" id="rfNewFolderBtn" type="button">
+                                <i data-lucide="plus"></i>
+                                <span>Nova pasta</span>
+                            </button>
+                        </div>
+                    </header>
+                    <div class="rf-folders-wrap">
+                        <div class="rf-folders" id="rfFolders"></div>
+                    </div>
+                </section>
+
+                <section class="rf-block" id="rfItemsBlock">
+                    <header class="rf-block-head">
+                        <div class="rf-block-head-left">
+                            <h2 class="rf-block-title" id="rfSectionTitle">Todas as referências</h2>
+                            <span class="rf-section-count" id="rfCount">0</span>
+                        </div>
+                        <div class="rf-block-head-right">
+                            <button class="btn-minimal btn-minimal-primary" id="rfUploadBtn" type="button">
+                                <i data-lucide="plus"></i>
+                                <span>Nova referência</span>
+                            </button>
+                            <div class="rf-view-toggle" role="tablist">
+                                <button class="rf-view-btn is-active" data-view="grid" type="button">
+                                    <i data-lucide="layout-grid"></i>
+                                </button>
+                                <button class="rf-view-btn" data-view="list" type="button">
+                                    <i data-lucide="list"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </header>
+                    <div class="rf-grid" id="rfGrid" data-view="grid"></div>
+                </section>
+            </div>
+
+        </section>
+
+        <aside class="rf-panel" id="rfPanel">
+
+            <div class="rf-panel-empty" id="rfDetailEmpty">
+                <i data-lucide="image"></i>
+                <p>Selecione uma referência</p>
+                <span>Os detalhes aparecerão aqui.</span>
+            </div>
+
+            <div class="rf-panel-content hidden" id="rfDetailContent">
+
+                <div class="rf-viewer is-single" id="rfViewer">
+                    <img id="rfViewerImg" src="" alt="">
+                    <div class="rf-viewer-categories" id="rfViewerCategories"></div>
+                    <button class="rf-viewer-btn rf-viewer-expand" id="rfViewerExpand" title="Ampliar" type="button">
+                        <i data-lucide="maximize-2"></i>
+                    </button>
+                </div>
+
+                <header class="rf-panel-head">
+                    <div class="rf-name-row" id="rfNameRow">
+                        <h2 id="rfDetailName" class="rf-name-display">—</h2>
+                        <input type="text" id="rfNameInput" class="rf-name-input hidden" maxlength="255" autocomplete="off">
+                        <button class="rf-name-edit-btn" id="rfNameEditBtn" title="Renomear" type="button">
+                            <i data-lucide="pencil"></i>
+                        </button>
+                        <button class="rf-icon-btn rf-more-btn" id="rfDetailMenuBtn" title="Mais ações" type="button">
+                            <i data-lucide="more-horizontal"></i>
+                        </button>
+                    </div>
+                </header>
+
+                <section class="rf-panel-section rf-panel-section-desc">
+                    <div class="rf-section-head">
+                        <h3>Descrição</h3>
+                        <button class="rf-name-edit-btn" id="rfDescEditBtn" title="Editar descrição" type="button">
+                            <i data-lucide="pencil"></i>
+                        </button>
+                    </div>
+                    <p class="rf-panel-desc" id="rfDetailDescription"></p>
+                    <textarea id="rfDescInput" class="rf-desc-input hidden" rows="3"></textarea>
+                </section>
+
+                <section class="rf-panel-section">
+                    <h3>Categorias</h3>
+                    <div class="rf-cat-field" id="rfCatField">
+                        <div class="rf-cat-chips" id="rfCatChips"></div>
+                        <input
+                            type="text"
+                            id="rfCatInput"
+                            class="rf-cat-input"
+                            placeholder="Adicionar categoria..."
+                            autocomplete="off"
+                            spellcheck="false"
+                        >
+                        <div class="rf-cat-menu hidden" id="rfCatMenu"></div>
+                    </div>
+                </section>
+
+                <section class="rf-panel-section">
+                    <h3>Informações</h3>
+                    <div class="rf-field-row">
+                        <span class="rf-field-label">Tipo</span>
+                        <span class="rf-field-value" id="rfInfoType">—</span>
+                    </div>
+                    <div class="rf-field-row">
+                        <span class="rf-field-label"><i data-lucide="hard-drive"></i>Tamanho</span>
+                        <span class="rf-field-value" id="rfInfoSize">—</span>
+                    </div>
+                    <div class="rf-field-row">
+                        <span class="rf-field-label">Origem</span>
+                        <span class="rf-field-value" id="rfInfoSource">—</span>
+                    </div>
+                    <div class="rf-field-row">
+                        <span class="rf-field-label"><i data-lucide="calendar"></i>Data</span>
+                        <span class="rf-field-value" id="rfInfoCreatedAt">—</span>
+                    </div>
+                    <div class="rf-field-row">
+                        <span class="rf-field-label"><i data-lucide="user"></i>Por</span>
+                        <span class="rf-field-value" id="rfInfoCreatedBy">—</span>
+                    </div>
+                </section>
+
+                <section class="rf-panel-section">
+                    <h3>Associações</h3>
+                    <div class="rf-field-row">
+                        <span class="rf-field-label">Pasta</span>
+                        <span class="rf-field-value">
+                            <select id="rfAssociateFolderSelect">
+                                <option value="">Sem pasta</option>
+                            </select>
+                        </span>
+                    </div>
+                    <div class="rf-field-row">
+                        <span class="rf-field-label">Cliente</span>
+                        <span class="rf-field-value">
+                            <select id="rfAssociateClientSelect">
+                                <option value="">Sem cliente</option>
+                            </select>
+                        </span>
+                    </div>
+                </section>
+            </div>
+
+            <footer class="rf-panel-footer hidden" id="rfPanelFooter">
+                <label class="rf-switch" for="rfVisibleToClient">
+                    <span class="rf-switch-label">
+                        <span class="rf-switch-title">Visível ao cliente</span>
+                        <span class="rf-switch-hint" id="rfVisibilityHint">
+                            Somente o escritório vê esta referência.
+                        </span>
+                    </span>
+                    <input type="checkbox" id="rfVisibleToClient">
+                    <span class="rf-switch-track">
+                        <span class="rf-switch-thumb"></span>
+                    </span>
+                </label>
+            </footer>
+        </aside>
+    </div>
+</div>
+
+<!-- TEMPLATES -->
+<template id="rfFolderTpl">
+    <div class="rf-folder" data-folder-id="" draggable="true">
+        <button type="button" class="rf-folder-main">
+            <span class="rf-folder-cover">
+                <span class="rf-folder-icon">
+                    <svg viewBox="0 0 48 48" fill="none"><path d="M6 14c0-1.1.9-2 2-2h10.2c.6 0 1.2.3 1.6.7l2.2 2.3c.4.4 1 .7 1.6.7H40c1.1 0 2 .9 2 2v20c0 1.1-.9 2-2 2H8c-1.1 0-2-.9-2-2V14z" fill="currentColor" opacity="0.28"/><path d="M4 20c0-1.1.9-2 2-2h14l2 2h20c1.1 0 2 .9 2 2v16c0 1.1-.9 2-2 2H6c-1.1 0-2-.9-2-2V20z" fill="currentColor" opacity="0.55"/></svg>
+                </span>
+            </span>
+            <span class="rf-folder-body">
+                <span class="rf-folder-name"></span>
+                <span class="rf-folder-count"></span>
+            </span>
+        </button>
+        <button type="button" class="rf-folder-more" aria-label="Mais ações">
+            <i data-lucide="more-horizontal"></i>
+        </button>
+    </div>
+</template>
+
+<template id="rfCardTpl">
+    <article class="rf-card" data-id="" tabindex="0" draggable="true">
+        <div class="rf-card-media">
+            <img class="rf-card-img" src="" alt="" loading="lazy">
+            <label class="rf-check rf-card-check">
+                <input type="checkbox" class="rf-card-select">
+                <span class="rf-check-box"><i data-lucide="check"></i></span>
+            </label>
+            <button class="rf-icon-btn rf-card-more" type="button">
+                <i data-lucide="more-horizontal"></i>
+            </button>
+        </div>
+        <div class="rf-card-foot">
+            <div class="rf-card-body">
+                <div class="rf-card-text">
+                    <h3 class="rf-card-title"></h3>
+                    <div class="rf-card-categories"></div>
+                    <p class="rf-card-meta">
+                        <span class="rf-card-source"></span>
+                        <span class="rf-card-meta-text"></span>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </article>
+</template>
+
+<!-- CONTEXT MENUS -->
+<div class="rf-ctx-menu hidden" id="rfCtxMenu" role="menu">
+    <button class="rf-ctx-item" data-ctx-action="download" type="button">
+        <i data-lucide="download"></i><span>Baixar</span>
+    </button>
+    <button class="rf-ctx-item is-danger" data-ctx-action="delete" type="button">
+        <i data-lucide="trash-2"></i><span>Excluir</span>
+    </button>
+</div>
+
+<div class="rf-ctx-menu hidden" id="rfFolderCtxMenu" role="menu">
+    <button class="rf-ctx-item" data-folder-action="rename" type="button">
+        <i data-lucide="pencil"></i><span>Renomear pasta</span>
+    </button>
+    <button class="rf-ctx-item" data-folder-action="set-cover" type="button">
+        <i data-lucide="image-plus"></i><span>Definir capa</span>
+    </button>
+    <button class="rf-ctx-item" data-folder-action="clear-cover" type="button">
+        <i data-lucide="image-off"></i><span>Remover capa</span>
+    </button>
+    <button class="rf-ctx-item is-danger" data-folder-action="delete" type="button">
+        <i data-lucide="trash-2"></i><span>Excluir pasta</span>
+    </button>
+</div>
+
+<!-- MODAIS -->
+<div class="cl-modal-overlay" id="rfNewFolderModal">
+    <div class="cl-modal cl-modal-sm cl-modal-apple">
+        <div class="cl-modal-header cl-modal-header-apple">
+            <h2 id="rfNewFolderTitle">Nova pasta</h2>
+            <button class="cl-modal-close cl-modal-close-apple" data-close="rfNewFolderModal" type="button">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+        <form id="rfNewFolderForm" class="cl-modal-body cl-modal-body-apple">
+            <div class="rf-apple-field">
+                <label for="rfNewFolderName">Nome</label>
+                <input type="text" id="rfNewFolderName" maxlength="100" autocomplete="off" required>
+            </div>
+            <div class="cl-modal-actions cl-modal-actions-apple">
+                <button type="button" class="btn-apple btn-apple-ghost" data-close="rfNewFolderModal">Cancelar</button>
+                <button type="submit" class="btn-apple btn-apple-primary" id="rfNewFolderSubmitBtn">
+                    <span class="rf-btn-label">Salvar</span>
+                    <span class="rf-btn-spinner"></span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="cl-modal-overlay" id="rfFolderCoverModal">
+    <div class="cl-modal cl-modal-sm cl-modal-apple">
+        <div class="cl-modal-header cl-modal-header-apple">
+            <h2 id="rfFolderCoverTitle">Capa da pasta</h2>
+            <button class="cl-modal-close cl-modal-close-apple" data-close="rfFolderCoverModal" type="button">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+        <form id="rfFolderCoverForm" class="cl-modal-body cl-modal-body-apple">
+            <label class="rf-dropzone" id="rfFolderCoverDropzone" for="rfFolderCoverFile">
+                <input type="file" id="rfFolderCoverFile"
+                       accept="image/jpeg,image/png,image/webp,image/gif,.jpg,.jpeg,.jfif,.png,.webp,.gif" required>
+                <div class="rf-dropzone-inner">
+                    <div class="rf-dropzone-icon"><i data-lucide="image-plus"></i></div>
+                    <div class="rf-dropzone-text">
+                        <strong id="rfFolderCoverTitle2">Escolher imagem de capa</strong>
+                        <span id="rfFolderCoverSub">JPG, PNG, WEBP ou GIF</span>
+                    </div>
+                </div>
+            </label>
+            <div class="cl-modal-actions cl-modal-actions-apple">
+                <button type="button" class="btn-apple btn-apple-ghost" data-close="rfFolderCoverModal">Cancelar</button>
+                <button type="submit" class="btn-apple btn-apple-primary" id="rfFolderCoverSubmitBtn">
+                    <span class="rf-btn-label">Salvar capa</span>
+                    <span class="rf-btn-spinner"></span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="cl-modal-overlay" id="rfDeleteFolderModal">
+    <div class="cl-modal cl-modal-sm cl-modal-apple rf-delete-modal">
+        <div class="cl-modal-header cl-modal-header-apple">
+            <h2>Excluir pasta</h2>
+            <button class="cl-modal-close cl-modal-close-apple" data-close="rfDeleteFolderModal" type="button">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+        <div class="cl-modal-body cl-modal-body-apple rf-delete-body">
+            <p class="rf-delete-hint" id="rfDeleteFolderHint">—</p>
+            <div class="rf-delete-file" id="rfDeleteFolderName">—</div>
+        </div>
+        <div class="cl-modal-actions cl-modal-actions-apple rf-delete-actions">
+            <button class="btn-apple btn-apple-ghost" data-close="rfDeleteFolderModal" type="button">Cancelar</button>
+            <button class="btn-apple btn-apple-danger" id="rfDeleteFolderConfirmBtn" type="button">
+                <span class="rf-btn-label">Excluir pasta</span>
+                <span class="rf-btn-spinner"></span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="cl-modal-overlay" id="rfCategoriesModal">
+    <div class="cl-modal cl-modal-apple rf-categories-modal">
+        <div class="cl-modal-header cl-modal-header-apple">
+            <h2>Categorias</h2>
+            <button class="cl-modal-close cl-modal-close-apple" data-close="rfCategoriesModal" type="button">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+        <div class="cl-modal-body cl-modal-body-apple rf-categories-body">
+            <form id="rfNewCategoryForm" class="rf-cat-new">
+                <div class="rf-cat-new-field">
+                    <input type="text" id="rfNewCategoryName" placeholder="Nova categoria…" maxlength="60">
+                </div>
+                <button type="submit" class="btn-apple btn-apple-primary rf-cat-new-btn" id="rfNewCategorySubmitBtn">
+                    <span class="rf-btn-label">Adicionar</span>
+                    <span class="rf-btn-spinner"></span>
+                </button>
+            </form>
+            <div class="rf-cat-list" id="rfCatList">
+                <p class="rf-cat-empty">Nenhuma categoria.</p>
+            </div>
+        </div>
+        <div class="cl-modal-actions cl-modal-actions-apple">
+            <button type="button" class="btn-apple btn-apple-ghost" data-close="rfCategoriesModal">Fechar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Excluir categoria -->
+<div class="cl-modal-overlay" id="rfDeleteCategoryModal">
+    <div class="cl-modal cl-modal-sm cl-modal-apple rf-delete-modal">
+        <div class="cl-modal-header cl-modal-header-apple">
+            <h2>Excluir categoria</h2>
+            <button class="cl-modal-close cl-modal-close-apple" data-close="rfDeleteCategoryModal" type="button">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+        <div class="cl-modal-body cl-modal-body-apple rf-delete-body">
+            <p class="rf-delete-hint">
+                A categoria será removida de todas as referências associadas. Esta ação não pode ser desfeita.
+            </p>
+            <div class="rf-delete-file" id="rfDeleteCategoryName">—</div>
+        </div>
+        <div class="cl-modal-actions cl-modal-actions-apple rf-delete-actions">
+            <button class="btn-apple btn-apple-ghost" data-close="rfDeleteCategoryModal" type="button">Cancelar</button>
+            <button class="btn-apple btn-apple-danger" id="rfDeleteCategoryConfirmBtn" type="button">
+                <span class="rf-btn-label">Excluir categoria</span>
+                <span class="rf-btn-spinner"></span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="cl-modal-overlay" id="rfUploadModal">
+    <div class="cl-modal cl-modal-apple">
+        <div class="cl-modal-header cl-modal-header-apple">
+            <h2>Nova referência</h2>
+            <button class="cl-modal-close cl-modal-close-apple" data-close="rfUploadModal" type="button">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+        <form id="rfUploadForm" class="cl-modal-body cl-modal-body-apple">
+            <label class="rf-dropzone" id="rfDropzone" for="rfUploadFile">
+                <input type="file" id="rfUploadFile"
+                       accept="image/jpeg,image/png,image/webp,image/gif,.jpg,.jpeg,.jfif,.png,.webp,.gif" required>
+                <div class="rf-dropzone-inner">
+                    <div class="rf-dropzone-icon"><i data-lucide="upload-cloud"></i></div>
+                    <div class="rf-dropzone-text">
+                        <strong id="rfDropzoneTitle">Arraste uma imagem aqui</strong>
+                        <span id="rfDropzoneSub">JPG, JPEG, JFIF, PNG, WEBP ou GIF</span>
+                    </div>
+                </div>
+            </label>
+            <div class="rf-apple-field">
+                <label for="rfUploadTitle">Título</label>
+                <input type="text" id="rfUploadTitle" maxlength="255" required>
+            </div>
+            <div class="rf-apple-field">
+                <label for="rfUploadDescription">Descrição</label>
+                <input type="text" id="rfUploadDescription">
+            </div>
+            <div class="rf-apple-field">
+                <label>Categorias</label>
+                <div class="rf-cat-field" id="rfUploadCatField">
+                    <div class="rf-cat-chips" id="rfUploadCatChips"></div>
+                    <input
+                        type="text"
+                        id="rfUploadCatInput"
+                        class="rf-cat-input"
+                        placeholder="Adicionar categoria..."
+                        autocomplete="off"
+                        spellcheck="false"
+                    >
+                    <div class="rf-cat-menu hidden" id="rfUploadCatMenu"></div>
+                </div>
+            </div>
+            <div class="rf-apple-grid">
+                <div class="rf-apple-field">
+                    <label for="rfUploadFolder">Pasta</label>
+                    <select id="rfUploadFolder"><option value="">Sem pasta</option></select>
+                </div>
+            </div>
+            <div class="rf-apple-field">
+                <label class="rf-switch" for="rfUploadVisibleToClient">
+                    <span class="rf-switch-label">
+                        <span class="rf-switch-title">Visível ao cliente</span>
+                        <span class="rf-switch-hint">O cliente verá esta referência.</span>
+                    </span>
+                    <input type="checkbox" id="rfUploadVisibleToClient">
+                    <span class="rf-switch-track"><span class="rf-switch-thumb"></span></span>
+                </label>
+            </div>
+            <div class="cl-modal-actions cl-modal-actions-apple">
+                <button type="button" class="btn-apple btn-apple-ghost" data-close="rfUploadModal">Cancelar</button>
+                <button type="submit" class="btn-apple btn-apple-primary" id="rfUploadSubmitBtn">
+                    <span class="rf-btn-label">Enviar</span>
+                    <span class="rf-btn-spinner"></span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="cl-modal-overlay" id="rfDriveModal">
+    <div class="cl-modal cl-modal-apple rf-drive-modal">
+        <div class="cl-modal-header cl-modal-header-apple">
+            <div class="rf-drive-title">
+                <span class="rf-drive-title-icon" aria-hidden="true">
+                    <svg viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg" width="18" height="18">
+                        <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/>
+                        <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#00ac47"/>
+                        <path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335"/>
+                        <path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/>
+                        <path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/>
+                        <path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/>
+                    </svg>
+                </span>
+                <h2>Google Drive</h2>
+            </div>
+            <button class="cl-modal-close cl-modal-close-apple" data-close="rfDriveModal" type="button">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+
+        <div class="cl-modal-body cl-modal-body-apple rf-drive-body">
+            <div class="rf-drive-intro" id="rfDriveIntro" style="display:none;">
+                <div class="rf-drive-intro-icon">
+                    <svg viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg" width="72" height="72">
+                        <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/>
+                        <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#00ac47"/>
+                        <path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335"/>
+                        <path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/>
+                        <path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/>
+                        <path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/>
+                    </svg>
+                </div>
+                <h3>Traga referências do Google Drive</h3>
+                <p>Escolha imagens que já estão no seu Drive e adicione ao Clivo.</p>
+                <button type="button" class="btn-apple btn-apple-primary rf-drive-intro-btn" id="rfDriveConnectBtn">
+                    Entrar no Google Drive
+                </button>
+            </div>
+
+            <div class="rf-drive-connected" id="rfDriveConnected" style="display:none;">
+                <div class="rf-drive-error hidden" id="rfDriveError">
+                    <i data-lucide="alert-circle"></i>
+                    <div>
+                        <span id="rfDriveErrorText">Erro</span>
+                        <div id="rfDriveErrorActions" style="display:none;"></div>
+                    </div>
+                </div>
+                <div class="rf-drive-search">
+                    <i data-lucide="search"></i>
+                    <input type="text" id="rfDriveSearchInput" placeholder="Buscar arquivos no Drive...">
+                </div>
+                <div class="rf-drive-files" id="rfDriveFiles">
+                    <p class="rf-drive-empty">Carregando…</p>
+                </div>
+                <div class="rf-drive-footer">
+                    <div class="rf-drive-summary" id="rfDriveSummary">
+                        <span id="rfDriveSelectedCount">0</span> selecionado(s)
+                    </div>
+                    <div class="rf-drive-footer-actions">
+                        <button type="button" class="btn-apple btn-apple-ghost" data-close="rfDriveModal">Cancelar</button>
+                        <button type="button" class="btn-apple btn-apple-primary" id="rfDriveImportBtn" disabled>Adicionar</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="rf-drive-loading" id="rfDriveLoading" style="display:none;">
+                <div class="rf-drive-loading-spinner"></div>
+                <p>Conectando ao Google Drive…</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="cl-modal-overlay" id="rfDeleteModal">
+    <div class="cl-modal cl-modal-sm cl-modal-apple rf-delete-modal">
+        <div class="cl-modal-header cl-modal-header-apple">
+            <h2 id="rfDeleteTitle">Excluir referência</h2>
+            <button class="cl-modal-close cl-modal-close-apple" data-close="rfDeleteModal" type="button">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+        <div class="cl-modal-body cl-modal-body-apple rf-delete-body">
+            <p class="rf-delete-hint">Esta ação remove a referência permanentemente.</p>
+            <div class="rf-delete-file" id="rfDeleteFileName">—</div>
+        </div>
+        <div class="cl-modal-actions cl-modal-actions-apple rf-delete-actions">
+            <button class="btn-apple btn-apple-ghost" data-close="rfDeleteModal" type="button">Cancelar</button>
+            <button class="btn-apple btn-apple-danger" id="rfDeleteConfirmBtn" type="button">
+                <span class="rf-btn-label">Excluir</span>
+                <span class="rf-btn-spinner"></span>
+            </button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block page_js %}
+<script src="{% static 'js/references.js' %}" defer></script>
+{% endblock %}

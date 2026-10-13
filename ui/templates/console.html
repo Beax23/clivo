@@ -30,7 +30,6 @@
         @keyframes spin { to { transform: rotate(360deg); } }
         .spin-icon { animation: spin 0.8s linear infinite; }
 
-        /* Capabilities column */
         .cap-count {
             display: inline-flex;
             align-items: center;
@@ -148,8 +147,8 @@
                         </div>
                         <div class="nav-group">
                             <div class="nav-label">Infraestrutura</div>
-                            <a href="#" data-nav="providers">
-                                <i class="lucide" data-lucide="server"></i><span>Providers</span>
+                            <a href="#" data-nav="storage">
+                                <i class="lucide" data-lucide="hard-drive"></i><span>Armazenamento</span>
                             </a>
                         </div>
                         <div class="nav-group">
@@ -357,16 +356,17 @@
                                         <table class="apple-governance-table">
                                             <thead>
                                                 <tr>
-                                                    <th style="width:36%;">Plano</th>
-                                                    <th style="width:22%;">Preço</th>
-                                                    <th style="width:14%;text-align:center;">Workspaces</th>
-                                                    <th style="width:13%;text-align:center;">Inicial</th>
-                                                    <th style="width:15%;text-align:right;">Ações</th>
+                                                    <th style="width:30%;">Plano</th>
+                                                    <th style="width:20%;">Preço</th>
+                                                    <th style="width:20%;">Quota armazenamento</th>
+                                                    <th style="width:10%;text-align:center;">Workspaces</th>
+                                                    <th style="width:10%;text-align:center;">Inicial</th>
+                                                    <th style="width:10%;text-align:right;">Ações</th>
                                                 </tr>
                                             </thead>
                                             <tbody id="plansTableBody">
                                                 <tr>
-                                                    <td colspan="5" style="text-align:center; color:var(--text-tertiary); padding:30px 0; font-size:12.5px;">
+                                                    <td colspan="6" style="text-align:center; color:var(--text-tertiary); padding:30px 0; font-size:12.5px;">
                                                         Nenhum plano criado
                                                     </td>
                                                 </tr>
@@ -495,101 +495,25 @@
                         </div>
                     </div>
 
-                    <!-- ===== VIEW: PROVIDERS ===== -->
-                    <div id="viewProviders" class="view-content" style="display:none;">
-                        <div class="apple-grid">
-                            <div class="apple-panel">
-                                <div class="apple-panel-header">
-                                    <div class="apple-panel-title">
-                                        <i class="lucide" data-lucide="server" style="width:18px; height:18px; opacity:0.6;"></i>
-                                        <h3>Providers</h3>
-                                        <span class="apple-badge" id="providerCount">0</span>
-                                    </div>
-                                </div>
-                                <div class="apple-panel-body">
-                                    <div class="apple-form-wrapper" id="providerFormWrapper">
-                                        <form id="providerForm">
-                                            <input type="hidden" id="editProviderId">
-                                            <div class="apple-form-group">
-                                                <label for="providerName">Nome</label>
-                                                <input type="text" id="providerName" placeholder="Ex: OpenAI" required>
-                                            </div>
-                                            <div class="apple-form-group">
-                                                <label for="providerCategory">Categoria</label>
-                                                <input type="text" id="providerCategory" placeholder="Ex: ai, storage, email">
-                                            </div>
-                                            <div class="apple-form-group">
-                                                <label for="providerDescription">Descrição</label>
-                                                <textarea id="providerDescription" placeholder="Descrição do provider..." rows="2"></textarea>
-                                            </div>
-                                            <div class="apple-form-row">
-                                                <div class="apple-form-checkbox">
-                                                    <input type="checkbox" id="providerIsActive" checked>
-                                                    <label for="providerIsActive">Ativo</label>
-                                                </div>
-                                                <div class="apple-form-actions" style="margin-left:auto;">
-                                                    <button type="submit" class="apple-btn apple-btn-primary" id="saveProviderBtn" style="padding: 6px 16px;">
-                                                        <i class="lucide" data-lucide="check" style="width:14px; height:14px;"></i> Salvar
-                                                    </button>
-                                                    <button type="button" class="apple-btn apple-btn-secondary" id="cancelProviderBtn" style="display:none; padding: 6px 16px;">Cancelar</button>
-                                                </div>
-                                            </div>
-                                        </form>
-                                    </div>
+                    <!-- ===== VIEW: ARMAZENAMENTO ===== -->
+                    <div id="viewStorage" class="view-content" style="display:none;">
+                        <div class="storage-page">
 
-                                    <div class="apple-table-wrapper">
-                                        <table class="apple-governance-table">
-                                            <thead>
-                                                <tr>
-                                                    <th style="width:50%;">Provider</th>
-                                                    <th style="width:25%;text-align:center;">Conexões</th>
-                                                    <th style="width:25%;text-align:right;">Ações</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody id="providersTableBody">
-                                                <tr>
-                                                    <td colspan="3" style="text-align:center; color:var(--text-tertiary); padding:30px 0; font-size:12.5px;">
-                                                        Nenhum provider criado
-                                                    </td>
-                                                </tr>
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
+                            <!-- Seletor de provider (aparece só se houver >1) -->
+                            <div id="storageProviderSwitch" class="storage-provider-switch" style="display:none;"></div>
+
+                            <!-- Estado de carregamento -->
+                            <div id="storageLoading" class="storage-loading" style="display:none;">
+                                <span class="btn-spinner" style="border-top-color: var(--text-secondary);"></span>
+                                <span>Carregando…</span>
                             </div>
 
-                            <div class="apple-panel">
-                                <div class="apple-panel-header">
-                                    <div class="apple-panel-title">
-                                        <i class="lucide" data-lucide="link" style="width:18px; height:18px; opacity:0.6;"></i>
-                                        <h3>Conexões</h3>
-                                        <span class="apple-badge" id="selectedConnCount">0</span>
-                                    </div>
-                                    <span class="apple-panel-subtitle" id="selectedProviderName">Selecione um provider</span>
-                                </div>
-                                <div class="apple-panel-body">
-                                    <div class="apple-capabilities">
-                                        <div class="apple-filter">
-                                            <div class="apple-filter-left">
-                                                <i class="lucide" data-lucide="plug" style="width:14px; height:14px; opacity:0.5;"></i>
-                                                <span style="font-size:11.5px; color:var(--text-secondary);">Conexões do provider</span>
-                                            </div>
-                                            <div class="apple-filter-right">
-                                                <button class="apple-btn apple-btn-sm apple-btn-primary" id="addConnectionBtn" disabled>
-                                                    <i class="lucide" data-lucide="plus" style="width:12px; height:12px;"></i> Nova conexão
-                                                </button>
-                                            </div>
-                                        </div>
+                            <!-- Estado vazio (sem provider) -->
+                            <div id="storageEmptyState" class="storage-empty-state" style="display:none;"></div>
 
-                                        <div class="apple-capabilities-list" id="connectionsList">
-                                            <div class="apple-empty">
-                                                <i class="lucide" data-lucide="server" style="width:32px; height:32px; opacity:0.3; margin-bottom:8px;"></i>
-                                                <p>Selecione um provider</p>
-                                                <span>As conexões aparecerão aqui</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
+                            <!-- Conteúdo real: único container, largura total -->
+                            <div id="storageContent" style="display:none;">
+                                <section class="storage-section-editorial" id="storageCapSection"></section>
                             </div>
                         </div>
                     </div>
@@ -616,16 +540,17 @@
                                         <table class="apple-governance-table">
                                             <thead>
                                                 <tr>
-                                                    <th style="width:30%;">Workspace</th>
-                                                    <th style="width:20%;">Plano</th>
-                                                    <th style="width:14%;text-align:center;">Membros</th>
-                                                    <th style="width:16%;">Localização</th>
-                                                    <th style="width:20%;text-align:center;">Criado em</th>
+                                                    <th style="width:28%;">Workspace</th>
+                                                    <th style="width:18%;">Plano</th>
+                                                    <th style="width:11%;text-align:center;">Membros</th>
+                                                    <th style="width:15%;">Localização</th>
+                                                    <th style="width:14%;text-align:center;">Criado em</th>
+                                                    <th style="width:14%;text-align:right;">Ações</th>
                                                 </tr>
                                             </thead>
                                             <tbody id="workspacesTableBody">
                                                 <tr>
-                                                    <td colspan="5" style="text-align:center; color:var(--text-tertiary); padding:30px 0; font-size:12.5px;">
+                                                    <td colspan="6" style="text-align:center; color:var(--text-tertiary); padding:30px 0; font-size:12.5px;">
                                                         Carregando workspaces...
                                                     </td>
                                                 </tr>
@@ -782,6 +707,210 @@
                 <div class="apple-form-actions">
                     <button type="submit" class="apple-btn apple-btn-primary" id="addConnectionSubmitBtn">Adicionar</button>
                     <button type="button" class="apple-btn apple-btn-secondary" data-modal="addConnectionModal">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: NOVO / EDITAR CONTRATO -->
+    <div class="apple-modal-overlay" id="contractModal">
+        <div class="apple-modal">
+            <div class="apple-modal-header">
+                <h2 id="contractModalTitle">Novo contrato</h2>
+                <button class="apple-modal-close" data-modal="contractModal">
+                    <i class="lucide" data-lucide="x" style="width:18px; height:18px;"></i>
+                </button>
+            </div>
+            <form id="contractForm">
+                <input type="hidden" id="contractEditId">
+                <input type="hidden" id="contractProviderId">
+
+                <div class="apple-form-group">
+                    <label for="contractName">Nome</label>
+                    <input type="text" id="contractName" placeholder="Ex: Production" required maxlength="100">
+                </div>
+
+                <div class="apple-form-row">
+                    <div class="apple-form-group" style="flex:1; margin:0;">
+                        <label for="contractBillingPeriod">Período de cobrança</label>
+                        <select id="contractBillingPeriod">
+                            <option value="monthly">Mensal</option>
+                            <option value="yearly">Anual</option>
+                            <option value="one_time">Única</option>
+                            <option value="custom">Custom</option>
+                        </select>
+                    </div>
+                    <div class="apple-form-group" style="flex:1; margin:0;">
+                        <label for="contractCurrency">Moeda</label>
+                        <select id="contractCurrency">
+                            <option value="BRL">BRL</option>
+                            <option value="USD">USD</option>
+                            <option value="EUR">EUR</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="apple-form-row" style="margin-top:10px;">
+                    <div class="apple-form-group" style="flex:1; margin:0;">
+                        <label for="contractFixedCost">Custo fixo (opcional)</label>
+                        <input type="number" id="contractFixedCost" placeholder="0.00" step="0.01" min="0">
+                    </div>
+                    <div class="apple-form-group" style="flex:1; margin:0;">
+                        <label for="contractStartedAt">Início</label>
+                        <input type="date" id="contractStartedAt" required>
+                    </div>
+                </div>
+
+                <div class="apple-form-group" style="margin-top:10px;">
+                    <label for="contractEndsAt">Término (opcional)</label>
+                    <input type="date" id="contractEndsAt">
+                </div>
+
+                <div class="apple-form-group">
+                    <label for="contractExternalReference">Referência externa (opcional)</label>
+                    <input type="text" id="contractExternalReference" placeholder="Ex: CLD-2026-001" maxlength="255">
+                </div>
+
+                <div class="apple-form-group">
+                    <label for="contractIncludedStorageBytes">
+                        Teto operacional de armazenamento (bytes)
+                    </label>
+                    <input
+                        type="number"
+                        id="contractIncludedStorageBytes"
+                        placeholder="Não cadastrado"
+                        min="0"
+                        step="1"
+                    >
+                    <p style="font-size:11.5px; color:var(--text-tertiary); margin-top:4px; line-height:1.55;">
+                        Preencha com o valor do <strong>Daily Storage Cap</strong> visto no console web do
+                        Backblaze B2 (Caps &amp; Alerts). A API S3-compatible do B2 <strong>não</strong> expõe
+                        este valor — ele precisa ser cadastrado manualmente aqui.
+                        <br>
+                        Deixe em branco para indicar que o teto não foi cadastrado.
+                        <strong>Vazio não significa ilimitado.</strong>
+                    </p>
+                    <p id="contractIncludedStorageHint" style="font-size:11.5px; color:var(--text-secondary); margin-top:6px;"></p>
+                </div>
+
+                <div class="apple-form-group">
+                    <label for="contractNotes">Observações (opcional)</label>
+                    <textarea id="contractNotes" placeholder="Notas internas..." rows="2"></textarea>
+                </div>
+
+                <div class="apple-form-row" style="margin-top:10px;">
+                    <div class="apple-form-checkbox">
+                        <input type="checkbox" id="contractIsActive" checked>
+                        <label for="contractIsActive">Contrato ativo</label>
+                    </div>
+                </div>
+
+                <div class="apple-form-actions">
+                    <button type="submit" class="apple-btn apple-btn-primary" id="contractSubmitBtn">Salvar</button>
+                    <button type="button" class="apple-btn apple-btn-secondary" data-modal="contractModal">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: EDITAR ORÇAMENTO -->
+    <div class="apple-modal-overlay" id="budgetModal">
+        <div class="apple-modal">
+            <div class="apple-modal-header">
+                <h2>Editar orçamento</h2>
+                <button class="apple-modal-close" data-modal="budgetModal">
+                    <i class="lucide" data-lucide="x" style="width:18px; height:18px;"></i>
+                </button>
+            </div>
+            <form id="budgetForm">
+                <div class="apple-form-group">
+                    <label for="budgetTotalBytes">Orçamento total (bytes)</label>
+                    <input
+                        type="number"
+                        id="budgetTotalBytes"
+                        placeholder="Ex: 53687091200"
+                        min="0"
+                        step="1"
+                        required
+                    >
+                    <p id="budgetTotalHint" style="font-size:11.5px; color:var(--text-secondary); margin-top:4px;"></p>
+                </div>
+
+                <div class="apple-form-group">
+                    <label for="budgetReservePercent">Reserva operacional (%)</label>
+                    <input
+                        type="number"
+                        id="budgetReservePercent"
+                        min="0"
+                        max="100"
+                        step="1"
+                        required
+                    >
+                    <p id="budgetReserveHint" style="font-size:11.5px; color:var(--text-tertiary); margin-top:4px; line-height:1.55;">
+                        Percentual do orçamento total reservado para operação
+                        (arquivos temporários, versões antigas, margem de segurança).
+                        O restante é alocável a workspaces.
+                    </p>
+                </div>
+
+                <div class="apple-form-group">
+                    <label for="budgetPolicy">Política de alocação</label>
+                    <select id="budgetPolicy" required>
+                        <option value="strict">Estrita (bloqueia acima do alocável)</option>
+                        <option value="controlled">Controlada (permite sobrealocação com aviso)</option>
+                    </select>
+                </div>
+
+                <div class="apple-form-group">
+                    <label for="budgetReason">Justificativa</label>
+                    <textarea id="budgetReason" placeholder="Por que esta alteração está sendo feita?" rows="2"></textarea>
+                </div>
+
+                <div class="apple-form-actions">
+                    <button type="submit" class="apple-btn apple-btn-primary" id="budgetSubmitBtn">Salvar</button>
+                    <button type="button" class="apple-btn apple-btn-secondary" data-modal="budgetModal">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: MUDAR PLANO DO WORKSPACE -->
+    <div class="apple-modal-overlay" id="changePlanModal">
+        <div class="apple-modal">
+            <div class="apple-modal-header">
+                <h2>Mudar plano</h2>
+                <button class="apple-modal-close" data-modal="changePlanModal">
+                    <i class="lucide" data-lucide="x" style="width:18px; height:18px;"></i>
+                </button>
+            </div>
+            <form id="changePlanForm">
+                <input type="hidden" id="changePlanWorkspaceId">
+                <div class="change-plan-info">
+                    <div class="change-plan-ws-name" id="changePlanWorkspaceName">—</div>
+                    <div class="change-plan-current" id="changePlanCurrentPlan">Sem plano ativo</div>
+                </div>
+                <div class="apple-form-group">
+                    <label for="changePlanSelect">Novo plano</label>
+                    <select id="changePlanSelect" required>
+                        <option value="">Selecione um plano...</option>
+                    </select>
+                </div>
+                <div class="apple-form-group">
+                    <label for="changePlanReason">Motivo</label>
+                    <select id="changePlanReason">
+                        <option value="manual" selected>Ajuste manual</option>
+                        <option value="upgrade">Upgrade</option>
+                        <option value="downgrade">Downgrade</option>
+                        <option value="migration">Migração de dados</option>
+                        <option value="other">Outro</option>
+                    </select>
+                </div>
+                <p class="change-plan-hint" id="changePlanHint">
+                    A assinatura anterior será encerrada e uma nova será criada. O histórico é preservado.
+                </p>
+                <div class="apple-form-actions">
+                    <button type="submit" class="apple-btn apple-btn-primary" id="changePlanSubmitBtn">Trocar plano</button>
+                    <button type="button" class="apple-btn apple-btn-secondary" data-modal="changePlanModal">Cancelar</button>
                 </div>
             </form>
         </div>

@@ -2,6 +2,9 @@
 Seed do catálogo de Provider.
 
 Inicialmente apenas os providers reais da infraestrutura do Clivo.
+
+Idempotente: usa `update_or_create` por `key`. Rodar várias vezes
+não duplica. Não apaga providers que não estão nesta lista.
 """
 
 from datetime import date
@@ -22,10 +25,10 @@ class Command(BaseCommand):
             'description': 'Provedor de modelos de linguagem.',
         },
         {
-            'key': 'cloudinary',
-            'name': 'Cloudinary',
+            'key': 'backblaze_b2',
+            'name': 'Backblaze B2',
             'category': 'storage',
-            'description': 'Armazenamento e transformação de mídia.',
+            'description': 'Armazenamento de objetos S3-compatible.',
         },
         {
             'key': 'resend',

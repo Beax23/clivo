@@ -8,13 +8,14 @@ from typing import Optional
 
 from django.db import transaction
 
-from apps.documents.models import Document, DocumentHistory
+from apps.documents.models import Document, DocumentHistory, DocumentFolder
 from apps.documents.exceptions import (
     DocumentNotFoundError,
     DocumentFileMissingError,
     DocumentInvalidUploadError,
     DocumentClientNotFoundError,
     DocumentProjectNotFoundError,
+    DocumentFolderNotFoundError,
     DocumentStorageError,
 )
 from apps.documents.queries import DocumentQueries
@@ -38,22 +39,14 @@ class DocumentService:
         name: Optional[str] = None,
         client=None,
         project_id=None,
+        folder=None,
         created_by=None,
         source: str = Document.SOURCE_UPLOAD,
         source_url: str = '',
+        visible_to_client: bool = False,
     ) -> Document:
         """
         Cria um novo Document a partir de um arquivo enviado.
-
-        Parâmetros:
-            workspace      → workspace de destino (obrigatório)
-            uploaded_file  → InMemoryUploadedFile ou TemporaryUploadedFile
-            name           → nome sem extensão. Se vazio, usa o do arquivo.
-            client         → Client opcional
-            project_id     → UUID opcional (projects.Project.id)
-            created_by     → User opcional
-            source         → origem (upload/gdrive/url)
-            source_url     → URL original (quando aplicável)
         """
         DocumentService._validate_uploaded_file(uploaded_file)
 
@@ -75,6 +68,9 @@ class DocumentService:
         if client is not None:
             DocumentService._validate_client(workspace, client)
 
+        if folder is not None:
+            DocumentService._validate_folder(workspace, folder)
+
         if source not in dict(Document.SOURCE_CHOICES):
             source = Document.SOURCE_UPLOAD
 
@@ -86,8 +82,10 @@ class DocumentService:
             size=size,
             client=client,
             project_id=project_id,
+            folder=folder,
             source=source,
             source_url=(source_url or '')[:1000],
+            visible_to_client=bool(visible_to_client),
             created_by=created_by,
             updated_by=created_by,
         )
@@ -114,8 +112,10 @@ class DocumentService:
                 'size': document.size,
                 'client_id': str(document.client_id) if document.client_id else None,
                 'project_id': str(document.project_id) if document.project_id else None,
+                'folder_id': str(document.folder_id) if document.folder_id else None,
                 'source': document.source,
                 'source_url': document.source_url or None,
+                'visible_to_client': document.visible_to_client,
             },
         )
 
@@ -170,6 +170,83 @@ class DocumentService:
         return document
 
     # ------------------------------------------------------------------
+    # MOVER PARA PASTA
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    @transaction.atomic
+    def move_to_folder(
+        *,
+        document: Document,
+        folder: Optional[DocumentFolder],
+        actor=None,
+    ) -> Document:
+        """
+        Move o documento para uma pasta.
+
+        `folder=None` significa "soltar" (remover da pasta atual).
+        """
+        if folder is not None:
+            DocumentService._validate_folder(document.workspace, folder)
+
+        previous_folder_id = (
+            str(document.folder_id) if document.folder_id else None
+        )
+        new_folder_id = str(folder.id) if folder else None
+
+        if previous_folder_id == new_folder_id:
+            return document
+
+        document.folder = folder
+        document.updated_by = actor
+        document.save(update_fields=['folder', 'updated_by', 'updated_at'])
+
+        DocumentHistoryService.log(
+            document=document,
+            action=DocumentHistory.ACTION_MOVED,
+            user=actor,
+            previous_value={'folder_id': previous_folder_id},
+            new_value={'folder_id': new_folder_id},
+        )
+        return document
+
+    # ------------------------------------------------------------------
+    # VISIBILIDADE
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    @transaction.atomic
+    def set_visibility(
+        *,
+        document: Document,
+        visible_to_client: bool,
+        actor=None,
+    ) -> Document:
+        """
+        Define se o arquivo é visível ao cliente.
+        """
+        new_value = bool(visible_to_client)
+
+        if document.visible_to_client == new_value:
+            return document
+
+        previous_value = document.visible_to_client
+        document.visible_to_client = new_value
+        document.updated_by = actor
+        document.save(update_fields=[
+            'visible_to_client', 'updated_by', 'updated_at',
+        ])
+
+        DocumentHistoryService.log(
+            document=document,
+            action=DocumentHistory.ACTION_VISIBILITY_CHANGED,
+            user=actor,
+            previous_value={'visible_to_client': previous_value},
+            new_value={'visible_to_client': new_value},
+        )
+        return document
+
+    # ------------------------------------------------------------------
     # SUBSTITUIR ARQUIVO FÍSICO
     # ------------------------------------------------------------------
 
@@ -217,8 +294,6 @@ class DocumentService:
         document.mime_type = new_mime
         document.size = new_size
         document.updated_by = actor
-        # Substituição NÃO altera a origem: se veio do Drive, continua
-        # sendo origem Drive (o conteúdo é que mudou).
         document.save(update_fields=[
             'file', 'extension', 'mime_type', 'size',
             'updated_by', 'updated_at',
@@ -373,6 +448,45 @@ class DocumentService:
             ) from exc
 
     # ------------------------------------------------------------------
+    # ESTATÍSTICAS DE ARMAZENAMENTO
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def storage_usage(workspace) -> dict:
+        """
+        Soma o tamanho dos documentos do workspace e devolve o total.
+
+        A cota total vem de `settings.DOCUMENTS_STORAGE_QUOTA_BYTES`
+        (fallback: 5 GB). Se o projeto quiser tratar por plano, basta
+        ler do Workspace no futuro.
+        """
+        from django.conf import settings
+        from django.db.models import Sum
+
+        total_bytes = (
+            Document.objects
+            .filter(workspace=workspace)
+            .aggregate(total=Sum('size'))
+            .get('total') or 0
+        )
+
+        quota_bytes = int(
+            getattr(settings, 'DOCUMENTS_STORAGE_QUOTA_BYTES', 5 * 1024 ** 3)
+        )
+        if quota_bytes <= 0:
+            quota_bytes = 5 * 1024 ** 3
+
+        percent = 0.0
+        if quota_bytes > 0:
+            percent = min(100.0, (total_bytes / quota_bytes) * 100.0)
+
+        return {
+            'used_bytes': int(total_bytes),
+            'quota_bytes': int(quota_bytes),
+            'percent': round(percent, 2),
+        }
+
+    # ------------------------------------------------------------------
     # EXCLUSÃO
     # ------------------------------------------------------------------
 
@@ -393,6 +507,8 @@ class DocumentService:
                 'mime_type': document.mime_type,
                 'size': document.size,
                 'source': document.source,
+                'folder_id': str(document.folder_id) if document.folder_id else None,
+                'visible_to_client': document.visible_to_client,
             },
             new_value=None,
         )
@@ -444,4 +560,13 @@ class DocumentService:
         if getattr(client, 'workspace_id', None) != workspace.id:
             raise DocumentClientNotFoundError(
                 'Cliente não encontrado neste workspace.'
+            )
+
+    @staticmethod
+    def _validate_folder(workspace, folder) -> None:
+        if folder is None:
+            return
+        if getattr(folder, 'workspace_id', None) != workspace.id:
+            raise DocumentFolderNotFoundError(
+                'Pasta não encontrada neste workspace.'
             )

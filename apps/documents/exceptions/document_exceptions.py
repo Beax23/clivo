@@ -9,6 +9,9 @@ Padrão:
         ├── DocumentInvalidUploadError
         ├── DocumentClientNotFoundError
         ├── DocumentProjectNotFoundError
+        ├── DocumentFolderError
+        │     ├── DocumentFolderNotFoundError
+        │     └── DocumentFolderNameConflictError
         └── DocumentStorageError
 """
 
@@ -53,13 +56,26 @@ class DocumentClientNotFoundError(DocumentError):
 
 
 class DocumentProjectNotFoundError(DocumentError):
-    """
-    Projeto referenciado não existe.
+    """Projeto referenciado não existe."""
+    pass
 
-    Como `projects` ainda não existe no P0, esta exceção é reservada
-    para quando o app `projects` nascer e o UUID passado não corresponder
-    a nenhum projeto.
-    """
+
+# =====================================================================
+# PASTA
+# =====================================================================
+
+class DocumentFolderError(DocumentError):
+    """Erro genérico de pasta."""
+    pass
+
+
+class DocumentFolderNotFoundError(DocumentFolderError):
+    """Pasta não encontrada no workspace."""
+    pass
+
+
+class DocumentFolderNameConflictError(DocumentFolderError):
+    """Já existe uma pasta com este nome no workspace."""
     pass
 
 

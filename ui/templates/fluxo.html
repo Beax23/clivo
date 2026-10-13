@@ -1,0 +1,308 @@
+{% extends "sidebar.html" %}
+{% load static %}
+
+{% block title %}Fluxo · Clivo{% endblock %}
+{% block page_name %}fluxo{% endblock %}
+
+{% block page_css %}
+<link rel="stylesheet" href="{% static 'css/fluxo.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="rf-page" id="fxPage">
+    <div class="fx-body">
+
+        <!-- ============================================================
+             COLUNA 1 — CATEGORIAS
+             ============================================================ -->
+        <aside class="fx-col fx-col--categories" id="fxCategories">
+            <header class="fx-col-head">
+                <div class="fx-col-head-row">
+                    <h2 class="fx-col-title">Categorias</h2>
+                    <button class="fx-icon-btn" id="fxNewCategoryBtn" type="button" title="Nova categoria">
+                        <i data-lucide="plus"></i>
+                    </button>
+                </div>
+                <p class="fx-col-sub">Agrupam modelos</p>
+            </header>
+
+            <div class="fx-col-scroll">
+                <ul class="fx-list" id="fxCategoriesList">
+                    <li class="fx-list-empty">Carregando…</li>
+                </ul>
+            </div>
+        </aside>
+
+        <!-- ============================================================
+             COLUNA 2 — MODELOS (cards com capa, toggle, kebab)
+             ============================================================ -->
+        <section class="fx-col fx-col--templates" id="fxTemplates">
+            <header class="fx-col-head">
+                <div class="fx-col-head-row">
+                    <h2 class="fx-col-title" id="fxTemplatesTitle">Modelos</h2>
+                    <span class="fx-col-count" id="fxTemplatesCount">0</span>
+                    <button class="fx-icon-btn fx-icon-btn--primary" id="fxNewTemplateBtn" type="button" title="Novo modelo">
+                        <i data-lucide="plus"></i>
+                    </button>
+                </div>
+                <div class="fx-search">
+                    <i data-lucide="search" class="fx-search-icon"></i>
+                    <input type="search" id="fxTemplatesSearch" placeholder="Buscar modelos" autocomplete="off">
+                </div>
+            </header>
+
+            <div class="fx-col-scroll">
+                <div class="fx-tpl-grid" id="fxTemplatesList">
+                    <div class="fx-list-empty">Carregando modelos…</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================================
+             COLUNA 3 — SESSÕES (numeradas)
+             ============================================================ -->
+        <section class="fx-col fx-col--sections" id="fxSections">
+            <header class="fx-col-head">
+                <div class="fx-col-head-row">
+                    <h2 class="fx-col-title" id="fxSectionsTitle">Sessões</h2>
+                    <span class="fx-col-count" id="fxSectionsCount">0</span>
+                    <button class="fx-icon-btn" id="fxNewSectionBtn" type="button" title="Nova sessão" disabled>
+                        <i data-lucide="plus"></i>
+                    </button>
+                </div>
+                <p class="fx-col-sub" id="fxSectionsSub">Selecione um modelo</p>
+            </header>
+
+            <div class="fx-col-scroll">
+                <ul class="fx-list" id="fxSectionsList">
+                    <li class="fx-list-empty">Nenhum modelo selecionado.</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- ============================================================
+             COLUNA 4 — PERGUNTAS (lista / form inline)
+             ============================================================ -->
+        <section class="fx-col fx-col--questions" id="fxQuestions">
+            <header class="fx-col-head" id="fxQuestionsHead">
+                <div class="fx-col-head-row">
+                    <h2 class="fx-col-title" id="fxQuestionsTitle">Perguntas</h2>
+                    <span class="fx-col-count" id="fxQuestionsCount">0</span>
+                    <button class="fx-icon-btn" id="fxNewQuestionBtn" type="button" title="Nova pergunta" disabled>
+                        <i data-lucide="plus"></i>
+                    </button>
+                </div>
+                <p class="fx-col-sub" id="fxQuestionsSub">Selecione uma sessão</p>
+            </header>
+
+            <div class="fx-col-scroll" id="fxQuestionsScroll">
+                <div class="fx-col-view" data-view="list">
+                    <ul class="fx-list" id="fxQuestionsList">
+                        <li class="fx-list-empty">Nenhuma sessão selecionada.</li>
+                    </ul>
+                </div>
+
+                <div class="fx-col-view is-hidden" data-view="form">
+                    <form class="fx-q-form" id="fxQForm">
+                        <div class="fx-q-form-head">
+                            <button type="button" class="fx-back-btn" id="fxQBackBtn" title="Voltar">
+                                <i data-lucide="arrow-left"></i>
+                            </button>
+                            <div class="fx-q-form-title-wrap">
+                                <h3 class="fx-q-form-title" id="fxQFormTitle">Nova pergunta</h3>
+                                <p class="fx-q-form-sub" id="fxQFormSub">Na sessão selecionada</p>
+                            </div>
+                        </div>
+
+                        <div class="fx-field">
+                            <label for="fxQText">Enunciado</label>
+                            <textarea id="fxQText" rows="3" placeholder="Como você descreveria sua rotina?" maxlength="2000" required></textarea>
+                        </div>
+
+                        <div class="fx-field">
+                            <label for="fxQInstructions">Instruções <span class="fx-opt">(opcional)</span></label>
+                            <textarea id="fxQInstructions" rows="2" placeholder="Contexto adicional…" maxlength="2000"></textarea>
+                        </div>
+
+                        <div class="fx-field">
+                            <label for="fxQType">Tipo da pergunta</label>
+                            <select id="fxQType">
+                                <option value="text">Texto livre</option>
+                                <option value="short_text">Texto curto</option>
+                                <option value="long_text">Texto longo</option>
+                                <option value="single_choice">Escolha única</option>
+                                <option value="multiple_choice">Múltipla escolha</option>
+                                <option value="scale">Escala (1–10)</option>
+                                <option value="rating">Avaliação (estrelas)</option>
+                                <option value="yes_no">Sim / Não</option>
+                                <option value="date">Data</option>
+                                <option value="number">Número</option>
+                                <option value="url">Link</option>
+                            </select>
+                        </div>
+
+                        <!-- Opções — só p/ single_choice / multiple_choice -->
+                        <div class="fx-field is-hidden" id="fxQOptionsField">
+                            <div class="fx-q-options-head">
+                                <label>Opções</label>
+                                <button type="button" class="fx-btn fx-btn--ghost fx-btn--sm" id="fxQAddOptionBtn">
+                                    <i data-lucide="plus"></i>
+                                    <span>Adicionar</span>
+                                </button>
+                            </div>
+                            <div class="fx-q-options" id="fxQOptionsList"></div>
+                            <p class="fx-q-options-hint">Cada opção pode ter uma imagem de referência.</p>
+                        </div>
+
+                        <div class="fx-field">
+                            <label>Formatos de resposta aceitos</label>
+                            <div class="fx-check-row">
+                                <label class="fx-check"><input type="checkbox" name="fxQFormat" value="text" checked><span>Texto</span></label>
+                                <label class="fx-check"><input type="checkbox" name="fxQFormat" value="audio" checked><span>Áudio</span></label>
+                                <label class="fx-check"><input type="checkbox" name="fxQFormat" value="image" checked><span>Imagem</span></label>
+                            </div>
+                        </div>
+
+                        <div class="fx-field fx-field--inline">
+                            <label class="fx-switch">
+                                <input type="checkbox" id="fxQRequired" checked>
+                                <span class="fx-switch-track"><span class="fx-switch-thumb"></span></span>
+                                <span class="fx-switch-label">Obrigatória</span>
+                            </label>
+                        </div>
+
+                        <div class="fx-q-form-actions">
+                            <button type="button" class="fx-btn" id="fxQCancelBtn">Cancelar</button>
+                            <button type="submit" class="fx-btn fx-btn--primary" id="fxQSubmit">Salvar pergunta</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </section>
+
+    </div>
+</div>
+
+<!-- ================================================================
+     MODAL — NOVA / EDITAR CATEGORIA
+     ================================================================ -->
+<div class="fx-modal-overlay" id="fxModalCategory">
+    <div class="fx-modal" role="dialog" aria-modal="true">
+        <div class="fx-modal-head">
+            <h3 class="fx-modal-title" id="fxCatModalTitle">Nova categoria</h3>
+            <button class="fx-modal-close" data-fx-close="fxModalCategory" type="button">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+        <form class="fx-modal-body" id="fxFormCategory">
+            <div class="fx-field">
+                <label for="fxCatName">Nome</label>
+                <input type="text" id="fxCatName" placeholder="Residencial" maxlength="60" required>
+            </div>
+            <div class="fx-modal-actions">
+                <button type="button" class="fx-btn" data-fx-close="fxModalCategory">Cancelar</button>
+                <button type="submit" class="fx-btn fx-btn--primary" id="fxCatSubmit">Criar categoria</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ================================================================
+     MODAL — NOVO / EDITAR MODELO (com upload de capa)
+     ================================================================ -->
+<div class="fx-modal-overlay" id="fxModalTemplate">
+    <div class="fx-modal" role="dialog" aria-modal="true">
+        <div class="fx-modal-head">
+            <h3 class="fx-modal-title" id="fxTplModalTitle">Novo modelo</h3>
+            <button class="fx-modal-close" data-fx-close="fxModalTemplate" type="button">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+        <form class="fx-modal-body" id="fxFormTemplate">
+            <!-- Capa -->
+            <div class="fx-cover-field">
+                <label class="fx-cover-upload" for="fxTplCover">
+                    <input type="file" id="fxTplCover" accept="image/*">
+                    <div class="fx-cover-preview" id="fxTplCoverPreview">
+                        <i data-lucide="image-plus"></i>
+                        <span>Adicionar capa</span>
+                    </div>
+                </label>
+                <button type="button" class="fx-cover-clear is-hidden" id="fxTplCoverClear" title="Remover capa">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+
+            <div class="fx-field">
+                <label for="fxTplName">Nome</label>
+                <input type="text" id="fxTplName" placeholder="Briefing Residencial" maxlength="200" required>
+            </div>
+            <div class="fx-field">
+                <label for="fxTplCategory">Categoria <span class="fx-opt">(opcional)</span></label>
+                <select id="fxTplCategory">
+                    <option value="">Sem categoria</option>
+                </select>
+            </div>
+            <div class="fx-field">
+                <label for="fxTplDescription">Descrição <span class="fx-opt">(opcional)</span></label>
+                <textarea id="fxTplDescription" rows="3" placeholder="Objetivo do modelo…" maxlength="2000"></textarea>
+            </div>
+            <div class="fx-modal-actions">
+                <button type="button" class="fx-btn" data-fx-close="fxModalTemplate">Cancelar</button>
+                <button type="submit" class="fx-btn fx-btn--primary" id="fxTplSubmit">Criar modelo</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ================================================================
+     MODAL — NOVA / EDITAR SESSÃO
+     ================================================================ -->
+<div class="fx-modal-overlay" id="fxModalSection">
+    <div class="fx-modal" role="dialog" aria-modal="true">
+        <div class="fx-modal-head">
+            <h3 class="fx-modal-title" id="fxSecModalTitle">Nova sessão</h3>
+            <button class="fx-modal-close" data-fx-close="fxModalSection" type="button">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+        <form class="fx-modal-body" id="fxFormSection">
+            <div class="fx-field">
+                <label for="fxSecTitle">Título</label>
+                <input type="text" id="fxSecTitle" placeholder="Sobre você" maxlength="200" required>
+            </div>
+            <div class="fx-field">
+                <label for="fxSecDescription">Descrição <span class="fx-opt">(opcional)</span></label>
+                <textarea id="fxSecDescription" rows="3" placeholder="O que essa sessão cobre…" maxlength="2000"></textarea>
+            </div>
+            <div class="fx-modal-actions">
+                <button type="button" class="fx-btn" data-fx-close="fxModalSection">Cancelar</button>
+                <button type="submit" class="fx-btn fx-btn--primary" id="fxSecSubmit">Criar sessão</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ================================================================
+     MODAL — CONFIRMAR EXCLUSÃO (genérico)
+     ================================================================ -->
+<div class="fx-modal-overlay" id="fxModalDelete">
+    <div class="fx-modal fx-modal--sm" role="dialog" aria-modal="true">
+        <div class="fx-modal-body fx-modal-body--center">
+            <div class="fx-danger-icon">
+                <i data-lucide="alert-triangle"></i>
+            </div>
+            <h3 class="fx-danger-title" id="fxDeleteTitle">Excluir?</h3>
+            <p class="fx-danger-sub" id="fxDeleteSub">Esta ação não pode ser desfeita.</p>
+            <div class="fx-modal-actions fx-modal-actions--center">
+                <button type="button" class="fx-btn" data-fx-close="fxModalDelete">Cancelar</button>
+                <button type="button" class="fx-btn fx-btn--danger" id="fxDeleteConfirm">Excluir</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block page_js %}
+<script src="{% static 'js/fluxo.js' %}"></script>
+{% endblock %}

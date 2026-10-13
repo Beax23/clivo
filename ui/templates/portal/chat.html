@@ -1,0 +1,577 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Briefing · Clivo</title>
+    <meta name="csrf-token" content="{{ csrf_token }}">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        :root {
+            --bg: #FFFFFF;
+            --bg-soft: #F7F7F9;
+            --bg-hover: #F0F0F2;
+            --border: #E9E9EC;
+            --text: #101014;
+            --text-soft: #6B6B76;
+            --text-mute: #9797A1;
+            --green: #17B26A;
+            --radius: 12px;
+            --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }
+        [data-theme="dark"] {
+            --bg: #0A0A0A;
+            --bg-soft: #141414;
+            --bg-hover: #1A1A1A;
+            --border: #1F1F1F;
+            --text: #F5F5F5;
+            --text-soft: #A0A0A0;
+            --text-mute: #666666;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { height: 100%; }
+        body {
+            font-family: var(--font);
+            background: var(--bg);
+            color: var(--text);
+            -webkit-font-smoothing: antialiased;
+            height: 100vh;
+            height: 100dvh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .p-header {
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-shrink: 0;
+        }
+        .p-back {
+            width: 32px; height: 32px;
+            border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            color: var(--text-soft);
+            background: none;
+            border: none;
+            cursor: pointer;
+            text-decoration: none;
+            transition: background-color 140ms ease;
+        }
+        .p-back:hover { background: var(--bg-soft); color: var(--text); }
+        .p-header-info { flex: 1; min-width: 0; }
+        .p-header-title {
+            font-size: 13.5px;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .p-header-sub {
+            font-size: 11.5px;
+            color: var(--text-mute);
+            margin-top: 1px;
+        }
+        .p-header-progress {
+            font-size: 11.5px;
+            color: var(--text-soft);
+            font-variant-numeric: tabular-nums;
+            flex-shrink: 0;
+        }
+
+        .p-chat {
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+            padding: 26px 20px 20px;
+            scroll-behavior: smooth;
+        }
+
+        .p-chat-inner {
+            max-width: 640px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 22px;
+        }
+
+        /* Bolha do arquiteto (pergunta) */
+        .p-turn {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            animation: fadeUp 220ms ease-out;
+        }
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .p-question {
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+        }
+        .p-avatar {
+            width: 28px; height: 28px;
+            border-radius: 50%;
+            background: var(--text);
+            color: var(--bg);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 11px; font-weight: 700;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+        .p-question-body {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .p-question-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-mute);
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+        }
+        .p-question-text {
+            font-size: 15px;
+            font-weight: 500;
+            line-height: 1.5;
+            color: var(--text);
+            white-space: pre-wrap;
+        }
+        .p-question-instructions {
+            font-size: 13px;
+            color: var(--text-soft);
+            line-height: 1.5;
+            padding: 10px 12px;
+            background: var(--bg-soft);
+            border-radius: 10px;
+            border-left: 2px solid var(--border);
+        }
+
+        /* Resposta do cliente */
+        .p-answer {
+            display: flex;
+            justify-content: flex-end;
+        }
+        .p-answer-bubble {
+            max-width: 80%;
+            padding: 10px 14px;
+            border-radius: 14px 14px 4px 14px;
+            background: var(--text);
+            color: var(--bg);
+            font-size: 14px;
+            line-height: 1.45;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        /* Composer */
+        .p-composer {
+            flex-shrink: 0;
+            border-top: 1px solid var(--border);
+            background: var(--bg);
+            padding: 14px 20px calc(14px + env(safe-area-inset-bottom));
+        }
+        .p-composer-inner {
+            max-width: 640px;
+            margin: 0 auto;
+            display: flex;
+            gap: 8px;
+            align-items: flex-end;
+            background: var(--bg-soft);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 8px 8px 8px 14px;
+            transition: border-color 140ms ease;
+        }
+        .p-composer-inner:focus-within { border-color: var(--text); }
+        .p-composer textarea {
+            flex: 1;
+            min-height: 24px;
+            max-height: 140px;
+            border: none;
+            background: transparent;
+            color: var(--text);
+            font-family: var(--font);
+            font-size: 14.5px;
+            line-height: 1.45;
+            resize: none;
+            outline: none;
+            padding: 6px 0;
+        }
+        .p-composer textarea::placeholder { color: var(--text-mute); }
+        .p-send {
+            width: 36px; height: 36px;
+            border-radius: 9px;
+            background: var(--text);
+            color: var(--bg);
+            border: none;
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+            transition: opacity 140ms ease;
+        }
+        .p-send:disabled { opacity: 0.35; cursor: not-allowed; }
+        .p-send:hover:not(:disabled) { opacity: 0.85; }
+
+        /* Estados */
+        .p-state {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            gap: 12px;
+            padding: 60px 20px;
+            max-width: 400px;
+            margin: 0 auto;
+        }
+        .p-state.is-active { display: flex; }
+        .p-state-icon {
+            width: 46px; height: 46px;
+            border-radius: 50%;
+            background: var(--bg-soft);
+            color: var(--text-soft);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 20px;
+        }
+        .p-state h2 { font-size: 16px; font-weight: 700; }
+        .p-state p {
+            font-size: 13px;
+            color: var(--text-soft);
+            line-height: 1.55;
+        }
+        .p-spinner {
+            width: 22px; height: 22px;
+            border: 2px solid var(--border);
+            border-top-color: var(--text);
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Completion */
+        .p-complete-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 14px;
+            background: var(--bg-soft);
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--green);
+        }
+    </style>
+</head>
+<body>
+
+<header class="p-header">
+    <a href="/portal/home/" class="p-back" title="Voltar">
+        <i class="fas fa-arrow-left"></i>
+    </a>
+    <div class="p-header-info">
+        <div class="p-header-title" id="pTitle">Carregando…</div>
+        <div class="p-header-sub" id="pSub"></div>
+    </div>
+    <div class="p-header-progress" id="pProgress"></div>
+</header>
+
+<div class="p-chat" id="pChat">
+    <div class="p-state is-active" id="pStateLoading" style="margin-top: 60px;">
+        <div class="p-spinner"></div>
+    </div>
+
+    <div class="p-state" id="pStateError">
+        <div class="p-state-icon"><i class="fas fa-exclamation-triangle"></i></div>
+        <h2 id="pErrorTitle">Erro</h2>
+        <p id="pErrorMessage"></p>
+    </div>
+
+    <div class="p-chat-inner" id="pChatInner" style="display:none;"></div>
+</div>
+
+<div class="p-composer" id="pComposer" style="display:none;">
+    <div class="p-composer-inner">
+        <textarea
+            id="pInput"
+            placeholder="Escreva sua resposta…"
+            rows="1"
+            maxlength="20000"
+        ></textarea>
+        <button class="p-send" id="pSend" type="button" disabled>
+            <i class="fas fa-arrow-up"></i>
+        </button>
+    </div>
+</div>
+
+<script>
+(function () {
+    'use strict';
+
+    const briefingId = "{{ briefing_id|escapejs }}";
+
+    const chatEl = document.getElementById('pChat');
+    const chatInner = document.getElementById('pChatInner');
+    const stateLoading = document.getElementById('pStateLoading');
+    const stateError = document.getElementById('pStateError');
+    const composer = document.getElementById('pComposer');
+    const input = document.getElementById('pInput');
+    const sendBtn = document.getElementById('pSend');
+    const titleEl = document.getElementById('pTitle');
+    const subEl = document.getElementById('pSub');
+    const progressEl = document.getElementById('pProgress');
+
+    let currentBriefing = null;
+    let currentQuestionId = null;
+    let sending = false;
+
+    function getCookie(name) {
+        const v = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+        return v ? v.pop() : '';
+    }
+
+    async function api(url, options = {}) {
+        const opts = {
+            method: options.method || 'GET',
+            credentials: 'include',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken'),
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        };
+        if (options.body) opts.body = JSON.stringify(options.body);
+        const res = await fetch(url, opts);
+        let data = null;
+        try { data = await res.json(); } catch (_) {}
+        if (!res.ok) {
+            const err = new Error((data && (data.error || data.detail)) || `Erro ${res.status}`);
+            err.status = res.status;
+            throw err;
+        }
+        return data;
+    }
+
+    function escapeHtml(str) {
+        if (str == null) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function scrollToBottom() {
+        requestAnimationFrame(() => {
+            chatEl.scrollTop = chatEl.scrollHeight;
+        });
+    }
+
+    function findSectionByQuestionId(briefing, qid) {
+        for (const s of (briefing.sections || [])) {
+            for (const q of (s.questions || [])) {
+                if (String(q.id) === String(qid)) return s;
+            }
+        }
+        return null;
+    }
+
+    function findQuestionById(briefing, qid) {
+        for (const s of (briefing.sections || [])) {
+            for (const q of (s.questions || [])) {
+                if (String(q.id) === String(qid)) return q;
+            }
+        }
+        return null;
+    }
+
+    function renderTurn(section, question) {
+        const turn = document.createElement('div');
+        turn.className = 'p-turn';
+        turn.dataset.questionId = question.id;
+
+        const instructions = question.instructions
+            ? `<div class="p-question-instructions">${escapeHtml(question.instructions)}</div>`
+            : '';
+
+        turn.innerHTML = `
+            <div class="p-question">
+                <div class="p-avatar">C</div>
+                <div class="p-question-body">
+                    ${section ? `<div class="p-question-label">${escapeHtml(section.title || '')}</div>` : ''}
+                    <div class="p-question-text">${escapeHtml(question.text || '')}</div>
+                    ${instructions}
+                </div>
+            </div>
+        `;
+
+        // Se já foi respondida, mostra a bolha de resposta
+        if (question.state === 'answered' && question.latest_content) {
+            const answer = document.createElement('div');
+            answer.className = 'p-answer';
+            answer.innerHTML = `<div class="p-answer-bubble">${escapeHtml(question.latest_content)}</div>`;
+            turn.appendChild(answer);
+        }
+
+        chatInner.appendChild(turn);
+    }
+
+    function renderBriefing(briefing) {
+        chatInner.innerHTML = '';
+
+        titleEl.textContent = briefing.title || 'Briefing';
+        subEl.textContent = briefing.status === 'completed' ? 'Concluído' : 'Em andamento';
+
+        const total = briefing.progress ? briefing.progress.total_required : 0;
+        const done = briefing.progress ? briefing.progress.answered : 0;
+        progressEl.textContent = total ? `${done}/${total}` : '';
+
+        // Renderiza os turnos já respondidos (histórico)
+        for (const s of (briefing.sections || [])) {
+            for (const q of (s.questions || [])) {
+                if (q.state === 'answered' || q.state === 'pending_clarification' || q.state === 'review_requested') {
+                    renderTurn(s, q);
+                }
+            }
+        }
+
+        // Concluído?
+        if (briefing.status === 'completed') {
+            const done = document.createElement('div');
+            done.className = 'p-turn';
+            done.style.alignItems = 'center';
+            done.innerHTML = `
+                <div class="p-complete-badge">
+                    <i class="fas fa-check-circle"></i>
+                    Briefing concluído
+                </div>
+            `;
+            chatInner.appendChild(done);
+            composer.style.display = 'none';
+            scrollToBottom();
+            return;
+        }
+
+        // Próxima pergunta elegível
+        const nextQid = briefing.next_question_id;
+        if (nextQid) {
+            const q = findQuestionById(briefing, nextQid);
+            const s = findSectionByQuestionId(briefing, nextQid);
+            if (q && q.state !== 'answered') {
+                renderTurn(s, q);
+                currentQuestionId = nextQid;
+                composer.style.display = '';
+                setTimeout(() => input.focus(), 120);
+            }
+        }
+
+        scrollToBottom();
+    }
+
+    async function loadBriefing() {
+        try {
+            const briefing = await api(`/api/portal/briefings/${briefingId}/`);
+            currentBriefing = briefing;
+            chatInner.style.display = 'flex';
+            stateLoading.classList.remove('is-active');
+            renderBriefing(briefing);
+        } catch (err) {
+            console.error(err);
+            if (err.status === 401) {
+                window.location.href = '/portal/';
+                return;
+            }
+            stateLoading.classList.remove('is-active');
+            document.getElementById('pErrorTitle').textContent = 'Erro ao carregar';
+            document.getElementById('pErrorMessage').textContent =
+                'Não foi possível abrir este briefing.';
+            stateError.classList.add('is-active');
+        }
+    }
+
+    async function submitAnswer() {
+        const text = input.value.trim();
+        if (!text || sending || !currentQuestionId) return;
+
+        sending = true;
+        sendBtn.disabled = true;
+        input.disabled = true;
+
+        // Adiciona a bolha de resposta imediatamente
+        const pendingTurn = chatInner.lastElementChild;
+        if (pendingTurn) {
+            const answer = document.createElement('div');
+            answer.className = 'p-answer';
+            answer.innerHTML = `<div class="p-answer-bubble">${escapeHtml(text)}</div>`;
+            pendingTurn.appendChild(answer);
+        }
+        input.value = '';
+        input.style.height = 'auto';
+        scrollToBottom();
+
+        try {
+            await api(
+                `/api/portal/briefings/${briefingId}/questions/${currentQuestionId}/answer/`,
+                { method: 'POST', body: { text } }
+            );
+
+            // Recarrega para pegar a próxima pergunta
+            await loadBriefing();
+        } catch (err) {
+            console.error(err);
+            // Reverte a bolha em caso de erro
+            if (pendingTurn && pendingTurn.lastElementChild) {
+                pendingTurn.lastElementChild.remove();
+            }
+            input.value = text;
+            alert(err.message || 'Erro ao enviar. Tente novamente.');
+        } finally {
+            sending = false;
+            sendBtn.disabled = !input.value.trim();
+            input.disabled = false;
+            input.focus();
+        }
+    }
+
+    // Auto-resize do textarea
+    function autosize() {
+        input.style.height = 'auto';
+        input.style.height = Math.min(input.scrollHeight, 140) + 'px';
+    }
+
+    input.addEventListener('input', () => {
+        autosize();
+        sendBtn.disabled = !input.value.trim() || sending;
+    });
+
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            submitAnswer();
+        }
+    });
+
+    sendBtn.addEventListener('click', submitAnswer);
+
+    loadBriefing();
+})();
+</script>
+
+</body>
+</html>

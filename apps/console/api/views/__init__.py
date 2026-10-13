@@ -16,6 +16,9 @@ from apps.console.api.views.provider_log_views import ProviderLogViewSet
 from apps.console.api.views.cost_views import CostViewSet
 from apps.console.api.views.workspace_admin_views import AdminWorkspaceViewSet
 from apps.console.api.views.user_admin_views import AdminUserViewSet
+from apps.console.api.views.storage_views import StorageViewSet
+from apps.console.api.views.quota_views import QuotaViewSet
+from apps.console.api.views.storage_budget_views import StorageBudgetViewSet
 
 __all__ = [
     'MembershipViewSet',
@@ -34,4 +37,7 @@ __all__ = [
     'CostViewSet',
     'AdminWorkspaceViewSet',
     'AdminUserViewSet',
+    'StorageViewSet',
+    'QuotaViewSet',
+    'StorageBudgetViewSet',
 ]

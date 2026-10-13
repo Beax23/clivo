@@ -6,12 +6,24 @@ from django.conf.urls.static import static
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('accounts/', include('allauth.urls')),
+
+    # ============================================================
+    # Padrão novo: /w/<public_id>/...
+    # Páginas autenticadas dentro de um workspace.
+    # O <public_id> é validado em cada view.
+    # ============================================================
+    path('w/<str:public_id>/', include('apps.workspaces.urls_workspace')),
+
+    # ============================================================
+    # Rotas antigas — mantidas durante a migração.
+    # Serão removidas após a migração total.
+    # ============================================================
     path('', include('apps.accounts.urls')),
     path('', include('apps.workspaces.urls')),
     path('', include('apps.console.urls')),
     path('', include('apps.clients.urls')),
     path('', include('apps.documents.urls')),
-    #path('', include('apps.references.urls')),
+    path('', include('apps.references.urls')),
     path('', include('apps.briefings.urls')),
     path('', include('apps.projects.urls')),
     path('', include('apps.timeline.urls')),

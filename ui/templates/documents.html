@@ -16,12 +16,24 @@
          ============================================================ -->
     <header class="dc-header">
         <div class="dc-header-left">
-            <h1>Arquivos</h1>
-            <p class="dc-header-sub">Biblioteca geral de arquivos do escritório.</p>
+            <div class="dc-header-title-row">
+                <h1>Arquivos</h1>
+                <span class="dc-header-dot" aria-hidden="true">·</span>
+                <p class="dc-header-sub">Biblioteca geral de arquivos do escritório.</p>
+            </div>
         </div>
 
         <div class="dc-header-right">
-            <!-- Botão Google Drive -->
+
+            <!-- ARMAZENAMENTO (pill compacta) -->
+            <div class="dc-storage-pill" id="dcStorageFooter" title="Armazenamento do workspace">
+                <span class="dc-storage-pill-label">Armazenamento</span>
+                <span class="dc-storage-pill-bar" id="dcStorageBar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                    <span class="dc-storage-pill-fill" id="dcStorageFill" style="width:0%"></span>
+                </span>
+                <span class="dc-storage-pill-value" id="dcStorageValue">—</span>
+            </div>
+
             <button class="btn-drive" id="dcDriveBtn" title="Importar do Google Drive">
                 <span class="btn-drive-icon" aria-hidden="true">
                     <svg viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg" width="16" height="16">
@@ -33,70 +45,76 @@
                         <path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/>
                     </svg>
                 </span>
-                <span>Google Drive</span>
+                <span class="btn-drive-label">Google Drive</span>
+                <span class="btn-drive-spinner" aria-hidden="true"></span>
             </button>
 
-            <!-- Botão Adicionar -->
             <button class="btn-minimal btn-minimal-primary" id="dcUploadBtn">
-                <i data-lucide="plus"></i>
-                <span>Adicionar</span>
+                <i data-lucide="upload"></i>
+                <span>Enviar arquivo</span>
             </button>
         </div>
     </header>
 
     <!-- ============================================================
-         GRID
+         GRID 40/60
          ============================================================ -->
     <div class="dc-grid">
 
         <!-- COLUNA 1 — LISTA -->
         <aside class="dc-col dc-col-list" id="dcColList">
+
             <div class="dc-col-filters">
-                <div class="dc-search">
-                    <i data-lucide="search"></i>
-                    <input type="text" id="dcSearchInput" placeholder="Buscar por arquivo ou cliente...">
+                <div class="dc-search-row">
+                    <div class="dc-search">
+                        <i data-lucide="search"></i>
+                        <input type="text" id="dcSearchInput" placeholder="Buscar arquivo, cliente ou pasta...">
+                    </div>
+                    <button class="dc-icon-btn dc-icon-btn-lg" id="dcNewFolderBtn" title="Nova pasta">
+                        <i data-lucide="folder-plus"></i>
+                    </button>
                 </div>
+            </div>
 
-                <div class="dc-filter-row">
-                    <div class="dc-filter">
-                        <label for="dcExtensionFilter" class="visually-hidden">Extensão</label>
-                        <select id="dcExtensionFilter">
-                            <option value="">Extensão</option>
-                        </select>
-                    </div>
-                    <div class="dc-filter">
-                        <label for="dcClientFilter" class="visually-hidden">Cliente</label>
-                        <select id="dcClientFilter">
-                            <option value="">Todos os clientes</option>
-                        </select>
-                    </div>
+            <div class="dc-breadcrumb hidden" id="dcBreadcrumb">
+                <button class="dc-breadcrumb-back" id="dcBreadcrumbBack">
+                    <i data-lucide="chevron-left"></i>
+                    <span class="dc-breadcrumb-name" id="dcBreadcrumbName">—</span>
+                </button>
+            </div>
+
+            <div class="dc-section-bar">
+                <div class="dc-section-left">
+                    <span class="dc-section-title" id="dcSectionTitle">Arquivos</span>
+                    <span class="dc-section-count" id="dcFilesCount">0</span>
                 </div>
+                <div class="dc-section-right">
 
-                <div class="dc-filter-row">
-                    <div class="dc-filter">
-                        <label for="dcContextFilter" class="visually-hidden">Contexto</label>
-                        <select id="dcContextFilter">
-                            <option value="">Contexto</option>
-                            <option value="with_client">Com cliente</option>
-                            <option value="without_client">Sem cliente</option>
-                            <option value="with_project">Com projeto</option>
-                            <option value="without_project">Sem projeto</option>
-                            <option value="without_any">Sem associação</option>
-                        </select>
+                    <!-- FILTRO: Todos / Pastas / Soltos -->
+                    <div class="dc-filter-toggle" role="tablist" aria-label="Filtrar arquivos">
+                        <button class="dc-filter-btn is-active" data-filter="all" role="tab" aria-selected="true" data-tooltip="Todos">
+                            <i data-lucide="layers"></i>
+                        </button>
+                        <button class="dc-filter-btn" data-filter="foldered" role="tab" aria-selected="false" data-tooltip="Pastas">
+                            <i data-lucide="folder"></i>
+                        </button>
+                        <button class="dc-filter-btn" data-filter="loose" role="tab" aria-selected="false" data-tooltip="Soltos">
+                            <i data-lucide="file"></i>
+                        </button>
                     </div>
-                    <div class="dc-filter">
-                        <label for="dcSourceFilter" class="visually-hidden">Origem</label>
-                        <select id="dcSourceFilter">
-                            <option value="">Origem</option>
-                            <option value="upload">Upload</option>
-                            <option value="gdrive">Google Drive</option>
-                            <option value="url">URL</option>
-                        </select>
+
+                    <div class="dc-view-toggle" role="tablist" aria-label="Modo de visualização">
+                        <button class="dc-view-btn is-active" data-view="list" role="tab" aria-selected="true" data-tooltip="Lista">
+                            <i data-lucide="list"></i>
+                        </button>
+                        <button class="dc-view-btn" data-view="grid" role="tab" aria-selected="false" data-tooltip="Blocos">
+                            <i data-lucide="layout-grid"></i>
+                        </button>
                     </div>
                 </div>
             </div>
 
-            <div class="dc-list" id="dcList"></div>
+            <div class="dc-list" id="dcList" data-view="list"></div>
         </aside>
 
         <!-- COLUNA 2 — DETALHE -->
@@ -169,9 +187,7 @@
 
                 <div class="dc-tab-panel is-active" id="dcTabPreview" role="tabpanel">
                     <div class="dc-preview-toolbar" id="dcPreviewToolbar">
-                        <div class="dc-preview-toolbar-left">
-                            <span class="dc-preview-kind" id="dcPreviewKind">—</span>
-                        </div>
+                        <div class="dc-preview-toolbar-left"></div>
                         <div class="dc-preview-toolbar-right">
                             <div class="dc-tool-group is-hidden" id="dcRotateControls">
                                 <button class="dc-zoom-btn" id="dcRotateLeft" title="Girar 90° à esquerda">
@@ -228,6 +244,10 @@
                                         <span class="dc-field-value" id="dcInfoSize">—</span>
                                     </div>
                                     <div class="dc-field-row">
+                                        <span class="dc-field-label">Pasta</span>
+                                        <span class="dc-field-value" id="dcInfoFolder">—</span>
+                                    </div>
+                                    <div class="dc-field-row">
                                         <span class="dc-field-label">Origem</span>
                                         <span class="dc-field-value" id="dcInfoSource">—</span>
                                     </div>
@@ -267,16 +287,48 @@
                                             </button>
                                         </div>
                                     </div>
+
                                     <div class="dc-associate-row">
-                                        <label for="dcAssociateProjectInput">Alterar projeto</label>
+                                        <label for="dcAssociateProjectSearch">Alterar projeto</label>
                                         <div class="dc-associate-controls">
-                                            <input type="text" id="dcAssociateProjectInput" placeholder="Identificador do projeto" maxlength="50">
+                                            <div class="dc-combobox" id="dcProjectCombobox">
+                                                <i data-lucide="search"></i>
+                                                <input
+                                                    type="text"
+                                                    id="dcAssociateProjectSearch"
+                                                    placeholder="Buscar projeto…"
+                                                    autocomplete="off"
+                                                    spellcheck="false"
+                                                >
+                                                <input type="hidden" id="dcAssociateProjectValue">
+                                                <div class="dc-combobox-menu hidden" id="dcProjectMenu"></div>
+                                            </div>
                                             <button class="btn-minimal" id="dcAssociateProjectBtn">
                                                 <i data-lucide="check"></i>
                                                 <span>Aplicar</span>
                                             </button>
                                         </div>
+                                        <p class="dc-associate-hint" id="dcAssociateProjectHint">
+                                            Nenhum projeto associado.
+                                        </p>
                                     </div>
+
+                                    <!-- VISIBILIDADE -->
+                                    <div class="dc-visibility-row">
+                                        <label class="dc-switch" for="dcVisibleToClient">
+                                            <input type="checkbox" id="dcVisibleToClient">
+                                            <span class="dc-switch-track">
+                                                <span class="dc-switch-thumb"></span>
+                                            </span>
+                                            <span class="dc-switch-label">
+                                                <span class="dc-switch-title">Visível ao cliente</span>
+                                                <span class="dc-switch-hint" id="dcVisibilityHint">
+                                                    Somente o escritório vê este arquivo.
+                                                </span>
+                                            </span>
+                                        </label>
+                                    </div>
+
                                 </div>
                             </section>
 
@@ -307,12 +359,92 @@
 </div>
 
 <!-- ============================================================
+     CONTEXT MENU: 3 pontinhos
+     ============================================================ -->
+<div class="dc-ctx-menu hidden" id="dcCtxMenu" role="menu">
+    <button class="dc-ctx-item" data-ctx-action="edit" role="menuitem">
+        <i data-lucide="pencil"></i>
+        <span>Renomear</span>
+    </button>
+    <button class="dc-ctx-item is-danger" data-ctx-action="delete" role="menuitem">
+        <i data-lucide="trash-2"></i>
+        <span>Excluir</span>
+    </button>
+</div>
+
+<!-- ============================================================
+     MODAL: NOVA PASTA
+     ============================================================ -->
+<div class="cl-modal-overlay" id="dcNewFolderModal">
+    <div class="cl-modal cl-modal-sm cl-modal-apple">
+        <div class="cl-modal-header cl-modal-header-apple">
+            <h2>Nova pasta</h2>
+            <button class="cl-modal-close cl-modal-close-apple" data-close="dcNewFolderModal">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+
+        <form id="dcNewFolderForm" class="cl-modal-body cl-modal-body-apple">
+            <div class="dc-apple-field">
+                <label for="dcNewFolderName">Nome</label>
+                <input
+                    type="text"
+                    id="dcNewFolderName"
+                    placeholder="Ex.: Contratos"
+                    maxlength="100"
+                    autocomplete="off"
+                    required
+                >
+            </div>
+
+            <div class="cl-modal-actions cl-modal-actions-apple">
+                <button type="button" class="btn-apple btn-apple-ghost" data-close="dcNewFolderModal">
+                    Cancelar
+                </button>
+                <button type="submit" class="btn-apple btn-apple-primary" id="dcNewFolderSubmitBtn">
+                    <span class="dc-btn-label">Criar pasta</span>
+                    <span class="dc-btn-spinner" aria-hidden="true"></span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ============================================================
+     MODAL: EXCLUIR PASTA
+     ============================================================ -->
+<div class="cl-modal-overlay" id="dcDeleteFolderModal">
+    <div class="cl-modal cl-modal-sm cl-modal-apple">
+        <div class="cl-modal-header cl-modal-header-apple">
+            <h2>Excluir pasta</h2>
+            <button class="cl-modal-close cl-modal-close-apple" data-close="dcDeleteFolderModal">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+
+        <div class="cl-modal-body cl-modal-body-apple" style="display:block;">
+            <p class="cl-hint" id="dcDeleteFolderHint">
+                Tem certeza que deseja excluir a pasta?
+            </p>
+        </div>
+
+        <div class="cl-modal-actions cl-modal-actions-apple">
+            <button class="btn-apple btn-apple-ghost" data-close="dcDeleteFolderModal">Cancelar</button>
+            <button class="btn-apple btn-apple-danger" id="dcDeleteFolderConfirmBtn">
+                <span class="dc-btn-label">Excluir</span>
+                <span class="dc-btn-spinner" aria-hidden="true"></span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================
      MODAL: ADICIONAR DO COMPUTADOR
      ============================================================ -->
 <div class="cl-modal-overlay" id="dcUploadModal">
     <div class="cl-modal cl-modal-apple">
         <div class="cl-modal-header cl-modal-header-apple">
-            <h2>Adicionar documento</h2>
+            <h2>Enviar arquivo</h2>
             <button class="cl-modal-close cl-modal-close-apple" data-close="dcUploadModal">
                 <i data-lucide="x"></i>
             </button>
@@ -354,8 +486,28 @@
 
                 <div class="dc-apple-field">
                     <label for="dcUploadProject">Projeto</label>
-                    <input type="text" id="dcUploadProject" placeholder="Identificador" maxlength="50" autocomplete="off">
+                    <input type="text" id="dcUploadProject" placeholder="Buscar projeto…" maxlength="50" autocomplete="off">
                 </div>
+            </div>
+
+            <div class="dc-apple-field">
+                <label for="dcUploadFolder">Pasta</label>
+                <select id="dcUploadFolder">
+                    <option value="">Sem pasta (solto)</option>
+                </select>
+            </div>
+
+            <div class="dc-apple-field">
+                <label class="dc-switch" for="dcUploadVisibleToClient">
+                    <input type="checkbox" id="dcUploadVisibleToClient">
+                    <span class="dc-switch-track">
+                        <span class="dc-switch-thumb"></span>
+                    </span>
+                    <span class="dc-switch-label">
+                        <span class="dc-switch-title">Visível ao cliente</span>
+                        <span class="dc-switch-hint">Se ativado, o cliente verá este arquivo.</span>
+                    </span>
+                </label>
             </div>
 
             <div class="cl-modal-actions cl-modal-actions-apple">
@@ -363,7 +515,8 @@
                     Cancelar
                 </button>
                 <button type="submit" class="btn-apple btn-apple-primary" id="dcUploadSubmitBtn">
-                    Adicionar
+                    <span class="dc-btn-label">Enviar</span>
+                    <span class="dc-btn-spinner" aria-hidden="true"></span>
                 </button>
             </div>
         </form>
@@ -375,8 +528,21 @@
      ============================================================ -->
 <div class="cl-modal-overlay" id="dcDriveModal">
     <div class="cl-modal cl-modal-apple dc-drive-modal">
+
         <div class="cl-modal-header cl-modal-header-apple">
-            <h2>Adicionar do Google Drive</h2>
+            <div class="dc-drive-title">
+                <span class="dc-drive-title-icon" aria-hidden="true">
+                    <svg viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg" width="18" height="18">
+                        <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/>
+                        <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#00ac47"/>
+                        <path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335"/>
+                        <path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/>
+                        <path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/>
+                        <path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/>
+                    </svg>
+                </span>
+                <h2 id="dcDriveTitle">Google Drive</h2>
+            </div>
             <button class="cl-modal-close cl-modal-close-apple" data-close="dcDriveModal">
                 <i data-lucide="x"></i>
             </button>
@@ -384,9 +550,10 @@
 
         <div class="cl-modal-body cl-modal-body-apple dc-drive-body">
 
-            <div class="dc-drive-connect" id="dcDriveConnect" style="display:none;">
-                <div class="dc-drive-connect-icon">
-                    <svg viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg" width="48" height="48">
+            <!-- ESTADO 1: CONVITE INICIAL -->
+            <div class="dc-drive-intro" id="dcDriveIntro" style="display:none;">
+                <div class="dc-drive-intro-icon">
+                    <svg viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg" width="72" height="72">
                         <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/>
                         <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#00ac47"/>
                         <path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335"/>
@@ -395,42 +562,57 @@
                         <path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/>
                     </svg>
                 </div>
-                <p>Conectar ao Google Drive</p>
-                <span>Permita que o Clivo encontre arquivos que você escolher para adicionar ao seu escritório.</span>
-                <a class="btn-apple btn-apple-primary dc-drive-connect-btn" href="/accounts/google/login/?process=login&next=/documents/">
-                    Conectar com Google
-                </a>
+                <h3>Traga arquivos do Google Drive</h3>
+                <p>
+                    Escolha arquivos que já estão no seu Drive e adicione ao Clivo.
+                    Uma vez importados, eles passam a viver aqui — a origem fica registrada no histórico.
+                </p>
+                <button type="button" class="btn-apple btn-apple-primary dc-drive-intro-btn" id="dcDriveConnectBtn">
+                    Entrar no Google Drive
+                </button>
             </div>
 
+            <!-- ESTADO 2: CONECTADO — lista de arquivos -->
             <div class="dc-drive-connected" id="dcDriveConnected" style="display:none;">
 
                 <div class="dc-drive-error hidden" id="dcDriveError">
                     <i data-lucide="alert-circle"></i>
-                    <span id="dcDriveErrorText">Erro</span>
+                    <div>
+                        <span id="dcDriveErrorText">Erro</span>
+                        <div id="dcDriveErrorActions" style="display:none;"></div>
+                    </div>
                 </div>
 
                 <div class="dc-drive-search">
                     <i data-lucide="search"></i>
-                    <input type="text" id="dcDriveSearchInput" placeholder="Buscar arquivos...">
+                    <input type="text" id="dcDriveSearchInput" placeholder="Buscar arquivos no Drive...">
                 </div>
 
                 <div class="dc-drive-files" id="dcDriveFiles">
                     <p class="dc-drive-empty">Carregando…</p>
                 </div>
 
-                <div class="dc-drive-summary hidden" id="dcDriveSummary">
-                    <span id="dcDriveSelectedCount">0</span> arquivo(s) selecionado(s)
+                <div class="dc-drive-footer">
+                    <div class="dc-drive-summary" id="dcDriveSummary">
+                        <span id="dcDriveSelectedCount">0</span> selecionado(s)
+                    </div>
+                    <div class="dc-drive-footer-actions">
+                        <button type="button" class="btn-apple btn-apple-ghost" data-close="dcDriveModal">
+                            Cancelar
+                        </button>
+                        <button type="button" class="btn-apple btn-apple-primary" id="dcDriveImportBtn" disabled>
+                            Adicionar
+                        </button>
+                    </div>
                 </div>
             </div>
 
-            <div class="cl-modal-actions cl-modal-actions-apple">
-                <button type="button" class="btn-apple btn-apple-ghost" data-close="dcDriveModal">
-                    Cancelar
-                </button>
-                <button type="button" class="btn-apple btn-apple-primary" id="dcDriveImportBtn" disabled>
-                    Adicionar
-                </button>
+            <!-- ESTADO 3: CARREGANDO (splash) -->
+            <div class="dc-drive-loading" id="dcDriveLoading" style="display:none;">
+                <div class="dc-drive-loading-spinner"></div>
+                <p>Conectando ao Google Drive…</p>
             </div>
+
         </div>
     </div>
 </div>
@@ -466,7 +648,8 @@
                     Cancelar
                 </button>
                 <button type="submit" class="btn-apple btn-apple-primary" id="dcReplaceSubmitBtn">
-                    Substituir
+                    <span class="dc-btn-label">Substituir</span>
+                    <span class="dc-btn-spinner" aria-hidden="true"></span>
                 </button>
             </div>
         </form>
@@ -474,30 +657,45 @@
 </div>
 
 <!-- ============================================================
-     MODAL: EXCLUIR
+     MODAL: EXCLUIR ARQUIVO — rápido, em série
      ============================================================ -->
 <div class="cl-modal-overlay" id="dcDeleteModal">
-    <div class="cl-modal cl-modal-sm cl-modal-apple">
+    <div class="cl-modal cl-modal-sm cl-modal-apple dc-delete-modal">
+
         <div class="cl-modal-header cl-modal-header-apple">
-            <h2>Excluir arquivo</h2>
+            <h2 id="dcDeleteTitle">Excluir arquivo</h2>
             <button class="cl-modal-close cl-modal-close-apple" data-close="dcDeleteModal">
                 <i data-lucide="x"></i>
             </button>
         </div>
 
-        <div class="cl-modal-body cl-modal-body-apple" style="display:block;">
-            <p class="cl-hint" style="margin-bottom:14px;">
-                Esta ação remove o arquivo permanentemente do banco e do storage. Não há como desfazer.
+        <div class="cl-modal-body cl-modal-body-apple dc-delete-body">
+
+            <!-- Aviso compacto -->
+            <p class="dc-delete-hint">
+                Esta ação remove o arquivo permanentemente. Não há como desfazer.
             </p>
-            <div class="dc-apple-field">
-                <label>Digite o nome do arquivo para confirmar</label>
-                <input type="text" id="dcDeleteInput" autocomplete="off" placeholder="Nome do arquivo">
+
+            <!-- Nome do arquivo grande e destacado -->
+            <div class="dc-delete-file" id="dcDeleteFileName">—</div>
+
+            <!-- Fila de exclusão -->
+            <div class="dc-delete-queue hidden" id="dcDeleteQueue">
+                <div class="dc-delete-queue-head">
+                    <span class="dc-delete-queue-label">Fila</span>
+                    <span class="dc-delete-queue-count" id="dcDeleteQueueCount">0</span>
+                </div>
+                <ul class="dc-delete-queue-list" id="dcDeleteQueueList"></ul>
             </div>
+
         </div>
 
-        <div class="cl-modal-actions cl-modal-actions-apple">
+        <div class="cl-modal-actions cl-modal-actions-apple dc-delete-actions">
             <button class="btn-apple btn-apple-ghost" data-close="dcDeleteModal">Cancelar</button>
-            <button class="btn-apple btn-apple-danger" id="dcDeleteConfirmBtn" disabled>Excluir</button>
+            <button class="btn-apple btn-apple-danger" id="dcDeleteConfirmBtn">
+                <span class="dc-btn-label" id="dcDeleteConfirmLabel">Excluir</span>
+                <span class="dc-btn-spinner" aria-hidden="true"></span>
+            </button>
         </div>
     </div>
 </div>

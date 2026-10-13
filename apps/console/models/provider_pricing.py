@@ -36,7 +36,7 @@ class ProviderPricing(models.Model):
 
     Exemplos:
         OpenAI / GPT-5.6 input     → $X / 1M tokens
-        Cloudinary / Storage       → $X / GB
+        Backblaze B2 / Storage     → $X / GB
         Resend / Emails            → $X / 1.000 emails
 
     O `pricing_model` determina como o custo é calculado a partir
@@ -248,14 +248,9 @@ class ProviderPricing(models.Model):
 
             # Sobreposição: existe outro pricing cujo intervalo
             # [starts_at, ends_at] intersecta com o deste.
-            #
-            # Interseção: other.starts_at < self.ends_at (ou self sem ends)
-            #          E  other.ends_at > self.starts_at (ou other sem ends)
 
             if self.ends_at:
                 overlap_qs = overlap_qs.filter(starts_at__lt=self.ends_at)
-            # Se self não tem ends_at, qualquer other com starts >= self.starts
-            # já está sobreposto — não filtramos por starts_at aqui.
 
             overlap_qs = overlap_qs.filter(
                 Q(ends_at__isnull=True) | Q(ends_at__gt=self.starts_at)

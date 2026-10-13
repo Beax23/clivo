@@ -164,10 +164,23 @@ class Plan(models.Model):
     @property
     def workspaces_count(self) -> int:
         """
-        Quantidade de workspaces usando este plano.
+        Quantidade de Workspaces com assinatura ATIVA neste plano.
 
-        Como `workspaces` ainda não existe, retorna 0.
-        Quando o app nascer, este método será reescrito para:
-            WorkspaceSubscription.objects.filter(plan=self).count()
+        Conta apenas `WorkspaceSubscription` com `is_active=True`.
+        Assinaturas históricas (inativas) NÃO entram na contagem —
+        elas refletem trocas de plano passadas e não representam
+        tenants atualmente usando este plano.
+
+        Workspace sem assinatura ativa (estado válido durante uma
+        janela entre trocas, ou antes de backfill) também NÃO é
+        contado.
+
+        O import é feito dentro da property para evitar ciclo de
+        importação entre `console` e `workspaces`.
         """
-        return 0
+        from apps.workspaces.models import WorkspaceSubscription
+
+        return WorkspaceSubscription.objects.filter(
+            plan=self,
+            is_active=True,
+        ).count()

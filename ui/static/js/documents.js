@@ -65,8 +65,43 @@
         return baseUrl + sep + 'v=' + v;
     }
 
+    function formatBytes(n) {
+        n = Number(n) || 0;
+        if (n < 1024) return n + ' B';
+        if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+        if (n < 1024 * 1024 * 1024) return (n / (1024 * 1024)).toFixed(1) + ' MB';
+        return (n / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+    }
+
     // =====================================================================
-    // SCRIPT LOADER (uma vez por sessão, não cacheia falhas)
+    // SVG — pasta e arquivo
+    // =====================================================================
+
+    function folderSvg() {
+        return (
+            '<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+                '<path d="M6 14c0-1.1.9-2 2-2h10.2c.6 0 1.2.3 1.6.7l2.2 2.3c.4.4 1 .7 1.6.7H40c1.1 0 2 .9 2 2v20c0 1.1-.9 2-2 2H8c-1.1 0-2-.9-2-2V14z" fill="currentColor" opacity="0.28"/>' +
+                '<path d="M4 20c0-1.1.9-2 2-2h14l2 2h20c1.1 0 2 .9 2 2v16c0 1.1-.9 2-2 2H6c-1.1 0-2-.9-2-2V20z" fill="currentColor" opacity="0.55"/>' +
+                '<path d="M4 20c0-1.1.9-2 2-2h14l2 2h20" stroke="currentColor" stroke-width="0.75" stroke-linejoin="round" opacity="0.9"/>' +
+            '</svg>'
+        );
+    }
+
+    function fileSvg() {
+        return (
+            '<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+                '<path d="M10 8c0-1.1.9-2 2-2h16l12 12v22c0 1.1-.9 2-2 2H12c-1.1 0-2-.9-2-2V8z" fill="currentColor" opacity="0.18"/>' +
+                '<path d="M10 8c0-1.1.9-2 2-2h16l12 12v22c0 1.1-.9 2-2 2H12c-1.1 0-2-.9-2-2V8z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>' +
+                '<path d="M28 6v10c0 1.1.9 2 2 2h10" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" fill="currentColor" fill-opacity="0.22"/>' +
+                '<path d="M15 22h12" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" opacity="0.45"/>' +
+                '<path d="M15 27h16" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" opacity="0.45"/>' +
+                '<path d="M15 32h10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" opacity="0.45"/>' +
+            '</svg>'
+        );
+    }
+
+    // =====================================================================
+    // SCRIPT LOADER
     // =====================================================================
 
     const _loadedScripts = {};
@@ -93,92 +128,74 @@
     }
 
     // =====================================================================
-    // ÍCONES + CORES
+    // TIPOS / CORES
     // =====================================================================
 
     const EXT_TYPE_MAP = {
-        'pdf':  { icon: 'file-text',        type: 'pdf' },
-        'doc':  { icon: 'file-text',        type: 'doc' },
-        'docx': { icon: 'file-text',        type: 'doc' },
-        'txt':  { icon: 'file-text',        type: 'doc' },
-        'md':   { icon: 'file-text',        type: 'doc' },
-        'rtf':  { icon: 'file-text',        type: 'doc' },
-        'odt':  { icon: 'file-text',        type: 'doc' },
-        'xls':  { icon: 'file-spreadsheet', type: 'xls' },
-        'xlsx': { icon: 'file-spreadsheet', type: 'xls' },
-        'csv':  { icon: 'file-spreadsheet', type: 'xls' },
-        'ods':  { icon: 'file-spreadsheet', type: 'xls' },
-        'jpg':  { icon: 'file-image',       type: 'img' },
-        'jpeg': { icon: 'file-image',       type: 'img' },
-        'png':  { icon: 'file-image',       type: 'img' },
-        'gif':  { icon: 'file-image',       type: 'img' },
-        'svg':  { icon: 'file-image',       type: 'img' },
-        'webp': { icon: 'file-image',       type: 'img' },
-        'bmp':  { icon: 'file-image',       type: 'img' },
-        'tiff': { icon: 'file-image',       type: 'img' },
-        'ico':  { icon: 'file-image',       type: 'img' },
-        'mp3':  { icon: 'file-audio',       type: 'audio' },
-        'wav':  { icon: 'file-audio',       type: 'audio' },
-        'm4a':  { icon: 'file-audio',       type: 'audio' },
-        'ogg':  { icon: 'file-audio',       type: 'audio' },
-        'flac': { icon: 'file-audio',       type: 'audio' },
-        'mp4':  { icon: 'file-video',       type: 'video' },
-        'mov':  { icon: 'file-video',       type: 'video' },
-        'avi':  { icon: 'file-video',       type: 'video' },
-        'mkv':  { icon: 'file-video',       type: 'video' },
-        'webm': { icon: 'file-video',       type: 'video' },
-        'zip':  { icon: 'file-archive',     type: 'archive' },
-        'rar':  { icon: 'file-archive',     type: 'archive' },
-        '7z':   { icon: 'file-archive',     type: 'archive' },
-        'tar':  { icon: 'file-archive',     type: 'archive' },
-        'gz':   { icon: 'file-archive',     type: 'archive' },
-        'dwg':  { icon: 'ruler',            type: 'cad' },
-        'dxf':  { icon: 'ruler',            type: 'cad' },
-        'skp':  { icon: 'ruler',            type: 'cad' },
+        'pdf':  { type: 'pdf' },
+        'doc':  { type: 'doc' },
+        'docx': { type: 'doc' },
+        'txt':  { type: 'doc' },
+        'md':   { type: 'doc' },
+        'rtf':  { type: 'doc' },
+        'odt':  { type: 'doc' },
+        'xls':  { type: 'xls' },
+        'xlsx': { type: 'xls' },
+        'csv':  { type: 'xls' },
+        'ods':  { type: 'xls' },
+        'jpg':  { type: 'img' },
+        'jpeg': { type: 'img' },
+        'png':  { type: 'img' },
+        'gif':  { type: 'img' },
+        'svg':  { type: 'img' },
+        'webp': { type: 'img' },
+        'bmp':  { type: 'img' },
+        'tiff': { type: 'img' },
+        'ico':  { type: 'img' },
+        'mp3':  { type: 'audio' },
+        'wav':  { type: 'audio' },
+        'm4a':  { type: 'audio' },
+        'ogg':  { type: 'audio' },
+        'flac': { type: 'audio' },
+        'mp4':  { type: 'video' },
+        'mov':  { type: 'video' },
+        'avi':  { type: 'video' },
+        'mkv':  { type: 'video' },
+        'webm': { type: 'video' },
+        'zip':  { type: 'archive' },
+        'rar':  { type: 'archive' },
+        '7z':   { type: 'archive' },
+        'tar':  { type: 'archive' },
+        'gz':   { type: 'archive' },
+        'dwg':  { type: 'cad' },
+        'dxf':  { type: 'cad' },
+        'skp':  { type: 'cad' },
     };
 
+    const THUMBNAIL_EXTS = ['jpg','jpeg','png','gif','webp','svg','bmp','ico','tiff'];
+
     function fileMeta(ext) {
-        if (!ext) return { icon: 'file', type: 'default' };
+        if (!ext) return { type: 'default' };
         const key = String(ext).toLowerCase();
-        return EXT_TYPE_MAP[key] || { icon: 'file', type: 'default' };
+        return EXT_TYPE_MAP[key] || { type: 'default' };
     }
 
-    function iconForExtension(ext) { return fileMeta(ext).icon; }
-    function typeClassForExtension(ext) { return 'dc-icon--' + fileMeta(ext).type; }
+    function toneClassForExtension(ext) { return 'dc-tone-' + fileMeta(ext).type; }
 
-    // =====================================================================
-    // PREVIEW — TIPO
-    // =====================================================================
+    function isImageExt(ext) {
+        return THUMBNAIL_EXTS.indexOf(String(ext || '').toLowerCase()) !== -1;
+    }
 
     function previewKind(mimeType, ext) {
         const t = String(mimeType || '').toLowerCase();
         const e = String(ext || '').toLowerCase();
 
-        if (t.indexOf('image/') === 0 ||
-            ['jpg','jpeg','png','gif','svg','webp','bmp','ico','tiff'].indexOf(e) !== -1) {
-            return 'image';
-        }
-        if (t === 'application/pdf' || e === 'pdf') {
-            return 'pdf';
-        }
+        if (t.indexOf('image/') === 0 || THUMBNAIL_EXTS.indexOf(e) !== -1) return 'image';
+        if (t === 'application/pdf' || e === 'pdf') return 'pdf';
         if (t.indexOf('text/') === 0 ||
-            ['txt','md','csv','json','xml','html','css','js','py','log'].indexOf(e) !== -1) {
-            return 'text';
-        }
-        if (['doc','docx','xls','xlsx','ppt','pptx','odt','ods','odp'].indexOf(e) !== -1) {
-            return 'office';
-        }
+            ['txt','md','csv','json','xml','html','css','js','py','log'].indexOf(e) !== -1) return 'text';
+        if (['doc','docx','xls','xlsx','ppt','pptx','odt','ods','odp'].indexOf(e) !== -1) return 'office';
         return 'none';
-    }
-
-    function previewKindLabel(kind, ext) {
-        switch (kind) {
-            case 'image':  return 'Imagem';
-            case 'pdf':    return 'PDF';
-            case 'text':   return 'Texto';
-            case 'office': return 'Documento Office';
-            default:       return (ext ? '.' + ext : 'Arquivo');
-        }
     }
 
     // =====================================================================
@@ -190,7 +207,12 @@
     let currentDocument = null;
     let clientsCache = [];
     let clientsLoaded = false;
+    let foldersCache = [];
+    let foldersLoaded = false;
+    let activeFolderId = null;
+    let folderFilter = 'all';
     let activeTab = 'preview';
+    let viewMode = 'list';
 
     let detailAbortController = null;
     let historyAbortController = null;
@@ -202,11 +224,27 @@
 
     let rotationDeg = 0;
 
-    // Google Drive
-    let gdriveSelectedFiles = {};       // id -> meta
+    let gdriveSelectedFiles = {};
     let gdriveFilesCache = [];
     let gdriveSearchTimer = null;
-    let gdriveLoaded = false;
+    let gdriveStatusCache = null;
+
+    let draggingDocumentId = null;
+    let renamingFolderId = null;
+
+    let ctxMenuTarget = null;
+    let ctxMenuVisible = false;
+
+    let pendingDeleteFolderId = null;
+
+    // Fila de exclusão de arquivos
+    let deleteQueue = [];
+    let deleteQueueIndex = 0;
+
+    let visibilitySaveTimer = null;
+
+    let projectSearchTimer = null;
+    let projectSearchAbort = null;
 
     // =====================================================================
     // CLIENTES
@@ -237,6 +275,142 @@
             }
             selectEl.appendChild(opt);
         });
+    }
+
+    function fillFolderSelect(selectEl, selectedId, emptyLabel) {
+        if (!selectEl) return;
+        selectEl.innerHTML = '<option value="">' + escapeHtml(emptyLabel || 'Sem pasta (solto)') + '</option>';
+        foldersCache.forEach(function(f) {
+            const opt = document.createElement('option');
+            opt.value = f.id;
+            opt.textContent = f.name;
+            if (selectedId && String(selectedId) === String(f.id)) {
+                opt.selected = true;
+            }
+            selectEl.appendChild(opt);
+        });
+    }
+
+    // =====================================================================
+    // PASTAS
+    // =====================================================================
+
+    async function loadFolders(force) {
+        if (foldersLoaded && !force) return foldersCache;
+        try {
+            const data = await api('/api/documents/folders/');
+            foldersCache = (data && data.folders) || [];
+            foldersLoaded = true;
+        } catch (e) {
+            foldersCache = [];
+            foldersLoaded = true;
+        }
+        return foldersCache;
+    }
+
+    /**
+     * Recarrega pastas E lista de arquivos em sequência.
+     * Usar sempre que uma operação mudar a distribuição de arquivos
+     * entre pastas (mover, excluir, upload, importar, excluir pasta).
+     *
+     * Isso garante que `document_count` de cada pasta esteja atualizado
+     * ao mesmo tempo que a lista de arquivos.
+     */
+    async function refreshFoldersAndList() {
+        foldersLoaded = false;
+        documentsLoaded = false;
+        await loadFolders(true);
+        await loadDocuments(true);
+    }
+
+    // =====================================================================
+    // ARMAZENAMENTO (PILL NO HEADER)
+    // =====================================================================
+
+    async function loadStorageUsage() {
+        const pill = document.getElementById('dcStorageFooter');
+        const valueEl = document.getElementById('dcStorageValue');
+        const fillEl = document.getElementById('dcStorageFill');
+        const barEl = document.getElementById('dcStorageBar');
+
+        if (!pill || !valueEl || !fillEl || !barEl) return;
+
+        try {
+            const stats = await api('/api/documents/storage-usage/');
+            const used = Number(stats && stats.used_bytes) || 0;
+            const quota = Number(stats && stats.quota_bytes) || 0;
+            const percent = Number(stats && stats.percent) || 0;
+
+            valueEl.textContent = formatBytes(used) + ' / ' + formatBytes(quota);
+
+            const clamped = Math.max(0, Math.min(100, percent));
+            fillEl.style.width = clamped + '%';
+            barEl.setAttribute('aria-valuenow', String(Math.round(clamped)));
+
+            pill.classList.remove('is-warning', 'is-danger');
+            if (clamped >= 90) pill.classList.add('is-danger');
+            else if (clamped >= 75) pill.classList.add('is-warning');
+
+            pill.title = 'Armazenamento: ' + formatBytes(used) + ' de ' + formatBytes(quota)
+                + ' (' + percent.toFixed(1) + '%)';
+        } catch (e) {
+            valueEl.textContent = '—';
+        }
+    }
+
+    // =====================================================================
+    // MOVER
+    // =====================================================================
+
+    async function moveDocumentToFolder(docId, folderId) {
+        const doc = documentsCache.find(function(d) { return d.id === docId; });
+        if (!doc) return;
+
+        const currentFolderId = doc.folder || null;
+        const targetFolderId = folderId || null;
+
+        if (currentFolderId === targetFolderId) return;
+
+        // Otimista: atualiza local imediatamente
+        doc.folder = targetFolderId;
+        const folder = foldersCache.find(function(f) { return f.id === targetFolderId; });
+        doc.folder_name = folder ? folder.name : null;
+
+        if (currentFolderId) {
+            const old = foldersCache.find(function(f) { return f.id === currentFolderId; });
+            if (old) old.document_count = Math.max(0, (old.document_count || 0) - 1);
+        }
+        if (targetFolderId) {
+            const nf = foldersCache.find(function(f) { return f.id === targetFolderId; });
+            if (nf) nf.document_count = (nf.document_count || 0) + 1;
+        }
+
+        renderList();
+
+        try {
+            const updated = await api(
+                '/api/documents/' + docId + '/move/',
+                'POST',
+                { folder_id: targetFolderId }
+            );
+            const idx = documentsCache.findIndex(function(d) { return d.id === docId; });
+            if (idx !== -1) documentsCache[idx] = updated;
+            if (currentDocument && currentDocument.id === docId) {
+                currentDocument = updated;
+                renderDetail();
+            }
+
+            // Recarrega pastas + lista para sincronizar contadores com o backend
+            await refreshFoldersAndList();
+            loadStorageUsage();
+            showToast(
+                targetFolderId ? 'Arquivo movido' : 'Arquivo removido da pasta',
+                'success'
+            );
+        } catch (err) {
+            await refreshFoldersAndList();
+            showToast(err.message || 'Erro ao mover arquivo', 'error');
+        }
     }
 
     // =====================================================================
@@ -271,78 +445,23 @@
         }
 
         renderList();
-        renderExtensionFilter();
-    }
-
-    function renderExtensionFilter() {
-        const select = document.getElementById('dcExtensionFilter');
-        if (!select) return;
-
-        const extensions = {};
-        documentsCache.forEach(function(d) {
-            const ext = (d.extension || '').toLowerCase();
-            if (ext) extensions[ext] = (extensions[ext] || 0) + 1;
-        });
-
-        const current = select.value;
-        select.innerHTML = '<option value="">Extensão</option>';
-        Object.keys(extensions).sort().forEach(function(ext) {
-            const opt = document.createElement('option');
-            opt.value = ext;
-            opt.textContent = '.' + ext;
-            select.appendChild(opt);
-        });
-
-        if (current && extensions[current]) select.value = current;
+        loadStorageUsage();
     }
 
     function getFilteredDocuments() {
         const searchInput = document.getElementById('dcSearchInput');
         const query = (searchInput && searchInput.value || '').trim().toLowerCase();
 
-        const extSelect = document.getElementById('dcExtensionFilter');
-        const extFilter = (extSelect && extSelect.value || '').toLowerCase();
-
-        const clientSelect = document.getElementById('dcClientFilter');
-        const clientFilter = clientSelect ? clientSelect.value : '';
-
-        const contextSelect = document.getElementById('dcContextFilter');
-        const contextFilter = contextSelect ? contextSelect.value : '';
-
-        const sourceSelect = document.getElementById('dcSourceFilter');
-        const sourceFilter = sourceSelect ? sourceSelect.value : '';
-
         let items = documentsCache.slice();
 
-        if (extFilter) {
-            items = items.filter(function(d) {
-                return (d.extension || '').toLowerCase() === extFilter;
-            });
-        }
-
-        if (clientFilter) {
-            items = items.filter(function(d) {
-                return String(d.client) === String(clientFilter);
-            });
-        }
-
-        if (contextFilter) {
-            items = items.filter(function(d) {
-                const hasClient = d.client !== null && d.client !== undefined && d.client !== '';
-                const hasProject = d.project_id !== null && d.project_id !== undefined && d.project_id !== '';
-                if (contextFilter === 'with_client') return hasClient;
-                if (contextFilter === 'without_client') return !hasClient;
-                if (contextFilter === 'with_project') return hasProject;
-                if (contextFilter === 'without_project') return !hasProject;
-                if (contextFilter === 'without_any') return !hasClient && !hasProject;
-                return true;
-            });
-        }
-
-        if (sourceFilter) {
-            items = items.filter(function(d) {
-                return (d.source || 'upload') === sourceFilter;
-            });
+        if (activeFolderId) {
+            items = items.filter(function(d) { return d.folder === activeFolderId; });
+        } else {
+            if (folderFilter === 'loose') {
+                items = items.filter(function(d) { return !d.folder; });
+            } else if (folderFilter === 'foldered') {
+                items = [];
+            }
         }
 
         if (query) {
@@ -356,13 +475,63 @@
         return items;
     }
 
+    function getVisibleFolders() {
+        const searchInput = document.getElementById('dcSearchInput');
+        const query = (searchInput && searchInput.value || '').trim().toLowerCase();
+
+        if (activeFolderId !== null) {
+            return [];
+        }
+
+        if (folderFilter === 'loose') {
+            return [];
+        }
+
+        let folders = foldersCache.slice();
+
+        if (query) {
+            folders = folders.filter(function(f) {
+                return (f.name || '').toLowerCase().indexOf(query) !== -1;
+            });
+        }
+
+        return folders;
+    }
+
+    function updateBreadcrumb() {
+        const bcEl = document.getElementById('dcBreadcrumb');
+        const bcName = document.getElementById('dcBreadcrumbName');
+        const sectionTitle = document.getElementById('dcSectionTitle');
+
+        if (!bcEl || !bcName || !sectionTitle) return;
+
+        if (activeFolderId) {
+            const folder = foldersCache.find(function(f) { return f.id === activeFolderId; });
+            if (folder) {
+                bcName.textContent = folder.name;
+                bcEl.classList.remove('hidden');
+                sectionTitle.textContent = 'Arquivos';
+                return;
+            }
+        }
+
+        bcEl.classList.add('hidden');
+        sectionTitle.textContent = 'Arquivos';
+    }
+
     function renderList() {
         const listEl = document.getElementById('dcList');
         if (!listEl) return;
 
         const items = getFilteredDocuments();
+        const folders = getVisibleFolders();
 
-        if (!items.length) {
+        const countEl = document.getElementById('dcFilesCount');
+        if (countEl) countEl.textContent = items.length;
+
+        updateBreadcrumb();
+
+        if (folders.length === 0 && items.length === 0) {
             listEl.innerHTML =
                 '<div class="dc-list-empty">' +
                     '<i data-lucide="file"></i>' +
@@ -373,48 +542,297 @@
         }
 
         const currentId = currentDocument ? currentDocument.id : null;
-
         let html = '';
-        items.forEach(function(d) {
-            const isSelected = currentId === d.id;
-            const iconName = iconForExtension(d.extension);
-            const typeClass = typeClassForExtension(d.extension);
-            const fullName = d.full_name || d.name || '—';
-            const size = d.size_display || '—';
-            const client = d.client_name || 'Sem cliente';
-            const source = d.source || 'upload';
 
-            const sourceBadge = source === 'gdrive'
-                ? '<span class="dc-item-source" title="Google Drive"><i data-lucide="hard-drive"></i>Drive</span>'
-                : '';
+        // Pastas
+        folders.forEach(function(f) {
+            const isRenaming = renamingFolderId === f.id;
 
             html +=
-                '<div class="dc-item' + (isSelected ? ' is-selected' : '') + '" data-document-id="' + escapeHtml(d.id) + '">' +
-                    '<div class="dc-item-icon ' + typeClass + '">' +
-                        '<i data-lucide="' + iconName + '"></i>' +
-                    '</div>' +
+                '<div class="dc-folder" data-folder-id="' + escapeHtml(f.id) + '">' +
+                    '<div class="dc-folder-icon">' + folderSvg() + '</div>' +
+                    '<div class="dc-folder-info">';
+
+            if (isRenaming) {
+                html += '<input type="text" class="dc-folder-name-input" ' +
+                        'data-folder-rename="' + escapeHtml(f.id) + '" ' +
+                        'value="' + escapeHtml(f.name) + '" maxlength="100">';
+                html += '<div class="dc-folder-meta">' + (f.document_count || 0) + ' arquivo(s)</div>';
+            } else {
+                html += '<div class="dc-folder-name">' + escapeHtml(f.name) + '</div>';
+                html += '<div class="dc-folder-meta">' + (f.document_count || 0) + ' arquivo(s)</div>';
+            }
+
+            html += '</div>';
+
+            if (!isRenaming) {
+                html +=
+                    '<div class="dc-folder-actions">' +
+                        '<button class="dc-folder-action" data-folder-action="rename" ' +
+                                'data-folder-id="' + escapeHtml(f.id) + '" title="Renomear">' +
+                            '<i data-lucide="pencil"></i>' +
+                        '</button>' +
+                        '<button class="dc-folder-action is-danger" data-folder-action="delete" ' +
+                                'data-folder-id="' + escapeHtml(f.id) + '" title="Excluir">' +
+                            '<i data-lucide="trash-2"></i>' +
+                        '</button>' +
+                    '</div>';
+            }
+
+            html += '</div>';
+        });
+
+        // Arquivos
+        items.forEach(function(d) {
+            const isSelected = currentId === d.id;
+            const toneClass = toneClassForExtension(d.extension);
+            const fullName = d.full_name || d.name || '—';
+            const folderName = d.folder_name || null;
+
+            const folderLabel = folderName ? folderName : 'Sem pasta';
+            const folderClass = folderName ? 'dc-item-folder' : 'dc-item-folder is-empty';
+            const metaHTML = '<span class="' + folderClass + '">' + escapeHtml(folderLabel) + '</span>';
+
+            let thumbHTML;
+            if (isImageExt(d.extension) && d.file_url) {
+                thumbHTML =
+                    '<div class="dc-item-thumb ' + toneClass + '">' +
+                        '<img src="' + escapeHtml(d.file_url) + '" alt="" loading="lazy">' +
+                    '</div>';
+            } else {
+                thumbHTML =
+                    '<div class="dc-item-thumb ' + toneClass + '">' +
+                        fileSvg() +
+                    '</div>';
+            }
+
+            html +=
+                '<div class="dc-item ' + toneClass + (isSelected ? ' is-selected' : '') + '" ' +
+                     'data-document-id="' + escapeHtml(d.id) + '" draggable="true">' +
+                    thumbHTML +
                     '<div class="dc-item-info">' +
                         '<div class="dc-item-name">' + escapeHtml(fullName) + '</div>' +
-                        '<div class="dc-item-meta">' +
-                            '<span>' + escapeHtml(size) + '</span>' +
-                            '<span>·</span>' +
-                            '<span>' + escapeHtml(client) + '</span>' +
-                            (sourceBadge ? '<span>·</span>' + sourceBadge : '') +
-                        '</div>' +
+                        '<div class="dc-item-meta">' + metaHTML + '</div>' +
                     '</div>' +
+                    '<button class="dc-item-menu" data-doc-menu="' + escapeHtml(d.id) + '" title="Mais opções">' +
+                        '<i data-lucide="more-vertical"></i>' +
+                    '</button>' +
                 '</div>';
         });
 
         listEl.innerHTML = html;
         refreshIcons();
 
+        // Bind pastas
+        listEl.querySelectorAll('.dc-folder').forEach(function(el) {
+            el.addEventListener('click', function(e) {
+                if (e.target.closest('.dc-folder-action')) return;
+                if (e.target.closest('.dc-folder-name-input')) return;
+
+                const fid = this.dataset.folderId;
+                if (fid) setActiveFolder(fid);
+            });
+
+            el.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                this.classList.add('is-droptarget');
+            });
+
+            el.addEventListener('dragleave', function(e) {
+                if (this.contains(e.relatedTarget)) return;
+                this.classList.remove('is-droptarget');
+            });
+
+            el.addEventListener('drop', function(e) {
+                e.preventDefault();
+                this.classList.remove('is-droptarget');
+
+                const fid = this.dataset.folderId;
+                const docId = e.dataTransfer.getData('text/x-document-id') || draggingDocumentId;
+                if (!docId || !fid) return;
+
+                moveDocumentToFolder(docId, fid);
+            });
+        });
+
+        listEl.querySelectorAll('.dc-folder-action').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const action = this.dataset.folderAction;
+                const fid = this.dataset.folderId;
+                if (!fid) return;
+
+                if (action === 'rename') {
+                    startRenameFolder(fid);
+                } else if (action === 'delete') {
+                    openDeleteFolderModal(fid);
+                }
+            });
+        });
+
+        const renameInput = listEl.querySelector('.dc-folder-name-input');
+        if (renameInput) {
+            renameInput.focus();
+            renameInput.select();
+
+            renameInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    commitRenameFolder(this.dataset.folderRename, this.value.trim());
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    cancelRenameFolder();
+                }
+            });
+
+            renameInput.addEventListener('blur', function() {
+                setTimeout(function() {
+                    if (renamingFolderId) {
+                        commitRenameFolder(renamingFolderId, renameInput.value.trim());
+                    }
+                }, 50);
+            });
+        }
+
+        // Bind arquivos
         listEl.querySelectorAll('.dc-item').forEach(function(el) {
-            el.addEventListener('click', function() {
-                const id = this.dataset.documentId;
-                if (id) openDocument(id);
+            const docId = el.dataset.documentId;
+
+            el.addEventListener('click', function(e) {
+                if (e.target.closest('.dc-item-menu')) return;
+                if (docId) openDocument(docId);
+            });
+
+            el.addEventListener('dragstart', function(e) {
+                draggingDocumentId = docId;
+                el.classList.add('is-dragging');
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/x-document-id', docId);
+                e.dataTransfer.setData('text/plain', docId);
+            });
+
+            el.addEventListener('dragend', function() {
+                draggingDocumentId = null;
+                el.classList.remove('is-dragging');
+                listEl.querySelectorAll('.dc-folder.is-droptarget').forEach(function(f) {
+                    f.classList.remove('is-droptarget');
+                });
+            });
+        });
+
+        // Bind menu 3 pontinhos
+        listEl.querySelectorAll('.dc-item-menu').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                e.preventDefault();
+                const docId = this.dataset.docMenu;
+                if (!docId) return;
+                openCtxMenu(this, docId);
             });
         });
     }
+
+    // =====================================================================
+    // CONTEXT MENU
+    // =====================================================================
+
+    function openCtxMenu(anchorEl, docId) {
+        const menu = document.getElementById('dcCtxMenu');
+        if (!menu) return;
+
+        closeCtxMenu();
+
+        ctxMenuTarget = docId;
+        ctxMenuVisible = true;
+
+        const rect = anchorEl.getBoundingClientRect();
+        const menuWidth = 180;
+
+        let left = rect.right - menuWidth;
+        let top = rect.bottom + 6;
+
+        if (left < 8) left = 8;
+        if (left + menuWidth > window.innerWidth - 8) {
+            left = window.innerWidth - menuWidth - 8;
+        }
+        if (top + 100 > window.innerHeight - 8) {
+            top = rect.top - 100 - 6;
+        }
+
+        menu.style.left = left + 'px';
+        menu.style.top = top + 'px';
+        menu.classList.remove('hidden');
+
+        anchorEl.classList.add('is-open');
+        refreshIcons();
+    }
+
+    function closeCtxMenu() {
+        const menu = document.getElementById('dcCtxMenu');
+        if (!menu) return;
+
+        menu.classList.add('hidden');
+        document.querySelectorAll('.dc-item-menu.is-open').forEach(function(b) {
+            b.classList.remove('is-open');
+        });
+
+        ctxMenuTarget = null;
+        ctxMenuVisible = false;
+    }
+
+    function setupCtxMenu() {
+        const menu = document.getElementById('dcCtxMenu');
+        if (!menu) return;
+
+        menu.querySelectorAll('.dc-ctx-item').forEach(function(item) {
+            item.addEventListener('click', function() {
+                const action = this.dataset.ctxAction;
+                const docId = ctxMenuTarget;
+                closeCtxMenu();
+
+                if (!docId) return;
+
+                if (action === 'edit') {
+                    openDocument(docId).then(function() {
+                        setTimeout(function() {
+                            const input = document.getElementById('dcNameInput');
+                            const nameEl = document.getElementById('dcDetailName');
+                            if (input && nameEl && currentDocument && currentDocument.id === docId) {
+                                input.value = currentDocument.name || '';
+                                nameEl.classList.add('hidden');
+                                input.classList.remove('hidden');
+                                input.focus();
+                                input.select();
+                            }
+                        }, 250);
+                    });
+                } else if (action === 'delete') {
+                    // NÃO abre o documento no painel direito — vai direto para o modal
+                    enqueueDelete([docId]);
+                }
+            });
+        });
+
+        document.addEventListener('click', function(e) {
+            if (!ctxMenuVisible) return;
+            if (menu.contains(e.target)) return;
+            if (e.target.closest('.dc-item-menu')) return;
+            closeCtxMenu();
+        });
+
+        document.addEventListener('scroll', function() {
+            if (ctxMenuVisible) closeCtxMenu();
+        }, true);
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && ctxMenuVisible) closeCtxMenu();
+        });
+    }
+
+    // =====================================================================
+    // SELEÇÃO / NAVEGAÇÃO
+    // =====================================================================
 
     function updateSelectionHighlight() {
         const listEl = document.getElementById('dcList');
@@ -425,8 +843,401 @@
         });
     }
 
+    function setActiveFolder(folderId) {
+        activeFolderId = folderId;
+        renderList();
+    }
+
+    function exitFolder() {
+        activeFolderId = null;
+        renderList();
+    }
+
+    function startRenameFolder(folderId) {
+        renamingFolderId = folderId;
+        renderList();
+    }
+
+    function cancelRenameFolder() {
+        renamingFolderId = null;
+        renderList();
+    }
+
+    async function commitRenameFolder(folderId, newName) {
+        if (!folderId) return;
+        if (renamingFolderId !== folderId) return;
+
+        renamingFolderId = null;
+
+        if (!newName) {
+            renderList();
+            return;
+        }
+
+        const folder = foldersCache.find(function(f) { return f.id === folderId; });
+        if (!folder) {
+            renderList();
+            return;
+        }
+
+        if (folder.name === newName) {
+            renderList();
+            return;
+        }
+
+        const previousName = folder.name;
+        folder.name = newName;
+        renderList();
+
+        try {
+            const updated = await api(
+                '/api/documents/folders/' + folderId + '/',
+                'PATCH',
+                { name: newName }
+            );
+            const idx = foldersCache.findIndex(function(f) { return f.id === folderId; });
+            if (idx !== -1) foldersCache[idx] = updated;
+            renderList();
+            showToast('Pasta renomeada', 'success');
+        } catch (err) {
+            folder.name = previousName;
+            renderList();
+            showToast(err.message || 'Erro ao renomear pasta', 'error');
+        }
+    }
+
     // =====================================================================
-    // DETALHE — abertura
+    // FILTRO (Todos / Pastas / Soltos)
+    // =====================================================================
+
+    function setFolderFilter(filter) {
+        folderFilter = (filter === 'foldered' || filter === 'loose') ? filter : 'all';
+
+        document.querySelectorAll('.dc-filter-btn').forEach(function(btn) {
+            const isActive = btn.dataset.filter === folderFilter;
+            btn.classList.toggle('is-active', isActive);
+            btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        });
+
+        try {
+            localStorage.setItem('clivo-documents-filter', folderFilter);
+        } catch (e) {}
+
+        if (activeFolderId !== null && folderFilter !== 'all') {
+            activeFolderId = null;
+        }
+
+        renderList();
+    }
+
+    function setupFolderFilter() {
+        document.querySelectorAll('.dc-filter-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                setFolderFilter(this.dataset.filter);
+            });
+        });
+    }
+
+    // =====================================================================
+    // MODAL: NOVA PASTA
+    // =====================================================================
+
+    function openNewFolderModal() {
+        const form = document.getElementById('dcNewFolderForm');
+        const input = document.getElementById('dcNewFolderName');
+        if (!form) return;
+
+        form.reset();
+        if (input) input.value = '';
+
+        openModal('dcNewFolderModal');
+        refreshIcons();
+
+        setTimeout(function() {
+            if (input) input.focus();
+        }, 100);
+    }
+
+    function setupNewFolderModal() {
+        const form = document.getElementById('dcNewFolderForm');
+        if (!form) return;
+
+        form.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const input = document.getElementById('dcNewFolderName');
+            const submitBtn = document.getElementById('dcNewFolderSubmitBtn');
+            const name = (input && input.value || '').trim();
+
+            if (!name) {
+                showToast('Informe o nome da pasta', 'error');
+                return;
+            }
+
+            submitBtn.disabled = true;
+            submitBtn.classList.add('is-loading');
+
+            try {
+                const created = await api('/api/documents/folders/', 'POST', { name: name });
+                foldersCache.push(created);
+                foldersCache.sort(function(a, b) {
+                    return a.name.localeCompare(b.name);
+                });
+                closeModal('dcNewFolderModal');
+                renderList();
+                showToast('Pasta criada', 'success');
+                setActiveFolder(created.id);
+            } catch (err) {
+                showToast(err.message || 'Erro ao criar pasta', 'error');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.classList.remove('is-loading');
+            }
+        });
+    }
+
+    // =====================================================================
+    // MODAL: EXCLUIR PASTA
+    // =====================================================================
+
+    function openDeleteFolderModal(folderId) {
+        const folder = foldersCache.find(function(f) { return f.id === folderId; });
+        if (!folder) return;
+
+        pendingDeleteFolderId = folderId;
+
+        const hintEl = document.getElementById('dcDeleteFolderHint');
+        const count = folder.document_count || 0;
+
+        if (hintEl) {
+            if (count > 0) {
+                hintEl.textContent = 'Tem certeza que deseja excluir a pasta "' +
+                    folder.name + '"? Os ' + count +
+                    ' arquivo(s) dentro dela NÃO serão excluídos — eles voltam a ficar soltos na biblioteca.';
+            } else {
+                hintEl.textContent = 'Tem certeza que deseja excluir a pasta "' +
+                    folder.name + '"? Esta ação não pode ser desfeita.';
+            }
+        }
+
+        openModal('dcDeleteFolderModal');
+        refreshIcons();
+    }
+
+    function setupDeleteFolderModal() {
+        const btn = document.getElementById('dcDeleteFolderConfirmBtn');
+        if (!btn) return;
+
+        btn.addEventListener('click', async function() {
+            if (!pendingDeleteFolderId) return;
+
+            btn.disabled = true;
+            btn.classList.add('is-loading');
+
+            try {
+                await api('/api/documents/folders/' + pendingDeleteFolderId + '/', 'DELETE');
+                showToast('Pasta excluída', 'success');
+
+                foldersCache = foldersCache.filter(function(f) {
+                    return f.id !== pendingDeleteFolderId;
+                });
+
+                if (activeFolderId === pendingDeleteFolderId) {
+                    activeFolderId = null;
+                }
+
+                closeModal('dcDeleteFolderModal');
+                pendingDeleteFolderId = null;
+
+                await refreshFoldersAndList();
+            } catch (err) {
+                showToast(err.message || 'Erro ao excluir pasta', 'error');
+                btn.disabled = false;
+                btn.classList.remove('is-loading');
+            }
+        });
+    }
+
+    // =====================================================================
+    // MODAL: EXCLUIR ARQUIVO — fila
+    // =====================================================================
+
+    function enqueueDelete(docIds) {
+        // Monta a fila com os nomes legíveis dos arquivos
+        deleteQueue = docIds.map(function(id) {
+            const doc = documentsCache.find(function(d) { return d.id === id; });
+            return {
+                id: id,
+                name: doc ? (doc.full_name || doc.name || '—') : '—',
+            };
+        }).filter(function(item) { return !!item.id; });
+
+        deleteQueueIndex = 0;
+
+        if (!deleteQueue.length) return;
+
+        renderDeleteModal();
+        openModal('dcDeleteModal');
+        refreshIcons();
+    }
+
+    function renderDeleteModal() {
+        const nameEl = document.getElementById('dcDeleteFileName');
+        const titleEl = document.getElementById('dcDeleteTitle');
+        const labelEl = document.getElementById('dcDeleteConfirmLabel');
+        const queueEl = document.getElementById('dcDeleteQueue');
+        const queueListEl = document.getElementById('dcDeleteQueueList');
+        const queueCountEl = document.getElementById('dcDeleteQueueCount');
+
+        if (!deleteQueue.length) return;
+
+        const current = deleteQueue[deleteQueueIndex];
+
+        if (nameEl) nameEl.textContent = current.name;
+
+        if (titleEl) {
+            if (deleteQueue.length > 1) {
+                titleEl.textContent = 'Excluir arquivos';
+            } else {
+                titleEl.textContent = 'Excluir arquivo';
+            }
+        }
+
+        if (labelEl) {
+            if (deleteQueue.length > 1 && deleteQueueIndex < deleteQueue.length - 1) {
+                labelEl.textContent = 'Excluir e próximo';
+            } else {
+                labelEl.textContent = 'Excluir';
+            }
+        }
+
+        // Fila (só se tiver mais de 1)
+        if (queueEl && queueListEl && queueCountEl) {
+            if (deleteQueue.length > 1) {
+                queueEl.classList.remove('hidden');
+                queueCountEl.textContent = String(deleteQueue.length - deleteQueueIndex);
+
+                let html = '';
+                for (let i = deleteQueueIndex; i < deleteQueue.length; i++) {
+                    const item = deleteQueue[i];
+                    const cls = (i === deleteQueueIndex) ? ' class="is-current"' : '';
+                    html += '<li' + cls + '>' + escapeHtml(item.name) + '</li>';
+                }
+                queueListEl.innerHTML = html;
+            } else {
+                queueEl.classList.add('hidden');
+                queueListEl.innerHTML = '';
+            }
+        }
+    }
+
+    function setupDelete() {
+        const btn = document.getElementById('dcDeleteBtn');
+        const confirmBtn = document.getElementById('dcDeleteConfirmBtn');
+
+        if (btn) {
+            btn.addEventListener('click', function() {
+                if (!currentDocument) return;
+                enqueueDelete([currentDocument.id]);
+            });
+        }
+
+        if (confirmBtn) {
+            confirmBtn.addEventListener('click', async function() {
+                if (!deleteQueue.length) return;
+                if (deleteQueueIndex >= deleteQueue.length) return;
+
+                const current = deleteQueue[deleteQueueIndex];
+                const docId = current.id;
+
+                confirmBtn.disabled = true;
+                confirmBtn.classList.add('is-loading');
+
+                try {
+                    await api('/api/documents/' + docId + '/', 'DELETE');
+
+                    // Remove do cache local
+                    documentsCache = documentsCache.filter(function(d) {
+                        return d.id !== docId;
+                    });
+
+                    // Se era o doc aberto no painel direito, limpa
+                    if (currentDocument && currentDocument.id === docId) {
+                        currentDocument = null;
+                        resetDetail();
+                    }
+
+                    // Avança na fila
+                    deleteQueueIndex++;
+
+                    if (deleteQueueIndex >= deleteQueue.length) {
+                        // Fim da fila
+                        const total = deleteQueue.length;
+                        closeModal('dcDeleteModal');
+                        deleteQueue = [];
+                        deleteQueueIndex = 0;
+
+                        showToast(
+                            total === 1 ? 'Arquivo excluído' : total + ' arquivos excluídos',
+                            'success'
+                        );
+
+                        // Recarrega pastas + lista (contadores sincronizados)
+                        await refreshFoldersAndList();
+                    } else {
+                        // Ainda há itens na fila: avança visualmente e recarrega em background
+                        renderDeleteModal();
+                        await refreshFoldersAndList();
+                    }
+                } catch (err) {
+                    showToast(err.message || 'Erro ao excluir', 'error');
+                } finally {
+                    confirmBtn.disabled = false;
+                    confirmBtn.classList.remove('is-loading');
+                }
+            });
+        }
+    }
+
+    function resetDetail() {
+        const empty = document.getElementById('dcDetailEmpty');
+        const content = document.getElementById('dcDetailContent');
+        if (empty) empty.classList.remove('hidden');
+        if (content) content.classList.add('hidden');
+    }
+
+    // =====================================================================
+    // VIEW MODE
+    // =====================================================================
+
+    function setViewMode(mode) {
+        viewMode = (mode === 'grid') ? 'grid' : 'list';
+
+        const listEl = document.getElementById('dcList');
+        if (listEl) listEl.dataset.view = viewMode;
+
+        document.querySelectorAll('.dc-view-btn').forEach(function(btn) {
+            const isActive = btn.dataset.view === viewMode;
+            btn.classList.toggle('is-active', isActive);
+            btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        });
+
+        try {
+            localStorage.setItem('clivo-documents-view', viewMode);
+        } catch (e) {}
+
+        renderList();
+    }
+
+    function setupViewToggle() {
+        document.querySelectorAll('.dc-view-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                setViewMode(this.dataset.view);
+            });
+        });
+    }
+
+    // =====================================================================
+    // DETALHE
     // =====================================================================
 
     async function openDocument(id) {
@@ -498,10 +1309,10 @@
         setText('dcDetailClient', d.client_name || 'Sem cliente');
         setText('dcDetailProject', d.project_id || '—');
 
-        // Painel de informações
         setText('dcInfoName', d.full_name || d.name || '—');
         setText('dcInfoType', d.extension ? d.extension.toUpperCase() : '—');
         setText('dcInfoSize', d.size_display || '—');
+        setText('dcInfoFolder', d.folder_name || 'Sem pasta');
         setText('dcInfoCreatedBy', d.created_by_name || '—');
         setText('dcInfoCreatedAt', d.created_at ? formatDateOnly(d.created_at) : '—');
 
@@ -520,10 +1331,9 @@
 
         const iconEl = document.getElementById('dcDetailIcon');
         if (iconEl) {
-            const iconName = iconForExtension(d.extension);
-            const typeClass = typeClassForExtension(d.extension);
-            iconEl.className = 'dc-detail-icon ' + typeClass;
-            iconEl.innerHTML = '<i data-lucide="' + iconName + '"></i>';
+            const toneClass = toneClassForExtension(d.extension);
+            iconEl.className = 'dc-detail-icon ' + toneClass;
+            iconEl.innerHTML = fileSvg();
         }
 
         const associateClientSelect = document.getElementById('dcAssociateClientSelect');
@@ -531,8 +1341,44 @@
             fillClientSelect(associateClientSelect, d.client, 'Sem cliente');
         }
 
-        const projectInput = document.getElementById('dcAssociateProjectInput');
-        if (projectInput) projectInput.value = d.project_id || '';
+        const projectSearch = document.getElementById('dcAssociateProjectSearch');
+        const projectValue = document.getElementById('dcAssociateProjectValue');
+        const projectHint = document.getElementById('dcAssociateProjectHint');
+        const projectMenu = document.getElementById('dcProjectMenu');
+
+        if (projectMenu) {
+            projectMenu.classList.add('hidden');
+            projectMenu.innerHTML = '';
+        }
+
+        if (projectSearch && projectValue) {
+            if (d.project_name) {
+                projectSearch.value = d.project_name;
+                projectValue.value = d.project_id || '';
+                if (projectHint) projectHint.textContent = 'Associado a "' + d.project_name + '".';
+            } else if (d.project_id) {
+                projectSearch.value = '';
+                projectValue.value = d.project_id;
+                if (projectHint) {
+                    projectHint.textContent = 'Projeto associado. Busque pelo nome para substituir.';
+                }
+            } else {
+                projectSearch.value = '';
+                projectValue.value = '';
+                if (projectHint) projectHint.textContent = 'Nenhum projeto associado.';
+            }
+        }
+
+        const visibilityCheckbox = document.getElementById('dcVisibleToClient');
+        const visibilityHint = document.getElementById('dcVisibilityHint');
+        if (visibilityCheckbox) {
+            visibilityCheckbox.checked = !!d.visible_to_client;
+        }
+        if (visibilityHint) {
+            visibilityHint.textContent = d.visible_to_client
+                ? 'O cliente também vê este arquivo.'
+                : 'Somente o escritório vê este arquivo.';
+        }
 
         renderPreview();
         refreshIcons();
@@ -648,9 +1494,7 @@
     // ROTAÇÃO
     // =====================================================================
 
-    function resetRotation() {
-        rotationDeg = 0;
-    }
+    function resetRotation() { rotationDeg = 0; }
 
     function applyRotation() {
         const img = document.querySelector('#dcPreviewContainer img');
@@ -697,7 +1541,6 @@
         const toolbar = document.getElementById('dcPreviewToolbar');
         const zoomControls = document.getElementById('dcZoomControls');
         const rotateControls = document.getElementById('dcRotateControls');
-        const kindLabel = document.getElementById('dcPreviewKind');
 
         if (!container || !currentDocument) return;
 
@@ -705,7 +1548,6 @@
         const kind = previewKind(d.mime_type, d.extension);
         const url = previewUrlFor(d);
 
-        if (kindLabel) kindLabel.textContent = previewKindLabel(kind, d.extension);
         if (zoomControls) zoomControls.classList.toggle('is-hidden', kind !== 'image');
 
         if (rotateControls) {
@@ -798,7 +1640,7 @@
     }
 
     // =====================================================================
-    // DOCX PREVIEW — docx-preview
+    // DOCX PREVIEW
     // =====================================================================
 
     async function renderDocxPreview(container, d) {
@@ -864,12 +1706,7 @@
             if (!currentDocument || currentDocument.id !== docId) return;
             console.error('Erro no docx-preview:', e);
 
-            renderOfficeError(
-                container,
-                typeClassForExtension(d.extension),
-                iconForExtension(d.extension),
-                d
-            );
+            renderOfficeError(container, toneClassForExtension(d.extension), d);
 
             const hint = document.createElement('small');
             hint.style.cssText = 'display:block;margin-top:10px;font-size:11px;color:#c00;max-width:100%;word-break:break-word;';
@@ -879,18 +1716,13 @@
         }
     }
 
-    // =====================================================================
-    // OFFICE PREVIEW (xlsx / pptx / outros)
-    // =====================================================================
-
     function renderOfficePreview(container, d) {
-        const iconName = iconForExtension(d.extension);
-        const typeClass = typeClassForExtension(d.extension);
+        const toneClass = toneClassForExtension(d.extension);
 
         container.innerHTML =
             '<div class="dc-preview-office">' +
-                '<div class="dc-preview-office-icon ' + typeClass + '">' +
-                    '<i data-lucide="' + iconName + '"></i>' +
+                '<div class="dc-preview-office-icon ' + toneClass + '">' +
+                    '<i data-lucide="file-text"></i>' +
                 '</div>' +
                 '<p>Preparando visualização…</p>' +
                 '<span>Conectando ao visualizador</span>' +
@@ -916,20 +1748,20 @@
 
                 const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)/i.test(data.url);
                 if (isLocalhost) {
-                    renderOfficeLocalhostFallback(container, d, typeClass, iconName);
+                    renderOfficeLocalhostFallback(container, d, toneClass);
                     return;
                 }
 
-                mountOfficeViewer(container, data.url, d, typeClass, iconName, docId);
+                mountOfficeViewer(container, data.url, d, toneClass, docId);
             })
             .catch(function(e) {
                 if (e.name === 'AbortError') return;
                 if (!currentDocument || currentDocument.id !== docId) return;
-                renderOfficeError(container, typeClass, iconName, d);
+                renderOfficeError(container, toneClass, d);
             });
     }
 
-    function mountOfficeViewer(container, publicUrl, doc, typeClass, iconName, docId) {
+    function mountOfficeViewer(container, publicUrl, doc, toneClass, docId) {
         const officeUrl =
             'https://view.officeapps.live.com/op/embed.aspx?src=' +
             encodeURIComponent(publicUrl);
@@ -960,12 +1792,12 @@
         });
     }
 
-    function renderOfficeLocalhostFallback(container, doc, typeClass, iconName) {
+    function renderOfficeLocalhostFallback(container, doc, toneClass) {
         const url = previewUrlFor(doc);
         container.innerHTML =
             '<div class="dc-preview-office">' +
-                '<div class="dc-preview-office-icon ' + typeClass + '">' +
-                    '<i data-lucide="' + iconName + '"></i>' +
+                '<div class="dc-preview-office-icon ' + toneClass + '">' +
+                    '<i data-lucide="file-text"></i>' +
                 '</div>' +
                 '<p>Documento Office</p>' +
                 '<span>A visualização embutida de ' +
@@ -983,11 +1815,11 @@
         refreshIcons();
     }
 
-    function renderOfficeError(container, typeClass, iconName, doc) {
+    function renderOfficeError(container, toneClass, doc) {
         container.innerHTML =
             '<div class="dc-preview-office">' +
-                '<div class="dc-preview-office-icon ' + typeClass + '">' +
-                    '<i data-lucide="' + iconName + '"></i>' +
+                '<div class="dc-preview-office-icon ' + toneClass + '">' +
+                    '<i data-lucide="file-text"></i>' +
                 '</div>' +
                 '<p>Documento Office</p>' +
                 '<span>Não foi possível preparar a visualização. ' +
@@ -1203,54 +2035,24 @@
         document.querySelectorAll('[data-close]').forEach(function(el) {
             el.addEventListener('click', function() {
                 const id = this.dataset.close;
-                if (id) closeModal(id);
+                if (id) {
+                    if (id === 'dcDeleteModal') {
+                        deleteQueue = [];
+                        deleteQueueIndex = 0;
+                    }
+                    closeModal(id);
+                }
             });
         });
 
         document.querySelectorAll('.cl-modal-overlay').forEach(function(overlay) {
             overlay.addEventListener('click', function(e) {
-                if (e.target === overlay) overlay.classList.remove('active');
-            });
-        });
-    }
-
-    // =====================================================================
-    // MENU "ADICIONAR"
-    // =====================================================================
-
-    function setupAddMenu() {
-        const wrap = document.getElementById('dcAddWrap');
-        const btn = document.getElementById('dcAddBtn');
-        const menu = document.getElementById('dcAddMenu');
-
-        if (!wrap || !btn || !menu) return;
-
-        btn.addEventListener('click', function(e) {
-            e.stopPropagation();
-            const isOpen = wrap.classList.toggle('is-open');
-            menu.classList.toggle('hidden', !isOpen);
-            refreshIcons();
-        });
-
-        document.addEventListener('click', function(e) {
-            if (!wrap.contains(e.target)) {
-                wrap.classList.remove('is-open');
-                menu.classList.add('hidden');
-            }
-        });
-
-        menu.querySelectorAll('.dc-add-item').forEach(function(item) {
-            item.addEventListener('click', function() {
-                const action = this.dataset.add;
-                wrap.classList.remove('is-open');
-                menu.classList.add('hidden');
-
-                if (action === 'upload') {
-                    openUploadModal();
-                } else if (action === 'gdrive') {
-                    openDriveModal();
-                } else if (action === 'url') {
-                    showToast('Importação por URL em breve', 'info');
+                if (e.target === overlay) {
+                    if (overlay.id === 'dcDeleteModal') {
+                        deleteQueue = [];
+                        deleteQueueIndex = 0;
+                    }
+                    overlay.classList.remove('active');
                 }
             });
         });
@@ -1265,6 +2067,7 @@
         if (!form) return;
 
         await loadClients();
+        await loadFolders();
         form.reset();
 
         const dropzone = document.getElementById('dcDropzone');
@@ -1273,11 +2076,25 @@
         const select = document.getElementById('dcUploadClient');
         fillClientSelect(select, null, 'Sem cliente');
 
+        const folderSelect = document.getElementById('dcUploadFolder');
+        const preFolder = activeFolderId ? activeFolderId : null;
+        fillFolderSelect(folderSelect, preFolder, 'Sem pasta (solto)');
+
+        const visibleCheckbox = document.getElementById('dcUploadVisibleToClient');
+        if (visibleCheckbox) visibleCheckbox.checked = false;
+
         openModal('dcUploadModal');
         refreshIcons();
     }
 
     function setupUpload() {
+        const btn = document.getElementById('dcUploadBtn');
+        if (btn) {
+            btn.addEventListener('click', function() {
+                openUploadModal();
+            });
+        }
+
         const form = document.getElementById('dcUploadForm');
         if (!form) return;
 
@@ -1288,6 +2105,8 @@
             const nameInput = document.getElementById('dcUploadName');
             const clientSelect = document.getElementById('dcUploadClient');
             const projectInput = document.getElementById('dcUploadProject');
+            const folderSelect = document.getElementById('dcUploadFolder');
+            const visibleCheckbox = document.getElementById('dcUploadVisibleToClient');
 
             if (!fileInput.files || !fileInput.files.length) {
                 showToast('Selecione um arquivo', 'error');
@@ -1299,25 +2118,193 @@
             if (nameInput.value.trim()) formData.append('name', nameInput.value.trim());
             if (clientSelect.value) formData.append('client_id', clientSelect.value);
             if (projectInput.value.trim()) formData.append('project_id', projectInput.value.trim());
+            if (folderSelect.value) formData.append('folder_id', folderSelect.value);
+
+            formData.append(
+                'visible_to_client',
+                (visibleCheckbox && visibleCheckbox.checked) ? 'true' : 'false'
+            );
 
             const submitBtn = document.getElementById('dcUploadSubmitBtn');
             submitBtn.disabled = true;
-            const original = submitBtn.innerHTML;
-            submitBtn.innerHTML = 'Enviando...';
+            submitBtn.classList.add('is-loading');
 
             try {
                 const created = await api('/api/documents/', 'POST', formData);
                 showToast('Arquivo enviado', 'success');
                 closeModal('dcUploadModal');
-                documentsLoaded = false;
-                await loadDocuments(true);
+                await refreshFoldersAndList();
                 if (created && created.id) openDocument(created.id);
             } catch (err) {
                 showToast(err.message || 'Erro ao enviar arquivo', 'error');
             } finally {
                 submitBtn.disabled = false;
-                submitBtn.innerHTML = original;
+                submitBtn.classList.remove('is-loading');
             }
+        });
+    }
+
+    // =====================================================================
+    // VISIBILIDADE (CHECKBOX)
+    // =====================================================================
+
+    function setupVisibilityToggle() {
+        const checkbox = document.getElementById('dcVisibleToClient');
+        if (!checkbox) return;
+
+        checkbox.addEventListener('change', function() {
+            if (!currentDocument) return;
+
+            const docId = currentDocument.id;
+            const newValue = !!checkbox.checked;
+
+            const hintEl = document.getElementById('dcVisibilityHint');
+            if (hintEl) {
+                hintEl.textContent = newValue
+                    ? 'O cliente também vê este arquivo.'
+                    : 'Somente o escritório vê este arquivo.';
+            }
+
+            const idx = documentsCache.findIndex(function(d) { return d.id === docId; });
+            if (idx !== -1) {
+                documentsCache[idx].visible_to_client = newValue;
+            }
+            currentDocument.visible_to_client = newValue;
+            renderList();
+
+            if (visibilitySaveTimer) clearTimeout(visibilitySaveTimer);
+            visibilitySaveTimer = setTimeout(function() {
+                persistVisibility(docId, newValue);
+            }, 220);
+        });
+    }
+
+    async function persistVisibility(docId, visible) {
+        try {
+            const updated = await api(
+                '/api/documents/' + docId + '/visibility/',
+                'POST',
+                { visible_to_client: visible }
+            );
+
+            if (currentDocument && currentDocument.id === docId) {
+                currentDocument = updated;
+            }
+            const idx = documentsCache.findIndex(function(d) { return d.id === docId; });
+            if (idx !== -1) documentsCache[idx] = updated;
+
+            renderList();
+            loadHistory();
+            showToast(
+                visible ? 'Arquivo visível ao cliente' : 'Arquivo somente do escritório',
+                'success'
+            );
+        } catch (err) {
+            showToast(err.message || 'Erro ao alterar visibilidade', 'error');
+            await refreshFoldersAndList();
+            if (currentDocument && currentDocument.id === docId) {
+                try {
+                    const fresh = await api('/api/documents/' + docId + '/');
+                    currentDocument = fresh;
+                    const idx = documentsCache.findIndex(function(d) { return d.id === docId; });
+                    if (idx !== -1) documentsCache[idx] = fresh;
+                } catch (e) {}
+                renderDetail();
+            }
+        }
+    }
+
+    // =====================================================================
+    // COMBOBOX DE PROJETO
+    // =====================================================================
+
+    function setupProjectCombobox() {
+        const input = document.getElementById('dcAssociateProjectSearch');
+        const hidden = document.getElementById('dcAssociateProjectValue');
+        const menu = document.getElementById('dcProjectMenu');
+        if (!input || !hidden || !menu) return;
+
+        function closeMenu() {
+            menu.classList.add('hidden');
+            menu.innerHTML = '';
+        }
+
+        function renderItems(items) {
+            menu.innerHTML = '';
+
+            if (!items.length) {
+                const empty = document.createElement('div');
+                empty.className = 'dc-combobox-item-empty';
+                empty.textContent = 'Nenhum projeto encontrado';
+                menu.appendChild(empty);
+                return;
+            }
+
+            items.forEach(function(p) {
+                const el = document.createElement('div');
+                el.className = 'dc-combobox-item';
+                el.dataset.projectId = p.id;
+                el.innerHTML =
+                    '<i data-lucide="folder-kanban" style="width:13px;height:13px;color:var(--text-tertiary);"></i>' +
+                    '<span>' + escapeHtml(p.name || '(sem nome)') + '</span>';
+                el.addEventListener('click', function() {
+                    input.value = p.name || '';
+                    hidden.value = p.id || '';
+
+                    const hintEl = document.getElementById('dcAssociateProjectHint');
+                    if (hintEl) {
+                        hintEl.textContent = 'Pronto para aplicar: "' + (p.name || '') + '".';
+                    }
+
+                    closeMenu();
+                });
+                menu.appendChild(el);
+            });
+
+            refreshIcons();
+        }
+
+        input.addEventListener('input', function() {
+            const q = this.value.trim();
+            hidden.value = '';
+
+            if (projectSearchTimer) clearTimeout(projectSearchTimer);
+            if (projectSearchAbort) projectSearchAbort.abort();
+
+            if (!q) { closeMenu(); return; }
+
+            projectSearchTimer = setTimeout(async function() {
+                projectSearchAbort = new AbortController();
+                try {
+                    const res = await fetch(
+                        '/api/projects/?search=' + encodeURIComponent(q) + '&limit=8',
+                        { credentials: 'same-origin', signal: projectSearchAbort.signal }
+                    );
+                    if (!res.ok) throw new Error('Falha');
+                    const data = await res.json();
+                    const items = Array.isArray(data) ? data : (data.results || []);
+                    renderItems(items);
+                    menu.classList.remove('hidden');
+                } catch (e) {
+                    if (e.name === 'AbortError') return;
+                    renderItems([]);
+                    menu.classList.remove('hidden');
+                }
+            }, 250);
+        });
+
+        input.addEventListener('focus', function() {
+            if (menu.innerHTML) menu.classList.remove('hidden');
+        });
+
+        document.addEventListener('click', function(e) {
+            if (menu.classList.contains('hidden')) return;
+            if (e.target.closest('#dcProjectCombobox')) return;
+            closeMenu();
+        });
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeMenu();
         });
     }
 
@@ -1325,38 +2312,157 @@
     // GOOGLE DRIVE
     // =====================================================================
 
+    function setDriveError(message) {
+        const errEl = document.getElementById('dcDriveError');
+        const errText = document.getElementById('dcDriveErrorText');
+        const errActions = document.getElementById('dcDriveErrorActions');
+        if (!errEl || !errText) return;
+
+        if (!message) {
+            errEl.classList.add('hidden');
+            if (errActions) {
+                errActions.style.display = 'none';
+                errActions.innerHTML = '';
+            }
+            return;
+        }
+        errText.textContent = message;
+        if (errActions) {
+            errActions.style.display = 'none';
+            errActions.innerHTML = '';
+        }
+        errEl.classList.remove('hidden');
+    }
+
+    function setDriveReconnectAction() {
+        const errActions = document.getElementById('dcDriveErrorActions');
+        if (!errActions) return;
+        errActions.innerHTML =
+            '<a class="btn-apple btn-apple-primary" ' +
+               'href="/accounts/google/login/?process=login&next=/documents/" ' +
+               'style="text-decoration:none;margin-top:10px;display:inline-flex;">' +
+                'Reconectar conta Google' +
+            '</a>';
+        errActions.style.display = 'block';
+    }
+
+    function showDriveIntro() {
+        const introEl = document.getElementById('dcDriveIntro');
+        const connectedEl = document.getElementById('dcDriveConnected');
+        const loadingEl = document.getElementById('dcDriveLoading');
+        if (introEl) introEl.style.display = 'flex';
+        if (connectedEl) connectedEl.style.display = 'none';
+        if (loadingEl) loadingEl.style.display = 'none';
+    }
+
+    function showDriveConnected() {
+        const introEl = document.getElementById('dcDriveIntro');
+        const connectedEl = document.getElementById('dcDriveConnected');
+        const loadingEl = document.getElementById('dcDriveLoading');
+        if (introEl) introEl.style.display = 'none';
+        if (connectedEl) connectedEl.style.display = 'flex';
+        if (loadingEl) loadingEl.style.display = 'none';
+    }
+
+    function showDriveLoading() {
+        const introEl = document.getElementById('dcDriveIntro');
+        const connectedEl = document.getElementById('dcDriveConnected');
+        const loadingEl = document.getElementById('dcDriveLoading');
+        if (introEl) introEl.style.display = 'none';
+        if (connectedEl) connectedEl.style.display = 'none';
+        if (loadingEl) loadingEl.style.display = 'flex';
+    }
+
+    function setDriveButtonLoading(isLoading) {
+        const btn = document.getElementById('dcDriveBtn');
+        if (!btn) return;
+        if (isLoading) {
+            btn.classList.add('is-loading');
+            btn.disabled = true;
+        } else {
+            btn.classList.remove('is-loading');
+            btn.disabled = false;
+        }
+    }
+
     async function openDriveModal() {
         gdriveSelectedFiles = {};
         updateDriveSummary();
+        setDriveError('');
 
-        const connectEl = document.getElementById('dcDriveConnect');
+        const introEl = document.getElementById('dcDriveIntro');
         const connectedEl = document.getElementById('dcDriveConnected');
+        const loadingEl = document.getElementById('dcDriveLoading');
+        if (!introEl || !connectedEl || !loadingEl) return;
 
-        if (!connectEl || !connectedEl) return;
+        openModal('dcDriveModal');
+        showDriveLoading();
+        refreshIcons();
 
-        // Checa se o usuário tem conta Google conectada
+        setDriveButtonLoading(true);
+
+        try {
+            let status = gdriveStatusCache;
+            if (!status) {
+                status = await api('/api/documents/gdrive/status/');
+                gdriveStatusCache = status;
+            }
+
+            const connected = !!(status && status.connected);
+            const needsReconnect = !!(status && status.needs_reconnect);
+
+            if (needsReconnect) {
+                showDriveIntro();
+                setDriveError(
+                    'Sua conexão com o Google está incompleta. ' +
+                    'Por favor, reconecte sua conta Google para permitir ' +
+                    'que o Clivo acesse seu Drive.'
+                );
+                setDriveReconnectAction();
+                return;
+            }
+
+            if (!connected) {
+                showDriveIntro();
+                return;
+            }
+
+            showDriveConnected();
+            const filesEl = document.getElementById('dcDriveFiles');
+            if (filesEl) {
+                filesEl.innerHTML = '<p class="dc-drive-empty">Carregando…</p>';
+            }
+            await loadDriveFiles('');
+
+        } catch (err) {
+            showDriveIntro();
+        } finally {
+            setDriveButtonLoading(false);
+        }
+    }
+
+    async function enterDriveAndLoadFiles() {
         let connected = false;
         try {
             const status = await api('/api/documents/gdrive/status/');
+            gdriveStatusCache = status;
             connected = !!(status && status.connected);
         } catch (e) {
             connected = false;
         }
 
         if (!connected) {
-            connectEl.style.display = 'flex';
-            connectedEl.style.display = 'none';
-            openModal('dcDriveModal');
-            refreshIcons();
+            window.location.href = '/accounts/google/login/?process=login&next=/documents/';
             return;
         }
 
-        connectEl.style.display = 'none';
-        connectedEl.style.display = 'flex';
-        openModal('dcDriveModal');
-        refreshIcons();
+        showDriveConnected();
 
-        // Carrega arquivos
+        const filesEl = document.getElementById('dcDriveFiles');
+        if (filesEl) {
+            filesEl.innerHTML = '<p class="dc-drive-empty">Carregando…</p>';
+        }
+
         await loadDriveFiles('');
     }
 
@@ -1364,18 +2470,23 @@
         const listEl = document.getElementById('dcDriveFiles');
         if (!listEl) return;
 
+        setDriveError('');
         listEl.innerHTML = '<p class="dc-drive-empty">Carregando…</p>';
 
         try {
             const url = '/api/documents/gdrive/list/' + (query ? ('?q=' + encodeURIComponent(query)) : '');
             const data = await api(url);
             gdriveFilesCache = (data && data.files) || [];
-            gdriveLoaded = true;
             renderDriveFiles();
         } catch (err) {
-            listEl.innerHTML = '<p class="dc-drive-empty">' +
-                escapeHtml(err.message || 'Erro ao carregar arquivos') +
-                '</p>';
+            const msg = (err && err.message) || 'Erro ao carregar arquivos do Google Drive.';
+            setDriveError(msg);
+
+            if (msg.indexOf('incompleta') !== -1 || msg.indexOf('novamente') !== -1) {
+                setDriveReconnectAction();
+            }
+
+            listEl.innerHTML = '<p class="dc-drive-empty">—</p>';
         }
     }
 
@@ -1442,14 +2553,6 @@
         return '<i data-lucide="file"></i>';
     }
 
-    function formatBytes(n) {
-        if (!n || n <= 0) return '';
-        if (n < 1024) return n + ' B';
-        if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
-        if (n < 1024 * 1024 * 1024) return (n / (1024 * 1024)).toFixed(1) + ' MB';
-        return (n / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
-    }
-
     function updateDriveSummary() {
         const count = Object.keys(gdriveSelectedFiles).length;
         const countEl = document.getElementById('dcDriveSelectedCount');
@@ -1462,6 +2565,20 @@
     }
 
     function setupDrive() {
+        const driveBtn = document.getElementById('dcDriveBtn');
+        if (driveBtn) {
+            driveBtn.addEventListener('click', function() {
+                openDriveModal();
+            });
+        }
+
+        const connectBtn = document.getElementById('dcDriveConnectBtn');
+        if (connectBtn) {
+            connectBtn.addEventListener('click', function() {
+                enterDriveAndLoadFiles();
+            });
+        }
+
         const importBtn = document.getElementById('dcDriveImportBtn');
         const searchInput = document.getElementById('dcDriveSearchInput');
 
@@ -1476,8 +2593,13 @@
                 const original = importBtn.innerHTML;
                 importBtn.innerHTML = 'Importando...';
 
+                const payload = { files: files };
+                if (activeFolderId) {
+                    payload.folder_id = activeFolderId;
+                }
+
                 try {
-                    const result = await api('/api/documents/gdrive/import/', 'POST', { files: files });
+                    const result = await api('/api/documents/gdrive/import/', 'POST', payload);
                     const imported = (result && result.imported) || [];
                     const errors = (result && result.errors) || [];
 
@@ -1490,8 +2612,7 @@
 
                     closeModal('dcDriveModal');
                     gdriveSelectedFiles = {};
-                    documentsLoaded = false;
-                    await loadDocuments(true);
+                    await refreshFoldersAndList();
 
                     if (imported.length === 1 && imported[0].id) {
                         openDocument(imported[0].id);
@@ -1551,8 +2672,7 @@
 
                 const submitBtn = document.getElementById('dcReplaceSubmitBtn');
                 submitBtn.disabled = true;
-                const original = submitBtn.innerHTML;
-                submitBtn.innerHTML = 'Substituindo...';
+                submitBtn.classList.add('is-loading');
 
                 try {
                     const updated = await api(
@@ -1567,8 +2687,7 @@
                     const idx = documentsCache.findIndex(function(d) { return d.id === updated.id; });
                     if (idx !== -1) documentsCache[idx] = updated;
 
-                    documentsLoaded = false;
-                    await loadDocuments(true);
+                    await refreshFoldersAndList();
                     renderDetail();
                     loadHistory();
                     updateSelectionHighlight();
@@ -1576,69 +2695,10 @@
                     showToast(err.message || 'Erro ao substituir', 'error');
                 } finally {
                     submitBtn.disabled = false;
-                    submitBtn.innerHTML = original;
+                    submitBtn.classList.remove('is-loading');
                 }
             });
         }
-    }
-
-    // =====================================================================
-    // EXCLUIR
-    // =====================================================================
-
-    function setupDelete() {
-        const btn = document.getElementById('dcDeleteBtn');
-        const input = document.getElementById('dcDeleteInput');
-        const confirmBtn = document.getElementById('dcDeleteConfirmBtn');
-
-        if (btn) {
-            btn.addEventListener('click', function() {
-                if (!currentDocument) return;
-                if (input) input.value = '';
-                if (confirmBtn) confirmBtn.disabled = true;
-                openModal('dcDeleteModal');
-                refreshIcons();
-                setTimeout(function() { if (input) input.focus(); }, 100);
-            });
-        }
-
-        if (input && confirmBtn) {
-            input.addEventListener('input', function() {
-                const expected = (currentDocument && (currentDocument.full_name || currentDocument.name)) || '';
-                confirmBtn.disabled = this.value.trim() !== expected;
-            });
-        }
-
-        if (confirmBtn) {
-            confirmBtn.addEventListener('click', async function() {
-                if (!currentDocument) return;
-
-                confirmBtn.disabled = true;
-                const original = confirmBtn.innerHTML;
-                confirmBtn.innerHTML = 'Excluindo...';
-
-                try {
-                    await api('/api/documents/' + currentDocument.id + '/', 'DELETE');
-                    showToast('Arquivo excluído', 'success');
-                    closeModal('dcDeleteModal');
-                    currentDocument = null;
-                    documentsLoaded = false;
-                    resetDetail();
-                    await loadDocuments(true);
-                } catch (err) {
-                    showToast(err.message || 'Erro ao excluir', 'error');
-                    confirmBtn.disabled = false;
-                    confirmBtn.innerHTML = original;
-                }
-            });
-        }
-    }
-
-    function resetDetail() {
-        const empty = document.getElementById('dcDetailEmpty');
-        const content = document.getElementById('dcDetailContent');
-        if (empty) empty.classList.remove('hidden');
-        if (content) content.classList.add('hidden');
     }
 
     // =====================================================================
@@ -1679,8 +2739,7 @@
                     );
                     showToast('Cliente atualizado', 'success');
                     currentDocument = updated;
-                    documentsLoaded = false;
-                    await loadDocuments(true);
+                    await refreshFoldersAndList();
                     renderDetail();
                     loadHistory();
                 } catch (err) {
@@ -1696,8 +2755,8 @@
         if (projectBtn) {
             projectBtn.addEventListener('click', async function() {
                 if (!currentDocument) return;
-                const input = document.getElementById('dcAssociateProjectInput');
-                const projectId = input ? input.value.trim() : '';
+                const hidden = document.getElementById('dcAssociateProjectValue');
+                const projectId = hidden ? hidden.value.trim() : '';
 
                 projectBtn.disabled = true;
                 const original = projectBtn.innerHTML;
@@ -1711,8 +2770,7 @@
                     );
                     showToast('Projeto atualizado', 'success');
                     currentDocument = updated;
-                    documentsLoaded = false;
-                    await loadDocuments(true);
+                    await refreshFoldersAndList();
                     renderDetail();
                     loadHistory();
                 } catch (err) {
@@ -1733,20 +2791,14 @@
         const search = document.getElementById('dcSearchInput');
         if (search) search.addEventListener('input', renderList);
 
-        const ext = document.getElementById('dcExtensionFilter');
-        if (ext) ext.addEventListener('change', renderList);
-
-        const client = document.getElementById('dcClientFilter');
-        if (client) client.addEventListener('change', renderList);
-
-        const context = document.getElementById('dcContextFilter');
-        if (context) context.addEventListener('change', renderList);
-
-        const source = document.getElementById('dcSourceFilter');
-        if (source) source.addEventListener('change', renderList);
-
         const refresh = document.getElementById('dcRefreshHistoryBtn');
         if (refresh) refresh.addEventListener('click', loadHistory);
+
+        const newFolderBtn = document.getElementById('dcNewFolderBtn');
+        if (newFolderBtn) newFolderBtn.addEventListener('click', openNewFolderModal);
+
+        const bcBack = document.getElementById('dcBreadcrumbBack');
+        if (bcBack) bcBack.addEventListener('click', exitFolder);
     }
 
     // =====================================================================
@@ -1815,18 +2867,53 @@
 
     function mount() {
         documentsLoaded = false;
+        foldersLoaded = false;
         currentDocument = null;
+        activeFolderId = null;
         activeTab = 'preview';
         resetZoom();
         resetRotation();
         gdriveSelectedFiles = {};
         gdriveFilesCache = [];
-        gdriveLoaded = false;
+        gdriveStatusCache = null;
+        draggingDocumentId = null;
+        renamingFolderId = null;
+        ctxMenuTarget = null;
+        ctxMenuVisible = false;
+        pendingDeleteFolderId = null;
+        deleteQueue = [];
+        deleteQueueIndex = 0;
+
+        if (visibilitySaveTimer) {
+            clearTimeout(visibilitySaveTimer);
+            visibilitySaveTimer = null;
+        }
+        if (projectSearchTimer) {
+            clearTimeout(projectSearchTimer);
+            projectSearchTimer = null;
+        }
+        if (projectSearchAbort) {
+            projectSearchAbort.abort();
+            projectSearchAbort = null;
+        }
+
+        try {
+            const savedView = localStorage.getItem('clivo-documents-view');
+            viewMode = (savedView === 'grid') ? 'grid' : 'list';
+        } catch (e) {
+            viewMode = 'list';
+        }
+
+        try {
+            const savedFilter = localStorage.getItem('clivo-documents-filter');
+            folderFilter = (savedFilter === 'loose' || savedFilter === 'foldered') ? savedFilter : 'all';
+        } catch (e) {
+            folderFilter = 'all';
+        }
 
         resetDetail();
         setupModals();
         setupTabs();
-        setupAddMenu();
         setupUpload();
         setupDrive();
         setupInlineRename();
@@ -1834,20 +2921,29 @@
         setupDelete();
         setupDownload();
         setupAssociations();
+        setupProjectCombobox();
         setupFilters();
+        setupFolderFilter();
         setupZoomButtons();
         setupRotateButtons();
+        setupViewToggle();
+        setupCtxMenu();
+        setupNewFolderModal();
+        setupDeleteFolderModal();
+        setupVisibilityToggle();
 
         setupDropzone('dcDropzone', 'dcUploadFile', 'dcDropzoneTitle', 'dcDropzoneSub');
         setupDropzone('dcReplaceDropzone', 'dcReplaceFile', 'dcReplaceDropzoneTitle', 'dcReplaceDropzoneSub');
 
-        loadClients().then(function() {
-            const clientFilter = document.getElementById('dcClientFilter');
-            fillClientSelect(clientFilter, null, 'Todos os clientes');
-        });
+        setViewMode(viewMode);
+        setFolderFilter(folderFilter);
 
-        loadDocuments(true);
-        refreshIcons();
+        loadClients();
+
+        loadFolders().then(function() {
+            loadDocuments(true);
+            loadStorageUsage();
+        });
     }
 
     function unmount() {
@@ -1855,6 +2951,19 @@
         if (historyAbortController) historyAbortController.abort();
         if (officeLinkAbortController) officeLinkAbortController.abort();
         if (gdriveSearchTimer) clearTimeout(gdriveSearchTimer);
+        if (visibilitySaveTimer) {
+            clearTimeout(visibilitySaveTimer);
+            visibilitySaveTimer = null;
+        }
+        if (projectSearchTimer) {
+            clearTimeout(projectSearchTimer);
+            projectSearchTimer = null;
+        }
+        if (projectSearchAbort) {
+            projectSearchAbort.abort();
+            projectSearchAbort = null;
+        }
+        closeCtxMenu();
     }
 
     window.ClivoPages = window.ClivoPages || {};

@@ -4,21 +4,24 @@ Adapter customizado para Social Accounts (Google, etc).
 Responsável por:
 1. Vincular automaticamente um SocialAccount (Google) a um User existente
    quando o email do Google corresponde a um email já cadastrado
-   (ex: usuário foi adicionado como membro de um Workspace por email).
+   (ex: usuário foi criado via email/senha e agora entra com Google).
 2. Sincronizar dados do perfil (nome, avatar) do Google para o User local.
 3. Garantir que emails não verificados pelo Google sejam rejeitados.
-4. Não interferir no redirecionamento pós-login — isso é responsabilidade
-   de `LOGIN_REDIRECT_URL`, que aponta para /workspaces/entrar/.
+4. Marcar o EmailAddress do allauth como verificado quando o Google
+   confirma a posse do email — isso evita que o usuário fique preso em
+   fluxos de confirmação por email.
+5. Não interferir no redirecionamento pós-login — isso é responsabilidade
+   de `LOGIN_REDIRECT_URL` / `PostLoginRedirectView`.
 
 FLUXO:
     Google OAuth callback
         ↓
     pre_social_login()
         ├── já existe SocialAccount com este uid → sync + login
-        ├── existe User com este email           → connect + sync
+        ├── existe User com este email           → connect + sync + verify
         └── não existe User                      → save_user() cria
         ↓
-    allauth redireciona para LOGIN_REDIRECT_URL
+    allauth redireciona para PostLoginRedirectView
         ↓
     /workspaces/entrar/ resolve o contexto
 """
@@ -41,19 +44,23 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
     com o mesmo email, evitando duplicação de contas.
     """
 
+    # ------------------------------------------------------------------
+    # HOOK PRINCIPAL
+    # ------------------------------------------------------------------
+
     def pre_social_login(self, request, sociallogin):
         """
         Chamado ANTES do allauth criar/logar o usuário.
 
-        Fluxo:
-        1. Se já existe SocialAccount com este uid → apenas sincroniza perfil.
-        2. Se existe User com este email (ex: criado por "adicionar membro")
-           → faz o connect (vincula SocialAccount ao User existente).
-        3. Se não existe → deixa o allauth criar (save_user).
+        Casos:
+            1. SocialAccount já existe com este uid → sync + login
+            2. Existe User com este email            → connect + sync
+            3. Não existe User                       → deixa o allauth criar
         """
         logger.debug(
-            f"pre_social_login | provider={sociallogin.account.provider} "
-            f"uid={sociallogin.account.uid}"
+            "pre_social_login | provider=%s uid=%s",
+            sociallogin.account.provider,
+            sociallogin.account.uid,
         )
 
         email = sociallogin.account.extra_data.get('email')
@@ -63,7 +70,7 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
             logger.warning("Google não retornou email no extra_data")
             raise ValidationError('Email não fornecido pelo Google')
 
-        email = User.objects.normalize_email(email)
+        email = User.normalize_email(email)
 
         # ---------------------------------------------------------------
         # CASO 1: Já existe SocialAccount com este uid
@@ -75,29 +82,40 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
 
         if existing_social:
             logger.debug(
-                f"SocialAccount já existe para {email} "
-                f"(user={existing_social.user.email})"
+                "SocialAccount já existe para %s (user=%s)",
+                email,
+                existing_social.user.email,
             )
             self._sync_profile_from_google(
                 existing_social.user,
                 sociallogin.account.extra_data,
             )
+            self._mark_email_verified(existing_social.user, email)
             return
 
         # ---------------------------------------------------------------
         # CASO 2: Existe User com este email, mas sem SocialAccount
-        # (ex: adicionado como membro do Console/Workspace por email)
+        # (ex: criado via email/senha, agora entrando com Google)
         # ---------------------------------------------------------------
         user = User.objects.filter(email__iexact=email).first()
 
         if user:
-            logger.debug(f"User existente encontrado: {user.email} (id={user.id})")
+            logger.debug(
+                "User existente encontrado: %s (id=%s) — emparelhando com Google",
+                user.email,
+                user.id,
+            )
 
             if not email_verified:
-                logger.warning(f"Email {email} não verificado pelo Google")
+                logger.warning(
+                    "Email %s não verificado pelo Google — emparelhamento recusado",
+                    email,
+                )
                 raise ValidationError('Email não verificado pelo Google')
 
-            # Verifica se este User já tem OUTRO SocialAccount do mesmo provider
+            # Se este User já tem OUTRO SocialAccount do mesmo provider,
+            # não emparelha — evita que duas contas Google diferentes
+            # disputem o mesmo User.
             other_social = SocialAccount.objects.filter(
                 user=user,
                 provider=sociallogin.account.provider,
@@ -105,24 +123,35 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
 
             if other_social:
                 logger.warning(
-                    f"User {email} já tem SocialAccount do provider "
-                    f"{sociallogin.account.provider}"
+                    "User %s já tem SocialAccount do provider %s "
+                    "(uid=%s) — emparelhamento recusado",
+                    email,
+                    sociallogin.account.provider,
+                    other_social.uid,
                 )
                 raise ValidationError('Conta Google já vinculada a este usuário')
 
             with transaction.atomic():
-                # sociallogin.connect() cria o SocialAccount e vincula ao User
+                # Cria o SocialAccount e vincula ao User existente
                 sociallogin.connect(request, user)
                 self._sync_profile_from_google(user, sociallogin.account.extra_data)
-                logger.info(
-                    f"Account linking realizado: Google → {user.email} (id={user.id})"
-                )
+                self._mark_email_verified(user, email)
+
+            logger.info(
+                "Emparelhamento Google → User existente: %s (id=%s)",
+                user.email,
+                user.id,
+            )
             return
 
         # ---------------------------------------------------------------
-        # CASO 3: Não existe User → allauth criará via save_user()
+        # CASO 3: Não existe User → allauth cria via save_user()
         # ---------------------------------------------------------------
-        logger.debug(f"Novo usuário será criado para {email}")
+        logger.debug("Novo usuário será criado para %s", email)
+
+    # ------------------------------------------------------------------
+    # CRIAÇÃO DE USUÁRIO NOVO
+    # ------------------------------------------------------------------
 
     def save_user(self, request, sociallogin, form=None):
         """
@@ -130,9 +159,14 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
         Após criar, sincroniza o perfil com os dados do Google.
         """
         user = super().save_user(request, sociallogin, form)
-        logger.info(f"User criado via social signup: {user.email} (id={user.id})")
+        logger.info("User criado via social signup: %s (id=%s)", user.email, user.id)
         self._sync_profile_from_google(user, sociallogin.account.extra_data)
+        self._mark_email_verified(user, user.email)
         return user
+
+    # ------------------------------------------------------------------
+    # HELPERS
+    # ------------------------------------------------------------------
 
     @staticmethod
     def _sync_profile_from_google(user, user_data):
@@ -161,7 +195,7 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
             user.avatar = picture
             changed = True
             update_fields.append('avatar')
-            logger.debug(f"Avatar do Google sincronizado: {picture}")
+            logger.debug("Avatar do Google sincronizado: %s", picture)
 
         if not user.is_active:
             user.is_active = True
@@ -170,4 +204,59 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
 
         if changed:
             user.save(update_fields=update_fields)
-            logger.debug(f"Perfil atualizado para {user.email}: {update_fields}")
+            logger.debug(
+                "Perfil atualizado para %s: %s",
+                user.email,
+                update_fields,
+            )
+
+    @staticmethod
+    def _mark_email_verified(user, email):
+        """
+        Marca o EmailAddress do allauth como verificado.
+
+        O Google já confirmou que o usuário controla este email, então
+        não faz sentido pedir confirmação por link depois.
+
+        Se o EmailAddress não existir (fluxo antigo sem allauth.account),
+        apenas ignora silenciosamente.
+        """
+        if not user or not email:
+            return
+        try:
+            from allauth.account.models import EmailAddress
+        except ImportError:
+            # allauth.account não instalado — nada a fazer
+            return
+
+        try:
+            ea, created = EmailAddress.objects.get_or_create(
+                user=user,
+                email__iexact=email,
+                defaults={
+                    'email': email,
+                    'verified': True,
+                    'primary': True,
+                },
+            )
+            update_fields = []
+            if not ea.verified:
+                ea.verified = True
+                update_fields.append('verified')
+            if not ea.primary:
+                ea.primary = True
+                update_fields.append('primary')
+            if update_fields:
+                ea.save(update_fields=update_fields)
+                logger.debug(
+                    "EmailAddress marcado como verificado: %s (user=%s)",
+                    email,
+                    user.email,
+                )
+        except Exception as exc:
+            # Nunca deixa isso quebrar o login
+            logger.warning(
+                "Falha ao marcar EmailAddress como verificado para %s: %s",
+                email,
+                exc,
+            )

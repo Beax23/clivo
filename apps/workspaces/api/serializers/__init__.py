@@ -16,6 +16,9 @@ from apps.workspaces.api.serializers.invitation_serializers import (
     WorkspaceInvitationCreateSerializer,
     WorkspaceInvitationUpdateSerializer,
 )
+from apps.workspaces.api.serializers.storage_serializers import (
+    WorkspaceStorageSerializer,
+)
 
 __all__ = [
     'WorkspaceSerializer',
@@ -28,4 +31,5 @@ __all__ = [
     'WorkspaceInvitationSerializer',
     'WorkspaceInvitationCreateSerializer',
     'WorkspaceInvitationUpdateSerializer',
+    'WorkspaceStorageSerializer',
 ]

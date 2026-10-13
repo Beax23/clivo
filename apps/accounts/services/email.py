@@ -1,4 +1,4 @@
-from django.core.mail import EmailMultiAlternatives
+from django.core.mail import EmailMultiAlternatives, send_mail
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
 from django.conf import settings
@@ -17,6 +17,8 @@ class EmailService:
         - Reset de senha
         - Convite de workspace
         - Envio do código do cliente
+        - Notificação de briefing concluído
+        - Envio manual de briefing
     """
 
     # ==================================================================
@@ -63,7 +65,6 @@ class EmailService:
             msg.attach_alternative(html, 'text/html')
             return msg.send(fail_silently=fail_silently)
 
-        from django.core.mail import send_mail
         return send_mail(
             subject=subject,
             message=text,
@@ -179,3 +180,209 @@ class EmailService:
             text=plain_message,
             html=html_message,
         )
+
+    # ==================================================================
+    # BRIEFING — CONCLUSÃO AUTOMÁTICA
+    # ==================================================================
+
+    @staticmethod
+    def send_briefing_completed(
+        *,
+        briefing,
+        client_portal_url: str,
+        architect_email: str,
+        client_pdf_bytes: bytes = None,
+        client_pdf_filename: str = None,
+    ):
+        """
+        Envia e-mail de conclusão para o arquiteto e o cliente.
+
+        - Para o arquiteto: link para o painel + notificação.
+        - Para o cliente: PDF anexado (moodboard) + link do portal.
+
+        `fail_silently=False` de propósito: quem chama precisa
+        tratar falha de envio. A idempotência é responsabilidade
+        do chamador (via BriefingEvent).
+        """
+        frontend_url = getattr(
+            settings, 'FRONTEND_URL', ''
+        ).rstrip('/')
+        site_name = getattr(settings, 'SITE_NAME', 'Clivo')
+
+        # --- Para o arquiteto ---
+        subject_arch = f'Briefing "{briefing.title}" concluído'
+        text_arch = (
+            f'Olá,\n\n'
+            f'O cliente {briefing.client.name} concluiu o briefing '
+            f'"{briefing.title}".\n\n'
+            f'Abra no Clivo: {frontend_url}/fluxo/\n\n'
+            f'— {site_name}'
+        )
+        html_arch = (
+            f'<p>Olá,</p>'
+            f'<p>O cliente <strong>{briefing.client.name}</strong> '
+            f'concluiu o briefing <strong>{briefing.title}</strong>.</p>'
+            f'<p><a href="{frontend_url}/fluxo/">Abrir no Clivo</a></p>'
+            f'<p>— {site_name}</p>'
+        )
+
+        EmailService.send(
+            to=architect_email,
+            subject=subject_arch,
+            text=text_arch,
+            html=html_arch,
+        )
+
+        # --- Para o cliente ---
+        if not briefing.client.email:
+            return
+
+        subject_client = f'Seu briefing foi registrado — {briefing.title}'
+        text_client = (
+            f'Olá,\n\n'
+            f'Recebemos suas respostas do briefing "{briefing.title}".\n'
+            f'Em anexo está uma cópia para você guardar.\n\n'
+        )
+        if client_portal_url:
+            text_client += f'Você também pode voltar ao portal: {client_portal_url}\n\n'
+        text_client += f'— {site_name}'
+
+        html_client = (
+            f'<p>Olá,</p>'
+            f'<p>Recebemos suas respostas do briefing '
+            f'<strong>{briefing.title}</strong>.</p>'
+            f'<p>Em anexo está uma cópia para você guardar.</p>'
+        )
+        if client_portal_url:
+            html_client += (
+                f'<p><a href="{client_portal_url}">Abrir o portal</a></p>'
+            )
+        html_client += f'<p>— {site_name}</p>'
+
+        if client_pdf_bytes is not None:
+            EmailService._send_with_attachments(
+                to=briefing.client.email,
+                subject=subject_client,
+                text=text_client,
+                html=html_client,
+                attachments=[(
+                    client_pdf_filename or f'briefing-{briefing.id}.pdf',
+                    client_pdf_bytes,
+                    'application/pdf',
+                )],
+            )
+        else:
+            EmailService.send(
+                to=briefing.client.email,
+                subject=subject_client,
+                text=text_client,
+                html=html_client,
+            )
+
+    # ==================================================================
+    # BRIEFING — ENVIO MANUAL
+    # ==================================================================
+
+    @staticmethod
+    def send_briefing_to_client(
+        *,
+        briefing,
+        to_email: str,
+        pdf_bytes: bytes = None,
+        pdf_filename: str = None,
+        message: str = '',
+        client_portal_url: str = '',
+    ):
+        """
+        Envia (ou reenvia) o briefing para o cliente.
+
+        Chamado pelo arquiteto. `to_email` normalmente é o e-mail
+        do cliente, mas pode ser outro endereço — o operador
+        assume a responsabilidade.
+        """
+        site_name = getattr(settings, 'SITE_NAME', 'Clivo')
+
+        subject = f'Briefing: {briefing.title}'
+        body_intro = (
+            message.strip()
+            if message and message.strip()
+            else 'Segue o briefing solicitado.'
+        )
+
+        text = (
+            f'Olá,\n\n'
+            f'{body_intro}\n\n'
+        )
+        if client_portal_url:
+            text += f'Acesse o portal: {client_portal_url}\n\n'
+        text += f'— {site_name}'
+
+        html = (
+            f'<p>Olá,</p>'
+            f'<p>{body_intro}</p>'
+        )
+        if client_portal_url:
+            html += f'<p><a href="{client_portal_url}">Abrir o portal</a></p>'
+        html += f'<p>— {site_name}</p>'
+
+        if pdf_bytes is not None:
+            EmailService._send_with_attachments(
+                to=to_email,
+                subject=subject,
+                text=text,
+                html=html,
+                attachments=[(
+                    pdf_filename or f'briefing-{briefing.id}.pdf',
+                    pdf_bytes,
+                    'application/pdf',
+                )],
+            )
+        else:
+            EmailService.send(
+                to=to_email,
+                subject=subject,
+                text=text,
+                html=html,
+            )
+
+    # ==================================================================
+    # INTERNO — envio com anexos
+    # ==================================================================
+
+    @staticmethod
+    def _send_with_attachments(
+        *,
+        to,
+        subject: str,
+        text: str,
+        html: str,
+        attachments: list = None,
+        from_email: str = None,
+        fail_silently: bool = False,
+    ):
+        """
+        Envia e-mail com anexos em memória.
+
+        `attachments` é uma lista de tuplas:
+            (filename, bytes, mimetype)
+        """
+        if isinstance(to, str):
+            to = [to]
+
+        from_email = from_email or getattr(
+            settings, 'DEFAULT_FROM_EMAIL', 'suporte@clivoos.com'
+        )
+
+        msg = EmailMultiAlternatives(
+            subject=subject,
+            body=text,
+            from_email=from_email,
+            to=to,
+        )
+        if html:
+            msg.attach_alternative(html, 'text/html')
+
+        for fname, data, mime in (attachments or []):
+            msg.attach(fname, data, mime)
+
+        return msg.send(fail_silently=fail_silently)

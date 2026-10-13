@@ -19,6 +19,9 @@ from apps.console.api.views.provider_log_views import ProviderLogViewSet
 from apps.console.api.views.cost_views import CostViewSet
 from apps.console.api.views.workspace_admin_views import AdminWorkspaceViewSet
 from apps.console.api.views.user_admin_views import AdminUserViewSet
+from apps.console.api.views.storage_views import StorageViewSet
+from apps.console.api.views.quota_views import QuotaViewSet
+from apps.console.api.views.storage_budget_views import StorageBudgetViewSet
 
 router = DefaultRouter()
 
@@ -45,6 +48,21 @@ router.register(r'provider-logs', ProviderLogViewSet, basename='provider-log')
 
 # Console V1 — economia
 router.register(r'costs', CostViewSet, basename='cost')
+
+# Console V1 — orçamento operacional de armazenamento
+# Registrado ANTES de 'storage' para que a rota mais específica
+# (`storage/budget/`) não seja capturada pelo `StorageViewSet`.
+router.register(
+    r'storage/budget',
+    StorageBudgetViewSet,
+    basename='storage-budget',
+)
+
+# Console V1 — armazenamento (snapshot read-only)
+router.register(r'storage', StorageViewSet, basename='storage')
+
+# Console V1 — quota de armazenamento
+router.register(r'quota', QuotaViewSet, basename='quota')
 
 # Console V1 — visão administrativa (read-only)
 router.register(r'workspaces', AdminWorkspaceViewSet, basename='admin-workspace')

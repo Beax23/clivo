@@ -19,6 +19,12 @@ from apps.console.models.feature import Feature
 from apps.console.models.plan_feature import PlanFeature
 from apps.console.models.plan_feature_limit import PlanFeatureLimit
 
+from apps.console.models.storage_snapshot import StorageProviderSnapshot
+from apps.console.models.storage_budget import (
+    StorageBudget,
+    StorageBudgetChange,
+)
+
 __all__ = [
     # Console V1 — governança
     'ConsoleGovernance',
@@ -42,4 +48,9 @@ __all__ = [
     'Feature',
     'PlanFeature',
     'PlanFeatureLimit',
+
+    # Console V1 — armazenamento
+    'StorageProviderSnapshot',
+    'StorageBudget',
+    'StorageBudgetChange',
 ]

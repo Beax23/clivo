@@ -70,11 +70,11 @@ SOBRE O ARQUIVO
 
 O arquivo físico é armazenado via `FileField`, usando o storage padrão
 do Django (`DEFAULT_FILE_STORAGE`). Se o projeto estiver configurado
-com Cloudinary ou S3, usa o storage configurado. Se estiver em
-`MEDIA_ROOT` local, usa local.
+com S3-compatible (Backblaze B2, Cloudflare R2), usa o storage
+configurado. Se estiver em `MEDIA_ROOT` local, usa local.
 
-Documents NÃO amarra lógica específica de Cloudinary, S3, ou qualquer
-provider. Trocar storage é decisão de infraestrutura, não deste módulo.
+Documents NÃO amarra lógica específica de nenhum provider de storage.
+Trocar storage é decisão de infraestrutura, não deste módulo.
 
 ============================================================================
 SOBRE A EXTENSÃO E O MIME TYPE

@@ -1,3 +1,24 @@
+"""
+Exceções do módulo console.
+
+Padrão:
+
+    ConsoleError (base)
+        ├── GovernanceError
+        │     ├── GovernanceNotFoundError
+        │     ├── GovernanceProtectedError
+        │     └── GovernanceInUseError
+        ├── CapabilityError
+        │     └── CapabilityNotFoundError
+        ├── MembershipError
+        │     ├── DuplicateMembershipError
+        │     └── UserNotActiveError
+        ├── UsageMetricNotFoundError
+        └── QuotaError
+              └── AmbiguousQuotaConfigurationError
+"""
+
+
 class ConsoleError(Exception):
     """Exceção base para o módulo console."""
     pass
@@ -58,4 +79,22 @@ class UserNotActiveError(MembershipError):
 
 class UsageMetricNotFoundError(ConsoleError):
     """Métrica de uso não encontrada."""
+    pass
+
+
+# ---- Quota ----
+
+class QuotaError(ConsoleError):
+    """Erro relacionado a cotas de uso."""
+    pass
+
+
+class AmbiguousQuotaConfigurationError(QuotaError):
+    """
+    Mais de uma Feature do mesmo plano define limite para a mesma métrica.
+
+    Essa é uma configuração ambígua: somar poderia duplicar cotas sem
+    intenção comercial; escolher a primeira esconderia erros silenciosamente.
+    O Console deve sinalizar para o operador corrigir.
+    """
     pass

@@ -16,7 +16,9 @@ Padrão:
         ├── SubscriptionError
         │       ├── DefaultPlanNotFoundError
         │       ├── DefaultPlanAmbiguousError
-        │       └── ProprietarioGovernanceNotFoundError
+        │       ├── ProprietarioGovernanceNotFoundError
+        │       ├── AlreadyOnThisPlanError
+        │       └── PlanInactiveError
         └── WorkspaceInvitationError
                 ├── InvitationNotFoundError
                 ├── InvitationAlreadyPendingError
@@ -130,6 +132,28 @@ class ProprietarioGovernanceNotFoundError(SubscriptionError):
     encontrada no Console.
 
     Rode `python manage.py seed_console` para criá-la.
+    """
+    pass
+
+
+class AlreadyOnThisPlanError(SubscriptionError):
+    """
+    A troca de plano foi pedida mas o workspace já está no plano
+    de destino.
+
+    A operação não cria histórico artificial — devolver erro é
+    mais honesto do que registrar uma "reafirmação" que não
+    aconteceu.
+    """
+    pass
+
+
+class PlanInactiveError(SubscriptionError):
+    """
+    O plano de destino da troca está inativo no Console.
+
+    Plano inativo não deveria ser atribuído a nenhum workspace.
+    Rejeitar é mais seguro do que aceitar silenciosamente.
     """
     pass
 

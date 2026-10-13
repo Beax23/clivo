@@ -1,0 +1,63 @@
+from apps.briefings.api.serializers.template_serializers import (
+    BriefingTemplateListSerializer,
+    BriefingTemplateDetailSerializer,
+    BriefingTemplateCreateSerializer,
+    BriefingTemplateUpdateSerializer,
+    BriefingTemplateSetActiveSerializer,
+    BriefingSectionSerializer,
+    BriefingSectionCreateSerializer,
+    BriefingSectionUpdateSerializer,
+    BriefingQuestionSerializer,
+    BriefingQuestionCreateSerializer,
+    BriefingQuestionUpdateSerializer,
+    BriefingTemplateEventSerializer,
+    ReorderSerializer,
+)
+from apps.briefings.api.serializers.briefing_serializers import (
+    BriefingListSerializer,
+    BriefingDetailSerializer,
+    BriefingCreateSerializer,
+    BriefingReopenSerializer,
+    BriefingAnswerSerializer,
+    BriefingEventSerializer,
+)
+from apps.briefings.api.serializers.portal_serializers import (
+    PortalBriefingSerializer,
+    PortalAnswerSubmitSerializer,
+    PortalClarificationSerializer,
+    PortalReviewRequestSerializer,
+)
+from apps.briefings.api.serializers.note_serializers import (
+    BriefingNoteSerializer,
+    BriefingNoteCreateSerializer,
+    BriefingNoteUpdateSerializer,
+)
+
+__all__ = [
+    'BriefingTemplateListSerializer',
+    'BriefingTemplateDetailSerializer',
+    'BriefingTemplateCreateSerializer',
+    'BriefingTemplateUpdateSerializer',
+    'BriefingTemplateSetActiveSerializer',
+    'BriefingSectionSerializer',
+    'BriefingSectionCreateSerializer',
+    'BriefingSectionUpdateSerializer',
+    'BriefingQuestionSerializer',
+    'BriefingQuestionCreateSerializer',
+    'BriefingQuestionUpdateSerializer',
+    'BriefingTemplateEventSerializer',
+    'ReorderSerializer',
+    'BriefingListSerializer',
+    'BriefingDetailSerializer',
+    'BriefingCreateSerializer',
+    'BriefingReopenSerializer',
+    'BriefingAnswerSerializer',
+    'BriefingEventSerializer',
+    'PortalBriefingSerializer',
+    'PortalAnswerSubmitSerializer',
+    'PortalClarificationSerializer',
+    'PortalReviewRequestSerializer',
+    'BriefingNoteSerializer',
+    'BriefingNoteCreateSerializer',
+    'BriefingNoteUpdateSerializer',
+]

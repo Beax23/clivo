@@ -1,0 +1,1298 @@
+/* =========================================================================
+   FLUXO — estilos completos
+   Grid de 4 colunas, cards de modelo, modais, drag-and-drop.
+   ========================================================================= */
+
+:root {
+    --fx-col-cat-w: 220px;
+    --fx-col-tpl-w: 320px;
+    --fx-col-head-pad: 14px 16px 10px;
+    --fx-col-scroll-pad: 12px;
+    --fx-outer-pad: 14px 10px;
+}
+
+
+/* =========================================================================
+   01. PÁGINA / CORPO
+   ========================================================================= */
+.main-content[data-page="fluxo"] {
+    padding: var(--fx-outer-pad);
+    margin: 0;
+    overflow: hidden;
+    height: 100%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    box-sizing: border-box;
+}
+
+.rf-page {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background: #FFFFFF;
+    color: var(--text-primary);
+    border-radius: var(--radius-lg, 14px);
+    border: 1px solid var(--border-light);
+    box-sizing: border-box;
+}
+
+[data-theme="dark"] .rf-page {
+    background: #0A0A0A;
+    border-color: var(--border-color);
+}
+
+
+/* =========================================================================
+   02. BODY — grid de 4 colunas
+   ========================================================================= */
+.fx-body {
+    display: grid;
+    grid-template-columns:
+        var(--fx-col-cat-w)
+        var(--fx-col-tpl-w)
+        minmax(0, 1fr)
+        minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    flex: 1 1 auto;
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
+}
+
+
+/* =========================================================================
+   03. COLUNA
+   ========================================================================= */
+.fx-col {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
+    background: #FFFFFF;
+    border-right: 1px solid var(--border-color);
+    position: relative;
+}
+
+.fx-col:last-child { border-right: none; }
+
+[data-theme="dark"] .fx-col { background: #0A0A0A; }
+
+
+/* =========================================================================
+   04. CABEÇALHO DA COLUNA (sem linha divisória inferior)
+   ========================================================================= */
+.fx-col-head {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: var(--fx-col-head-pad);
+    flex-shrink: 0;
+    border-bottom: none;
+}
+
+.fx-col-head-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.fx-col-title {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    font-size: 12.5px;
+    font-weight: 600;
+    letter-spacing: -0.1px;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.fx-col-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 18px;
+    padding: 0 6px;
+    background: var(--bg-secondary);
+    border-radius: 999px;
+    font-size: 10.5px;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+}
+
+.fx-col-sub {
+    margin: 0;
+    font-size: 11px;
+    color: var(--text-tertiary);
+    line-height: 1.4;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.fx-icon-btn {
+    width: 24px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+
+.fx-icon-btn:hover:not(:disabled) {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    border-color: var(--border-light);
+}
+
+.fx-icon-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.fx-icon-btn svg { width: 13px; height: 13px; }
+
+.fx-icon-btn--primary {
+    background: var(--text-primary);
+    color: var(--bg-card);
+    border-color: var(--text-primary);
+}
+.fx-icon-btn--primary:hover:not(:disabled) {
+    opacity: 0.88;
+    background: var(--text-primary);
+    color: var(--bg-card);
+    border-color: var(--text-primary);
+}
+
+
+/* =========================================================================
+   05. SEARCH (coluna de modelos)
+   ========================================================================= */
+.fx-search {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.fx-search-icon {
+    position: absolute;
+    left: 9px;
+    width: 13px;
+    height: 13px;
+    color: var(--text-tertiary);
+    pointer-events: none;
+}
+
+.fx-search input {
+    width: 100%;
+    height: 30px;
+    padding: 0 10px 0 28px;
+    border: 1px solid var(--border-color);
+    border-radius: 7px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 12px;
+    font-family: var(--font-family);
+    outline: none;
+    transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.fx-search input:focus {
+    background: var(--bg-card);
+    border-color: var(--text-primary);
+}
+
+.fx-search input::placeholder { color: var(--text-tertiary); }
+
+
+/* =========================================================================
+   06. ÁREA ROLÁVEL
+   ========================================================================= */
+.fx-col-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: var(--fx-col-scroll-pad);
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0,0,0,0.10) transparent;
+}
+
+.fx-col-scroll::-webkit-scrollbar { width: 6px; }
+.fx-col-scroll::-webkit-scrollbar-track { background: transparent; }
+.fx-col-scroll::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.08);
+    border-radius: 999px;
+}
+.fx-col-scroll::-webkit-scrollbar-thumb:hover { background: rgba(0, 0, 0, 0.16); }
+
+[data-theme="dark"] .fx-col-scroll { scrollbar-color: rgba(255,255,255,0.10) transparent; }
+[data-theme="dark"] .fx-col-scroll::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.08); }
+
+/* Vistas dentro da coluna (lista vs form) */
+.fx-col-view.is-hidden { display: none !important; }
+
+
+/* =========================================================================
+   07. LISTA (categorias, sessões, perguntas)
+   ========================================================================= */
+.fx-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.fx-list-empty {
+    padding: 24px 12px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--text-tertiary);
+    font-style: italic;
+    list-style: none;
+}
+
+.fx-list-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px 6px 6px;
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-size: 12.5px;
+    font-weight: 500;
+    line-height: 1.3;
+    transition: background-color 120ms ease, color 120ms ease;
+    min-width: 0;
+    user-select: none;
+    position: relative;
+}
+
+.fx-list-item:hover {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+.fx-list-item.is-active {
+    background: #EAF3FF;
+    color: #1D4ED8;
+    font-weight: 600;
+}
+
+[data-theme="dark"] .fx-list-item.is-active {
+    background: #11203A;
+    color: #93C5FD;
+}
+
+.fx-list-item-name {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.fx-list-item-meta {
+    flex-shrink: 0;
+    font-size: 10.5px;
+    color: var(--text-tertiary);
+    font-variant-numeric: tabular-nums;
+}
+
+.fx-list-item.is-active .fx-list-item-meta { color: #4A6CF7; }
+
+
+/* =========================================================================
+   08. NUMERAÇÃO (sessões e perguntas)
+   ========================================================================= */
+.fx-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 5px;
+    background: var(--bg-secondary);
+    color: var(--text-tertiary);
+    font-size: 10.5px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+}
+
+.fx-list-item.is-active .fx-num {
+    background: rgba(74, 108, 247, 0.14);
+    color: #1D4ED8;
+}
+
+[data-theme="dark"] .fx-list-item.is-active .fx-num {
+    background: rgba(147, 197, 253, 0.18);
+    color: #93C5FD;
+}
+
+
+/* =========================================================================
+   09. DRAG HANDLE
+   ========================================================================= */
+.fx-drag-handle {
+    width: 18px;
+    height: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-tertiary);
+    cursor: grab;
+    border-radius: 4px;
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity 120ms ease, background-color 120ms ease;
+}
+
+.fx-list-item:hover .fx-drag-handle,
+.fx-tpl-card:hover .fx-drag-handle { opacity: 1; }
+
+.fx-drag-handle:hover { background: var(--bg-hover); }
+.fx-drag-handle:active { cursor: grabbing; }
+.fx-drag-handle svg { width: 12px; height: 12px; }
+
+.fx-list-item.is-dragging,
+.fx-tpl-card.is-dragging { opacity: 0.4; }
+
+.fx-list-item.is-drop-target,
+.fx-tpl-card.is-drop-target {
+    box-shadow: inset 0 2px 0 #4A6CF7;
+}
+
+
+/* =========================================================================
+   10. MENU "⋮"
+   ========================================================================= */
+.fx-kebab {
+    width: 22px;
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: 5px;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity 120ms ease, background-color 120ms ease, color 120ms ease;
+}
+
+.fx-list-item:hover .fx-kebab,
+.fx-tpl-card:hover .fx-kebab,
+.fx-kebab.is-open {
+    opacity: 1;
+}
+
+.fx-kebab:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.fx-kebab svg { width: 14px; height: 14px; }
+
+.fx-menu {
+    position: fixed;
+    min-width: 150px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.14);
+    padding: 4px;
+    z-index: 10000;
+    display: none;
+}
+
+.fx-menu.is-open {
+    display: block;
+    animation: fxMenuIn 100ms ease-out;
+}
+
+@keyframes fxMenuIn {
+    from { opacity: 0; transform: translateY(-2px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.fx-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 7px 10px;
+    border: none;
+    background: transparent;
+    border-radius: 5px;
+    color: var(--text-secondary);
+    font-size: 12.5px;
+    font-family: var(--font-family);
+    font-weight: 500;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color 120ms ease, color 120ms ease;
+}
+
+.fx-menu-item:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.fx-menu-item svg { width: 13px; height: 13px; opacity: 0.7; }
+
+.fx-menu-item--danger { color: var(--red); }
+.fx-menu-item--danger:hover { background: var(--red-bg); color: var(--red); }
+
+
+/* =========================================================================
+   11. CARDS DE MODELO (compactos com capa)
+   ========================================================================= */
+.fx-tpl-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.fx-tpl-card {
+    position: relative;
+    display: flex;
+    align-items: stretch;
+    gap: 12px;
+    padding: 10px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background-color 120ms ease, border-color 120ms ease;
+    min-width: 0;
+}
+
+.fx-tpl-card:hover {
+    background: var(--bg-secondary);
+    border-color: var(--border-light);
+}
+
+.fx-tpl-card.is-active {
+    background: #EAF3FF;
+    border-color: #4A6CF7;
+}
+
+[data-theme="dark"] .fx-tpl-card.is-active {
+    background: #11203A;
+    border-color: #4A6CF7;
+}
+
+.fx-tpl-card.is-dragging { opacity: 0.4; }
+.fx-tpl-card.is-drop-target { border-color: #4A6CF7; border-style: dashed; }
+
+/* Thumb */
+.fx-tpl-thumb {
+    width: 76px;
+    height: 76px;
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--bg-secondary);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-tertiary);
+    position: relative;
+    cursor: grab;
+}
+
+.fx-tpl-thumb:active { cursor: grabbing; }
+
+[data-theme="dark"] .fx-tpl-thumb { background: #171717; }
+
+.fx-tpl-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.fx-tpl-thumb svg { width: 22px; height: 22px; opacity: 0.5; }
+
+.fx-tpl-thumb-dot {
+    position: absolute;
+    bottom: 4px;
+    right: 4px;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 0 2px #FFFFFF;
+}
+
+[data-theme="dark"] .fx-tpl-thumb-dot { box-shadow: 0 0 0 2px #0A0A0A; }
+.fx-tpl-thumb-dot.is-off { background: #C7C7CC; }
+
+/* Info */
+.fx-tpl-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 2px 0;
+}
+
+.fx-tpl-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    word-break: break-word;
+}
+
+.fx-tpl-card.is-inactive .fx-tpl-name { color: var(--text-tertiary); }
+
+.fx-tpl-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--text-tertiary);
+    line-height: 1.2;
+}
+
+.fx-tpl-meta-item { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.fx-tpl-meta-item svg { width: 11px; height: 11px; opacity: 0.7; }
+
+.fx-tpl-meta-sep {
+    width: 2px;
+    height: 2px;
+    border-radius: 50%;
+    background: var(--text-tertiary);
+    opacity: 0.5;
+    flex-shrink: 0;
+}
+
+/* Ações verticais */
+.fx-tpl-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    flex-shrink: 0;
+    padding: 2px 0;
+}
+
+
+/* =========================================================================
+   12. MINI SWITCH (toggle ativo/inativo no card)
+   ========================================================================= */
+.fx-mini-switch {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+}
+
+.fx-mini-switch input { display: none; }
+
+.fx-mini-switch-track {
+    width: 26px;
+    height: 16px;
+    border-radius: 999px;
+    background: #D1D1D6;
+    position: relative;
+    transition: background-color 160ms ease;
+    flex-shrink: 0;
+}
+
+[data-theme="dark"] .fx-mini-switch-track { background: #3A3A3C; }
+
+.fx-mini-switch-thumb {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 12px;
+    height: 12px;
+    background: #FFFFFF;
+    border-radius: 50%;
+    transition: transform 160ms ease;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+
+.fx-mini-switch input:checked + .fx-mini-switch-track {
+    background: var(--green);
+}
+
+.fx-mini-switch input:checked + .fx-mini-switch-track .fx-mini-switch-thumb {
+    transform: translateX(10px);
+}
+
+.fx-mini-switch.is-loading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+
+/* =========================================================================
+   13. FORMULÁRIO INLINE DE PERGUNTA
+   ========================================================================= */
+.fx-q-form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 2px 2px 16px;
+}
+
+.fx-q-form-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-light);
+    margin-bottom: 2px;
+}
+
+[data-theme="dark"] .fx-q-form-head { border-bottom-color: #1F1F1F; }
+
+.fx-back-btn {
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-tertiary);
+    background: transparent;
+    border: 1px solid transparent;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background-color 120ms ease, color 120ms ease;
+}
+
+.fx-back-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.fx-back-btn svg { width: 14px; height: 14px; }
+
+.fx-q-form-title-wrap {
+    flex: 1;
+    min-width: 0;
+}
+
+.fx-q-form-title {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    line-height: 1.2;
+}
+
+.fx-q-form-sub {
+    margin: 2px 0 0;
+    font-size: 11px;
+    color: var(--text-tertiary);
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.fx-q-form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-light);
+    margin-top: 4px;
+}
+
+[data-theme="dark"] .fx-q-form-actions { border-top-color: #1F1F1F; }
+
+
+/* =========================================================================
+   14. OPÇÕES DE ESCOLHA (single/multiple)
+   ========================================================================= */
+.fx-q-options-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.fx-q-options-head label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.fx-q-options {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.fx-q-options-hint {
+    margin: 6px 0 0;
+    font-size: 10.5px;
+    color: var(--text-tertiary);
+    font-style: italic;
+}
+
+.fx-option-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--bg-page);
+    transition: border-color 120ms ease;
+}
+
+.fx-option-row:hover { border-color: var(--text-tertiary); }
+
+.fx-option-drag {
+    width: 14px;
+    height: 14px;
+    color: var(--text-tertiary);
+    cursor: grab;
+    flex-shrink: 0;
+}
+
+.fx-option-drag svg { width: 12px; height: 12px; }
+
+.fx-option-thumb {
+    width: 34px;
+    height: 34px;
+    border-radius: 6px;
+    overflow: hidden;
+    background: var(--bg-secondary);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    position: relative;
+    border: 1px solid var(--border-light);
+}
+
+.fx-option-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.fx-option-thumb svg { width: 14px; height: 14px; opacity: 0.6; }
+
+.fx-option-thumb input[type="file"] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.fx-option-input {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    background: transparent;
+    outline: none;
+    font-size: 12.5px;
+    font-family: var(--font-family);
+    color: var(--text-primary);
+    padding: 4px 0;
+}
+
+.fx-option-input::placeholder { color: var(--text-tertiary); }
+
+.fx-option-remove {
+    width: 22px;
+    height: 22px;
+    border-radius: 5px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-tertiary);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.fx-option-remove:hover { background: var(--red-bg); color: var(--red); }
+.fx-option-remove svg { width: 12px; height: 12px; }
+
+
+/* =========================================================================
+   15. FIELDS (modais + form inline)
+   ========================================================================= */
+.fx-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.fx-field.is-hidden { display: none !important; }
+
+.fx-field--inline {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+}
+
+.fx-field label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.fx-opt { color: var(--text-tertiary); font-weight: 400; }
+
+.fx-field input[type="text"],
+.fx-field textarea,
+.fx-field select {
+    width: 100%;
+    padding: 9px 12px;
+    background: var(--bg-page);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 13px;
+    font-family: var(--font-family);
+    outline: none;
+    transition: border-color 140ms ease, box-shadow 140ms ease;
+    resize: vertical;
+    min-height: 38px;
+    box-sizing: border-box;
+}
+
+.fx-field select {
+    appearance: none;
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236B6B76' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    background-size: 14px;
+    padding-right: 34px;
+}
+
+.fx-field input[type="text"]:focus,
+.fx-field textarea:focus,
+.fx-field select:focus {
+    border-color: var(--text-primary);
+    box-shadow: 0 0 0 3px rgba(16, 16, 20, 0.06);
+}
+
+[data-theme="dark"] .fx-field input[type="text"]:focus,
+[data-theme="dark"] .fx-field textarea:focus,
+[data-theme="dark"] .fx-field select:focus {
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.08);
+}
+
+.fx-check-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.fx-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    cursor: pointer;
+    font-size: 11.5px;
+    color: var(--text-secondary);
+    user-select: none;
+    transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.fx-check:hover { background: var(--bg-hover); }
+.fx-check input { display: none; }
+.fx-check input:checked ~ span { color: var(--text-primary); font-weight: 600; }
+
+.fx-check:has(input:checked) {
+    background: var(--bg-hover);
+    border-color: var(--text-primary);
+    color: var(--text-primary);
+}
+
+.fx-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    user-select: none;
+}
+
+.fx-switch input { display: none; }
+
+.fx-switch-track {
+    width: 32px;
+    height: 18px;
+    border-radius: 999px;
+    background: var(--border-color);
+    position: relative;
+    transition: background-color 140ms ease;
+    flex-shrink: 0;
+}
+
+.fx-switch-thumb {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    background: #FFFFFF;
+    border-radius: 50%;
+    transition: transform 140ms ease;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.fx-switch input:checked + .fx-switch-track { background: var(--text-primary); }
+.fx-switch input:checked + .fx-switch-track .fx-switch-thumb { transform: translateX(14px); }
+.fx-switch-label { font-weight: 500; }
+
+
+/* =========================================================================
+   16. UPLOAD DE CAPA (modal de modelo)
+   ========================================================================= */
+.fx-cover-field {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    margin-bottom: 4px;
+}
+
+.fx-cover-upload {
+    display: block;
+    width: 100%;
+    cursor: pointer;
+}
+
+.fx-cover-upload input[type="file"] { display: none; }
+
+.fx-cover-preview {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border-radius: 10px;
+    border: 1.5px dashed var(--border-color);
+    background: var(--bg-secondary);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    color: var(--text-tertiary);
+    font-size: 12px;
+    transition: border-color 120ms ease, background-color 120ms ease;
+    overflow: hidden;
+}
+
+.fx-cover-preview:hover { border-color: var(--text-tertiary); }
+.fx-cover-preview svg { width: 24px; height: 24px; opacity: 0.6; }
+
+.fx-cover-preview.has-image {
+    border-style: solid;
+    padding: 0;
+}
+
+.fx-cover-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.fx-cover-clear {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.6);
+    color: #FFFFFF;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+    transition: background-color 120ms ease;
+}
+
+.fx-cover-clear:hover { background: rgba(0, 0, 0, 0.8); }
+.fx-cover-clear svg { width: 13px; height: 13px; }
+.fx-cover-clear.is-hidden { display: none; }
+
+
+/* =========================================================================
+   17. MODAIS
+   ========================================================================= */
+.fx-modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.fx-modal-overlay.is-open {
+    display: flex;
+    animation: fxOverlayIn 140ms ease-out;
+}
+
+@keyframes fxOverlayIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+.fx-modal {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg, 14px);
+    max-width: 460px;
+    width: 100%;
+    box-shadow: 0 24px 48px rgba(0,0,0,0.2);
+    border: 1px solid var(--border-color);
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: fxModalIn 160ms ease-out;
+}
+
+@keyframes fxModalIn {
+    from { opacity: 0; transform: translateY(6px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.fx-modal-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid var(--border-light);
+    flex-shrink: 0;
+}
+
+[data-theme="dark"] .fx-modal-head { border-bottom-color: #1F1F1F; }
+
+.fx-modal-title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.1px;
+}
+
+.fx-modal-close {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-tertiary);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: background-color 140ms ease, color 140ms ease;
+}
+
+.fx-modal-close:hover { background: var(--bg-hover); color: var(--text-primary); }
+.fx-modal-close svg { width: 14px; height: 14px; }
+
+.fx-modal-body {
+    padding: 18px 20px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    overflow-y: auto;
+    min-height: 0;
+}
+
+.fx-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 6px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border-light);
+}
+
+[data-theme="dark"] .fx-modal-actions { border-top-color: #1F1F1F; }
+
+.fx-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 34px;
+    padding: 0 16px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 12.5px;
+    font-weight: 500;
+    font-family: var(--font-family);
+    cursor: pointer;
+    transition: background-color 140ms ease, color 140ms ease, opacity 140ms ease;
+    white-space: nowrap;
+}
+
+.fx-btn:hover:not(:disabled) { background: var(--bg-hover); color: var(--text-primary); }
+.fx-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.fx-btn svg { width: 13px; height: 13px; }
+
+.fx-btn--primary {
+    background: var(--text-primary);
+    color: var(--bg-card);
+    border-color: var(--text-primary);
+}
+.fx-btn--primary:hover:not(:disabled) {
+    opacity: 0.88;
+    background: var(--text-primary);
+    color: var(--bg-card);
+}
+
+.fx-btn--ghost {
+    border-color: transparent;
+    color: var(--text-secondary);
+}
+.fx-btn--ghost:hover:not(:disabled) {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.fx-btn--sm {
+    height: 26px;
+    padding: 0 10px;
+    font-size: 11.5px;
+    border-radius: 6px;
+}
+
+.fx-btn--sm svg { width: 11px; height: 11px; }
+
+.fx-btn--danger {
+    background: var(--red);
+    color: #FFFFFF;
+    border-color: var(--red);
+}
+
+.fx-btn--danger:hover:not(:disabled) {
+    opacity: 0.9;
+    background: var(--red);
+    color: #FFFFFF;
+}
+
+
+/* =========================================================================
+   18. MODAL DE EXCLUSÃO (pequeno)
+   ========================================================================= */
+.fx-modal--sm { max-width: 380px; }
+
+.fx-modal-body--center {
+    align-items: center;
+    text-align: center;
+    gap: 8px;
+    padding: 26px 22px 22px;
+}
+
+.fx-danger-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--red-bg);
+    color: var(--red);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 4px;
+}
+
+.fx-danger-icon svg { width: 22px; height: 22px; }
+
+.fx-danger-title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.fx-danger-sub {
+    margin: 0;
+    font-size: 12.5px;
+    color: var(--text-tertiary);
+    line-height: 1.5;
+}
+
+.fx-modal-actions--center {
+    justify-content: center;
+    border-top: none;
+    padding-top: 16px;
+    margin-top: 8px;
+    width: 100%;
+}
+
+
+/* =========================================================================
+   19. RESPONSIVO
+   ========================================================================= */
+@media (max-width: 1280px) {
+    :root {
+        --fx-col-cat-w: 190px;
+        --fx-col-tpl-w: 280px;
+    }
+}
+
+@media (max-width: 1024px) {
+    .fx-body {
+        grid-template-columns: 170px 260px minmax(0, 1fr);
+    }
+    .fx-col--questions { display: none; }
+}
+
+@media (max-width: 768px) {
+    .fx-body { grid-template-columns: 1fr; }
+    .fx-col { display: none; }
+    .fx-col.is-visible { display: flex; }
+}

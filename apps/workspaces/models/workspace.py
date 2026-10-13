@@ -16,8 +16,8 @@ REGRA ARQUITETURAL:
 RELAÇÃO:
 
     Workspace
-        ├── WorkspaceMembership  (quem pertence)
-        └── WorkspaceSubscription (qual plano)
+        ├── WorkspaceMembership   (quem pertence)
+        └── WorkspaceSubscription (qual plano, com histórico)
 """
 
 import uuid
@@ -130,3 +130,31 @@ class Workspace(models.Model):
     def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)
+
+    # ------------------------------------------------------------------
+    # ASSINATURA ATIVA
+    # ------------------------------------------------------------------
+
+    @property
+    def active_subscription(self):
+        """
+        Assinatura ativa do workspace, ou None.
+
+        Regra:
+            - Primeiro consulta o cache `_active_subscriptions`, que é
+              populado por um `Prefetch` filtrado em `WorkspaceQueries`
+              (evita N+1 em listagens).
+            - Se o cache não existir, dispara uma query filtrada.
+
+        Nunca levanta. Workspace sem assinatura ativa é estado válido.
+        """
+        cached = getattr(self, '_active_subscriptions', None)
+        if cached is not None:
+            return cached[0] if cached else None
+
+        return (
+            self.subscriptions
+            .filter(is_active=True)
+            .select_related('plan')
+            .first()
+        )

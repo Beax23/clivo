@@ -5,6 +5,9 @@ from apps.documents.exceptions.document_exceptions import (
     DocumentInvalidUploadError,
     DocumentClientNotFoundError,
     DocumentProjectNotFoundError,
+    DocumentFolderError,
+    DocumentFolderNotFoundError,
+    DocumentFolderNameConflictError,
     DocumentStorageError,
 )
 
@@ -15,5 +18,8 @@ __all__ = [
     'DocumentInvalidUploadError',
     'DocumentClientNotFoundError',
     'DocumentProjectNotFoundError',
+    'DocumentFolderError',
+    'DocumentFolderNotFoundError',
+    'DocumentFolderNameConflictError',
     'DocumentStorageError',
 ]

@@ -22,8 +22,9 @@ Ele NÃO é:
 SOBRE O CAMPO `file`
 --------------------
 Usamos `FileField` do Django. O storage é decidido pelo projeto
-(`DEFAULT_FILE_STORAGE`). Se o projeto estiver com Cloudinary, usa
-Cloudinary. Se estiver com `MEDIA_ROOT` local, usa local.
+(`DEFAULT_FILE_STORAGE`). Se o projeto estiver com S3-compatible
+(Backblaze B2, Cloudflare R2), usa o storage configurado. Se estiver
+com `MEDIA_ROOT` local, usa local.
 
 SOBRE `extension` E `mime_type`
 -------------------------------
@@ -54,11 +55,29 @@ Origem do arquivo. Define como ele entrou no Clivo:
     gdrive  → importado do Google Drive
     url     → baixado de uma URL externa
 
-O campo é informativo. Não muda o comportamento do Document.
+SOBRE `folder`
+--------------
+FK opcional para `DocumentFolder`. Representa o agrupamento VISUAL.
 
-`source_url` guarda a URL original (quando source='url' ou
-source='gdrive'). Não é usada para sincronização. É apenas
-registro histórico para o usuário saber de onde veio.
+- `folder = None` → documento solto
+- `folder = X`    → documento na pasta X
+
+NÃO confundir com organização semântica. Cliente / Projeto continuam
+sendo o eixo forte. Pasta é atalho.
+
+Se a pasta for excluída, `folder` recebe `NULL` (SET_NULL) e o
+documento volta a ficar solto. O arquivo NÃO é excluído.
+
+SOBRE `visible_to_client`
+-------------------------
+Flag booleana que controla se o arquivo é visível ao cliente.
+
+- `False` (padrão) → apenas o escritório (membros do workspace) vê
+- `True`            → o cliente também enxerga, quando portais/áreas
+                     do cliente passarem a consumir `documents`
+
+O padrão é `False` porque arquivo é do escritório até que se decida
+o contrário. Expor é ato deliberado do arquiteto.
 
 SOBRE EXCLUSÃO
 --------------
@@ -157,6 +176,21 @@ class Document(models.Model):
     )
 
     # ------------------------------------------------------------------
+    # PASTA (agrupamento visual)
+    # ------------------------------------------------------------------
+
+    folder = models.ForeignKey(
+        'documents.DocumentFolder',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='documents',
+        help_text=_(
+            'Pasta onde o documento está. NULL = solto na biblioteca.'
+        ),
+    )
+
+    # ------------------------------------------------------------------
     # ORIGEM
     # ------------------------------------------------------------------
 
@@ -174,6 +208,19 @@ class Document(models.Model):
         help_text=_(
             'URL de origem (Google Drive, URL externa). '
             'Apenas registro histórico — não é usada para sincronização.'
+        ),
+    )
+
+    # ------------------------------------------------------------------
+    # VISIBILIDADE
+    # ------------------------------------------------------------------
+
+    visible_to_client = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text=_(
+            'Se True, o arquivo é visível ao cliente. '
+            'Se False, apenas membros do workspace enxergam.'
         ),
     )
 
@@ -210,8 +257,10 @@ class Document(models.Model):
             models.Index(fields=['workspace', '-created_at']),
             models.Index(fields=['workspace', 'client']),
             models.Index(fields=['workspace', 'project_id']),
+            models.Index(fields=['workspace', 'folder']),
             models.Index(fields=['workspace', 'name']),
             models.Index(fields=['workspace', 'source']),
+            models.Index(fields=['workspace', 'visible_to_client']),
             models.Index(fields=['extension']),
             models.Index(fields=['created_at']),
         ]
@@ -239,8 +288,11 @@ class Document(models.Model):
         return self.project_id is not None
 
     @property
+    def has_folder(self) -> bool:
+        return self.folder_id is not None
+
+    @property
     def has_context(self) -> bool:
-        """Um documento tem contexto quando tem cliente OU projeto."""
         return self.has_client or self.has_project
 
     @property

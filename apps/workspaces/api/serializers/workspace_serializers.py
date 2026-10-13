@@ -37,8 +37,15 @@ class WorkspaceSerializer(serializers.ModelSerializer):
         return encode_workspace_id(obj.id)
 
     def get_plan(self, obj):
-        sub = getattr(obj, 'subscription', None)
-        if sub and sub.is_active and sub.plan:
+        """
+        Plano da assinatura ATIVA do workspace.
+
+        `active_subscription` já filtra `is_active=True` — não é
+        preciso checar isso aqui. Retorna `None` se não houver
+        assinatura ativa ou se o plano não existir.
+        """
+        sub = obj.active_subscription
+        if sub and sub.plan:
             return {
                 'id': str(sub.plan.id),
                 'key': sub.plan.key,

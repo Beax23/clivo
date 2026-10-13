@@ -10,6 +10,16 @@ from apps.console.exceptions.console_exceptions import (
     DuplicateMembershipError,
     UserNotActiveError,
     UsageMetricNotFoundError,
+    QuotaError,
+    AmbiguousQuotaConfigurationError,
+)
+from apps.console.exceptions.storage_budget_exceptions import (
+    StorageBudgetError,
+    StorageBudgetNotFoundError,
+    StorageBudgetNotConfiguredError,
+    StorageBudgetBelowCommittedError,
+    StorageBudgetUnlimitedQuotaError,
+    StorageBudgetAmbiguousQuotaError,
 )
 
 __all__ = [
@@ -24,4 +34,12 @@ __all__ = [
     'DuplicateMembershipError',
     'UserNotActiveError',
     'UsageMetricNotFoundError',
+    'QuotaError',
+    'AmbiguousQuotaConfigurationError',
+    'StorageBudgetError',
+    'StorageBudgetNotFoundError',
+    'StorageBudgetNotConfiguredError',
+    'StorageBudgetBelowCommittedError',
+    'StorageBudgetUnlimitedQuotaError',
+    'StorageBudgetAmbiguousQuotaError',
 ]

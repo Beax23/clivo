@@ -3,7 +3,7 @@
 =============================================================================
 SIDEBAR — Application Shell
 =============================================================================
-=============================================================================
+============================================================================
 {% endcomment %}
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -27,6 +27,7 @@ SIDEBAR — Application Shell
 
     <style>
         :root {
+            /* ---------- FUNDOS: tudo branco no light, tudo preto no dark ---------- */
             --bg-page: #FFFFFF;
             --bg-card: #FFFFFF;
             --bg-hover: #F0F0F2;
@@ -34,10 +35,12 @@ SIDEBAR — Application Shell
             --border-color: #E9E9EC;
             --border-light: #EFEFF1;
 
+            /* Cores usadas exclusivamente para textos/ícones — não como fundo */
             --text-primary: #101014;
             --text-secondary: #6B6B76;
             --text-tertiary: #9797A1;
 
+            /* Semânticos (usados apenas em toasts, badges e botões de perigo) */
             --green: #17B26A;
             --green-bg: #E6F8EF;
             --red: #E5484D;
@@ -61,10 +64,10 @@ SIDEBAR — Application Shell
 
         [data-theme="dark"] {
             --bg-page: #0A0A0A;
-            --bg-card: #0F0F0F;
+            --bg-card: #0A0A0A;
             --bg-hover: #1A1A1A;
-            --bg-secondary: #141414;
-            --border-color: #262626;
+            --bg-secondary: #0A0A0A;
+            --border-color: #1F1F1F;
             --border-light: #1F1F1F;
 
             --text-primary: #F5F5F5;
@@ -110,6 +113,27 @@ SIDEBAR — Application Shell
             overflow: hidden;
         }
 
+        /* =====================================================
+           .main-content — regra GLOBAL do shell.
+           Todas as páginas herdam. Antes, cada página precisava
+           definir a sua própria regra para o <main>, o que
+           causava o encolhimento à esquerda. Agora o shell
+           garante o comportamento base para todas.
+           ===================================================== */
+        .main-content {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            height: 100vh;
+            height: 100dvh;
+            background: var(--bg-page);
+        }
+
+        /* =====================================================
+           ICON RAIL
+           ===================================================== */
         .icon-rail {
             width: var(--rail-w);
             background: var(--bg-card);
@@ -140,6 +164,7 @@ SIDEBAR — Application Shell
 
         .icon-rail .rail-btn,
         .icon-rail .theme-toggle,
+        .icon-rail .config-toggle,
         .icon-rail .logout-btn {
             width: 32px;
             height: 32px;
@@ -154,7 +179,13 @@ SIDEBAR — Application Shell
         }
 
         .icon-rail .rail-btn:hover,
-        .icon-rail .theme-toggle:hover {
+        .icon-rail .theme-toggle:hover,
+        .icon-rail .config-toggle:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+
+        .icon-rail .config-toggle.is-active {
             background: var(--bg-hover);
             color: var(--text-primary);
         }
@@ -181,6 +212,7 @@ SIDEBAR — Application Shell
 
         .icon-rail .rail-btn .tooltip,
         .icon-rail .theme-toggle .tooltip,
+        .icon-rail .config-toggle .tooltip,
         .icon-rail .logout-btn .tooltip,
         .icon-rail .rail-avatar .tooltip {
             position: absolute;
@@ -204,6 +236,7 @@ SIDEBAR — Application Shell
 
         .icon-rail .rail-btn .tooltip::before,
         .icon-rail .theme-toggle .tooltip::before,
+        .icon-rail .config-toggle .tooltip::before,
         .icon-rail .logout-btn .tooltip::before,
         .icon-rail .rail-avatar .tooltip::before {
             content: '';
@@ -218,6 +251,7 @@ SIDEBAR — Application Shell
 
         .icon-rail .rail-btn:hover .tooltip,
         .icon-rail .theme-toggle:hover .tooltip,
+        .icon-rail .config-toggle:hover .tooltip,
         .icon-rail .logout-btn:hover .tooltip,
         .icon-rail .rail-avatar:hover .tooltip {
             opacity: 1;
@@ -265,11 +299,13 @@ SIDEBAR — Application Shell
 
         @keyframes spin { to { transform: rotate(360deg); } }
 
+        /* =====================================================
+           SIDEBAR — altura do viewport inteiro, borda visível
+           ===================================================== */
         .sidebar {
             width: var(--panel-w);
             background: var(--bg-card);
-            border-right: 1px solid var(--border-color);
-            padding: 16px 12px;
+            padding: 14px 10px;
             display: flex;
             flex-direction: column;
             flex-shrink: 0;
@@ -278,18 +314,31 @@ SIDEBAR — Application Shell
             z-index: 50;
         }
 
+        [data-theme="dark"] .sidebar {
+            background: var(--bg-card);
+        }
+
         .sidebar-inner {
-            background: var(--bg-secondary);
+            background: var(--bg-card);
             border-radius: var(--radius-lg);
-            padding: 12px 8px;
+            padding: 14px 10px;
             flex: 1 1 auto;
             display: flex;
             flex-direction: column;
             position: relative;
             min-height: 0;
             overflow: hidden;
+            border: 1px solid var(--border-light);
         }
 
+        [data-theme="dark"] .sidebar-inner {
+            background: var(--bg-card);
+            border-color: var(--border-color);
+        }
+
+        /* =====================================================
+           WORKSPACE SWITCH
+           ===================================================== */
         .workspace-switch {
             display: flex;
             align-items: center;
@@ -302,6 +351,7 @@ SIDEBAR — Application Shell
             user-select: none;
             position: relative;
             flex-shrink: 0;
+            background: transparent;
         }
 
         .workspace-switch:hover { background: var(--bg-hover); }
@@ -315,10 +365,15 @@ SIDEBAR — Application Shell
             display: flex;
             align-items: center;
             justify-content: center;
-            background: linear-gradient(135deg, #F2A9E6, #B78CF2);
+            background: #101014;
             font-size: 10px;
             font-weight: 600;
-            color: #fff;
+            color: #FFFFFF;
+        }
+
+        [data-theme="dark"] .workspace-switch .ws-avatar {
+            background: #F5F5F5;
+            color: #0A0A0A;
         }
 
         .workspace-switch .ws-avatar img {
@@ -349,6 +404,9 @@ SIDEBAR — Application Shell
             transform: rotate(180deg);
         }
 
+        /* =====================================================
+           WS DROPDOWN
+           ===================================================== */
         .ws-dropdown {
             position: absolute;
             top: 52px;
@@ -405,10 +463,15 @@ SIDEBAR — Application Shell
             display: flex;
             align-items: center;
             justify-content: center;
-            background: linear-gradient(135deg, #F2A9E6, #B78CF2);
+            background: #101014;
             font-size: 10px;
             font-weight: 600;
-            color: #fff;
+            color: #FFFFFF;
+        }
+
+        [data-theme="dark"] .ws-dropdown .ws-item .ws-item-avatar {
+            background: #F5F5F5;
+            color: #0A0A0A;
         }
 
         .ws-dropdown .ws-item .ws-item-info {
@@ -466,6 +529,9 @@ SIDEBAR — Application Shell
             color: var(--text-tertiary);
         }
 
+        /* =====================================================
+           SIDEBAR NAV
+           ===================================================== */
         .sidebar-nav {
             flex: 1 1 auto;
             min-height: 0;
@@ -499,6 +565,7 @@ SIDEBAR — Application Shell
             transition: background-color var(--transition), color var(--transition);
             margin-bottom: 1px;
             cursor: pointer;
+            background: transparent;
         }
 
         .sidebar-nav a i {
@@ -523,13 +590,24 @@ SIDEBAR — Application Shell
             color: var(--text-primary);
         }
 
+        /* =====================================================
+           SIDEBAR FOOTER — Plano (fixo na base)
+           ===================================================== */
+        .sidebar-footer {
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: auto;
+            padding-top: 12px;
+        }
+
         .sidebar-plan {
             flex-shrink: 0;
-            margin-top: 12px;
             padding: 14px;
             border-radius: var(--radius-md);
             background: var(--bg-card);
-            border: 1px solid var(--border-light);
+            border: 1px solid var(--border-color);
             display: flex;
             flex-direction: column;
             gap: 10px;
@@ -542,7 +620,7 @@ SIDEBAR — Application Shell
         }
 
         .sidebar-plan:hover {
-            border-color: var(--border-color);
+            border-color: var(--text-tertiary);
         }
 
         .sidebar-plan .plan-head {
@@ -561,6 +639,10 @@ SIDEBAR — Application Shell
             background: var(--bg-secondary);
             color: var(--text-primary);
             flex-shrink: 0;
+        }
+
+        [data-theme="dark"] .sidebar-plan .plan-icon {
+            background: #1F1F1F;
         }
 
         .sidebar-plan .plan-icon svg {
@@ -628,11 +710,11 @@ SIDEBAR — Application Shell
             font-weight: 600;
             padding: 2px 7px;
             border-radius: 999px;
-            background: var(--bg-secondary);
+            background: transparent;
             color: var(--text-secondary);
             flex-shrink: 0;
             letter-spacing: 0.2px;
-            border: 1px solid var(--border-light);
+            border: 1px solid var(--border-color);
         }
 
         .sidebar-plan .plan-badge::before {
@@ -647,6 +729,9 @@ SIDEBAR — Application Shell
             background: var(--text-tertiary);
         }
 
+        /* =====================================================
+           LOADING / MISC
+           ===================================================== */
         .loading-overlay {
             display: flex;
             align-items: center;
@@ -771,6 +856,9 @@ SIDEBAR — Application Shell
             vertical-align: middle;
         }
 
+        /* =====================================================
+           MODAL NOVO CLIENTE
+           ===================================================== */
         .g-modal-overlay {
             display: none;
             position: fixed;
@@ -997,11 +1085,13 @@ SIDEBAR — Application Shell
             .icon-rail { width: 40px; padding: 10px 0; }
             .icon-rail .rail-btn,
             .icon-rail .theme-toggle,
+            .icon-rail .config-toggle,
             .icon-rail .logout-btn { width: 28px; height: 28px; font-size: 15px; }
             .icon-rail .rail-avatar { width: 24px; height: 24px; }
 
             .icon-rail .rail-btn .tooltip,
             .icon-rail .theme-toggle .tooltip,
+            .icon-rail .config-toggle .tooltip,
             .icon-rail .logout-btn .tooltip,
             .icon-rail .rail-avatar .tooltip {
                 display: none;
@@ -1013,11 +1103,11 @@ SIDEBAR — Application Shell
 
     {% block page_css %}{% endblock %}
 </head>
-<body>
+<body data-workspace-public-id="{{ workspace_public_id|default:'' }}">
 
     <div class="soft-nav-progress" id="softNavProgress"></div>
 
-    <div id="app">
+    <div id="app" data-workspace-public-id="{{ workspace_public_id|default:'' }}">
         <div id="loadingState" class="loading-overlay">
             <div class="loading-spinner"></div>
             Carregando...
@@ -1029,12 +1119,12 @@ SIDEBAR — Application Shell
                 <div class="logo">C</div>
 
                 <button class="rail-btn" id="newBriefingBtn" title="Novo briefing">
-                    <i data-lucide="file-plus-2"></i>
+                    <i data-lucide="clipboard-plus"></i>
                     <span class="tooltip">Novo briefing</span>
                 </button>
 
                 <button class="rail-btn" id="newClientBtn" title="Novo cliente">
-                    <i data-lucide="user-plus"></i>
+                    <i data-lucide="user-round-plus"></i>
                     <span class="tooltip">Novo cliente</span>
                 </button>
 
@@ -1056,6 +1146,11 @@ SIDEBAR — Application Shell
                             <i data-lucide="sun"></i>
                         </span>
                         <span class="tooltip">Alterar tema</span>
+                    </button>
+
+                    <button class="config-toggle" id="configToggle" title="Configurações do workspace">
+                        <i data-lucide="settings"></i>
+                        <span class="tooltip">Configurações</span>
                     </button>
 
                     <div class="rail-avatar" id="userAvatar" title="Conta">
@@ -1088,57 +1183,73 @@ SIDEBAR — Application Shell
                         </div>
                     </div>
 
+                    <!-- ============================================
+                         NAV — 3 abas ativas + 5 abas visíveis mas
+                         sem navegação (data-nav-locked="1").
+                         Ordem: Mesa → Fluxo · Briefings → Clientes.
+                         ============================================ -->
                     <nav class="sidebar-nav">
                         <div class="nav-group">
                             <div class="nav-label">Trabalho</div>
+
                             <a href="/mesa/" data-nav="mesa" id="navMesaLink" class="{% if active_nav == 'mesa' %}active{% endif %}">
-                                <i data-lucide="home"></i><span>Mesa</span>
+                                <i data-lucide="layout-dashboard"></i><span>Mesa</span>
+                            </a>
+                            <a href="/fluxo/" data-nav="briefings" class="{% if active_nav == 'briefings' %}active{% endif %}">
+                                <i data-lucide="workflow"></i><span>Fluxo · Briefings</span>
                             </a>
                             <a href="/clientes/" data-nav="clientes" class="{% if active_nav == 'clientes' %}active{% endif %}">
-                                <i data-lucide="users"></i><span>Clientes</span>
+                                <i data-lucide="users-round"></i><span>Clientes</span>
                             </a>
-                            <a href="/documents/" data-nav="documents" class="{% if active_nav == 'documents' %}active{% endif %}">
-                                <i data-lucide="files"></i><span>Arquivos</span>
-                            </a>
-                            <a href="/briefings/" data-nav="briefings" class="{% if active_nav == 'briefings' %}active{% endif %}">
-                                <i data-lucide="file-text"></i><span>Briefings</span>
-                            </a>
-                            <a href="/projetos/" data-nav="projetos" class="{% if active_nav == 'projetos' %}active{% endif %}">
+
+                            <!-- Visíveis, mas sem navegação -->
+                            <a href="#" data-nav="projetos" data-nav-locked="1" class="{% if active_nav == 'projetos' %}active{% endif %}">
                                 <i data-lucide="folder-kanban"></i><span>Projetos</span>
+                            </a>
+                            <a href="#" data-nav="documents" data-nav-locked="1" class="{% if active_nav == 'documents' %}active{% endif %}">
+                                <i data-lucide="folder-open"></i><span>Documentos</span>
                             </a>
                         </div>
 
                         <div class="nav-group">
                             <div class="nav-label">Escritório</div>
-                            <a href="/financeiro/" data-nav="financeiro" class="{% if active_nav == 'financeiro' %}active{% endif %}">
-                                <i data-lucide="wallet"></i><span>Financeiro</span>
+
+                            <a href="#" data-nav="financeiro" data-nav-locked="1" class="{% if active_nav == 'financeiro' %}active{% endif %}">
+                                <i data-lucide="piggy-bank"></i><span>Economia</span>
                             </a>
-                            <a href="/propostas/" data-nav="propostas" class="{% if active_nav == 'propostas' %}active{% endif %}">
-                                <i data-lucide="file-check-2"></i><span>Propostas</span>
+                            <a href="#" data-nav="propostas" data-nav-locked="1" class="{% if active_nav == 'propostas' %}active{% endif %}">
+                                <i data-lucide="file-signature"></i><span>Propostas</span>
                             </a>
-                            <a href="/referencias/" data-nav="referencias" class="{% if active_nav == 'referencias' %}active{% endif %}">
-                                <i data-lucide="image"></i><span>Referências</span>
+                            <a href="#" data-nav="referencias" data-nav-locked="1" class="{% if active_nav == 'referencias' %}active{% endif %}">
+                                <i data-lucide="images"></i><span>Referências</span>
                             </a>
                         </div>
                     </nav>
 
-                    <div class="sidebar-plan" id="sidebarPlan">
-                        <div class="plan-head">
-                            <div class="plan-icon">
-                                <i data-lucide="sparkles"></i>
+                    <!-- ============================================
+                         FOOTER: Plano (fixo na base)
+                         ============================================ -->
+                    <div class="sidebar-footer">
+
+                        <div class="sidebar-plan" id="sidebarPlan">
+                            <div class="plan-head">
+                                <div class="plan-icon">
+                                    <i data-lucide="sparkles"></i>
+                                </div>
+                                <div class="plan-meta">
+                                    <div class="plan-label">Plano</div>
+                                    <div class="plan-name" id="sidebarPlanName">—</div>
+                                </div>
+                                <div class="plan-chevron">
+                                    <i data-lucide="chevron-right"></i>
+                                </div>
                             </div>
-                            <div class="plan-meta">
-                                <div class="plan-label">Plano</div>
-                                <div class="plan-name" id="sidebarPlanName">—</div>
-                            </div>
-                            <div class="plan-chevron">
-                                <i data-lucide="chevron-right"></i>
+                            <div class="plan-row">
+                                <div class="plan-price" id="sidebarPlanPrice">—</div>
+                                <div class="plan-badge" id="sidebarPlanBadge">Ativo</div>
                             </div>
                         </div>
-                        <div class="plan-row">
-                            <div class="plan-price" id="sidebarPlanPrice">—</div>
-                            <div class="plan-badge" id="sidebarPlanBadge">Ativo</div>
-                        </div>
+
                     </div>
 
                 </div>
@@ -1225,9 +1336,8 @@ SIDEBAR — Application Shell
                 isOwner: false,
                 governanceKey: null,
                 currentPage: null,
-                cache: {
-                    clients: null,
-                },
+                workspacePublicIdFromUrl: null,
+                cache: { clients: null },
             };
 
             window.clivoCurrentUser = window.clivoCurrentUser || null;
@@ -1235,6 +1345,70 @@ SIDEBAR — Application Shell
 
             window.ClivoPages = window.ClivoPages || {};
 
+            (function readWorkspacePublicIdFromUrl() {
+                const appEl = document.getElementById('app');
+                const raw = appEl ? (appEl.dataset.workspacePublicId || '') : '';
+                window.Clivo.workspacePublicIdFromUrl = raw || null;
+            })();
+
+            // ============================================================
+            // ASSET LOADER
+            // ============================================================
+            const GLOBAL_CSS = [
+                '/static/css/mesa.css',
+                '/static/css/cliente.css',
+            ];
+            const GLOBAL_JS = [
+                '/static/js/mesa.js',
+                '/static/js/cliente.js',
+            ];
+
+            function isGlobalCss(href) {
+                if (!href) return false;
+                return GLOBAL_CSS.some(function(g) { return href.indexOf(g) !== -1; });
+            }
+            function isGlobalJs(src) {
+                if (!src) return false;
+                return GLOBAL_JS.some(function(g) { return src.indexOf(g) !== -1; });
+            }
+
+            const _injectedLinks = {};
+            function ensureStylesheetLoaded(href) {
+                if (!href || isGlobalCss(href) || _injectedLinks[href]) return;
+                const existing = document.querySelector('link[rel="stylesheet"][href="' + href + '"]');
+                if (existing) { _injectedLinks[href] = existing; return; }
+                const link = document.createElement('link');
+                link.rel = 'stylesheet';
+                link.href = href;
+                link.setAttribute('data-clivo-softnav', 'css');
+                document.head.appendChild(link);
+                _injectedLinks[href] = link;
+            }
+
+            const _loadedScripts = {};
+            function ensureScriptLoaded(src) {
+                if (!src || isGlobalJs(src)) return Promise.resolve();
+                if (_loadedScripts[src]) return _loadedScripts[src];
+                const existing = document.querySelector('script[src="' + src + '"]');
+                if (existing) { _loadedScripts[src] = Promise.resolve(); return _loadedScripts[src]; }
+                _loadedScripts[src] = new Promise(function(resolve, reject) {
+                    const s = document.createElement('script');
+                    s.src = src; s.async = false;
+                    s.setAttribute('data-clivo-softnav', 'js');
+                    s.onload = function() { resolve(); };
+                    s.onerror = function() {
+                        delete _loadedScripts[src];
+                        try { s.remove(); } catch (e) {}
+                        reject(new Error('Falha ao carregar ' + src));
+                    };
+                    document.body.appendChild(s);
+                });
+                return _loadedScripts[src];
+            }
+
+            // ============================================================
+            // HELPERS
+            // ============================================================
             window.clivoGetCookie = function(name) {
                 let cookieValue = null;
                 if (document.cookie && document.cookie !== '') {
@@ -1255,32 +1429,19 @@ SIDEBAR — Application Shell
                 type = type || 'info';
                 const container = document.getElementById('toastContainer');
                 if (!container) return;
-
                 while (container.firstChild) container.removeChild(container.firstChild);
-
                 const toast = document.createElement('div');
                 toast.className = 'toast toast-' + type;
-
-                const iconMap = {
-                    success: 'fa-check-circle',
-                    error: 'fa-exclamation-circle',
-                    info: 'fa-info-circle'
-                };
-
+                const iconMap = { success: 'fa-check-circle', error: 'fa-exclamation-circle', info: 'fa-info-circle' };
                 toast.innerHTML =
-                    '<span class="toast-icon"><i class="fas ' +
-                    (iconMap[type] || iconMap.info) +
-                    '"></i></span>' +
+                    '<span class="toast-icon"><i class="fas ' + (iconMap[type] || iconMap.info) + '"></i></span>' +
                     '<span class="toast-content">' + message + '</span>' +
                     '<button class="toast-close"><i class="fas fa-times"></i></button>';
-
                 container.appendChild(toast);
-
                 toast.querySelector('.toast-close').addEventListener('click', function() {
                     toast.classList.add('hiding');
                     setTimeout(function() { toast.remove(); }, 300);
                 });
-
                 clearTimeout(toastTimeout);
                 toastTimeout = setTimeout(function() {
                     toast.classList.add('hiding');
@@ -1290,33 +1451,23 @@ SIDEBAR — Application Shell
 
             window.clivoApi = async function(url, method, body) {
                 const isFormData = body instanceof FormData;
-
                 const options = {
                     method: method || 'GET',
                     credentials: 'include',
-                    headers: {
-                        'X-CSRFToken': window.clivoGetCookie('csrftoken')
-                    }
+                    headers: { 'X-CSRFToken': window.clivoGetCookie('csrftoken') }
                 };
-
-                if (!isFormData) {
-                    options.headers['Content-Type'] = 'application/json';
-                }
-
+                if (!isFormData) options.headers['Content-Type'] = 'application/json';
                 if (body !== undefined && body !== null) {
                     options.body = isFormData ? body : JSON.stringify(body);
                 }
-
                 const response = await fetch(url, options);
                 if (response.status === 204) return null;
-
                 let data = null;
                 try { data = await response.json(); } catch (e) {}
-
                 if (!response.ok) {
                     const msg = (data && (data.error || data.detail ||
-                        (data.non_field_errors && data.non_field_errors[0])))
-                        || 'Erro na requisição';
+                        (data.non_field_errors && data.non_field_errors[0]))) ||
+                        'Erro na requisição';
                     throw new Error(msg);
                 }
                 return data;
@@ -1328,6 +1479,9 @@ SIDEBAR — Application Shell
                 lucide.createIcons();
             };
 
+            // ============================================================
+            // THEME
+            // ============================================================
             let currentTheme = localStorage.getItem('clivo-theme') || 'light';
             document.documentElement.setAttribute('data-theme', currentTheme);
 
@@ -1347,10 +1501,12 @@ SIDEBAR — Application Shell
                 updateThemeIcon(currentTheme);
             };
 
+            // ============================================================
+            // LOGOUT
+            // ============================================================
             window.clivoLogout = async function() {
                 const btn = document.getElementById('logoutBtn');
                 const icon = document.getElementById('logoutIcon');
-
                 if (btn) btn.classList.add('is-loading');
                 if (icon) icon.classList.add('hidden');
                 if (btn) {
@@ -1359,17 +1515,13 @@ SIDEBAR — Application Shell
                     spinner.id = 'logoutSpinner';
                     btn.appendChild(spinner);
                 }
-
                 try {
                     const response = await fetch('/api/auth/logout/', {
                         method: 'POST',
                         credentials: 'include',
                         headers: { 'X-CSRFToken': window.clivoGetCookie('csrftoken') }
                     });
-                    if (response.ok) {
-                        window.location.href = '/login/';
-                        return;
-                    }
+                    if (response.ok) { window.location.href = '/login/'; return; }
                     window.clivoShowToast('Erro ao fazer logout', 'error');
                     restoreLogoutButton();
                 } catch (e) {
@@ -1387,6 +1539,9 @@ SIDEBAR — Application Shell
                 if (btn) btn.classList.remove('is-loading');
             }
 
+            // ============================================================
+            // NOVO CLIENTE
+            // ============================================================
             let gLastCreatedId = null;
 
             function gOpenNewClientModal() {
@@ -1417,14 +1572,11 @@ SIDEBAR — Application Shell
                     const name = document.getElementById('gNewName').value.trim();
                     const email = document.getElementById('gNewEmail').value.trim();
                     const phone = document.getElementById('gNewPhone').value.trim();
-
                     if (!name) { window.clivoShowToast('Informe o nome', 'error'); return; }
                     if (!email) { window.clivoShowToast('Informe o email', 'error'); return; }
-
                     submitBtn.disabled = true;
                     const original = submitBtn.innerHTML;
                     submitBtn.innerHTML = 'Criando…';
-
                     try {
                         const created = await window.clivoApi('/api/clients/', 'POST', {
                             name: name, email: email, phone: phone,
@@ -1436,9 +1588,7 @@ SIDEBAR — Application Shell
                         successEl.classList.remove('hidden');
                         window.clivoRefreshIcons();
                         window.clivoShowToast('Cliente criado e email enviado', 'success');
-
                         window.Clivo.cache.clients = null;
-
                         if (typeof window.clivoOnClientCreated === 'function') {
                             window.clivoOnClientCreated(created);
                         }
@@ -1487,7 +1637,6 @@ SIDEBAR — Application Shell
                 modal.querySelectorAll('[data-g-close="gNewClientModal"]').forEach(function(el) {
                     el.addEventListener('click', function() { modal.classList.remove('active'); });
                 });
-
                 modal.addEventListener('click', function(e) {
                     if (e.target === modal) modal.classList.remove('active');
                 });
@@ -1495,12 +1644,16 @@ SIDEBAR — Application Shell
 
             window.clivoOpenNewClientModal = gOpenNewClientModal;
 
+            // ============================================================
+            // RAIL
+            // ============================================================
             function bindRail() {
                 const themeBtn = document.getElementById('themeToggle');
                 const logoutBtn = document.getElementById('logoutBtn');
                 const notifBtn = document.getElementById('notificationsBtn');
                 const newBriefingBtn = document.getElementById('newBriefingBtn');
                 const newClientBtn = document.getElementById('newClientBtn');
+                const configBtn = document.getElementById('configToggle');
 
                 if (themeBtn) themeBtn.addEventListener('click', window.clivoToggleTheme);
                 if (logoutBtn) logoutBtn.addEventListener('click', function(e) {
@@ -1511,13 +1664,19 @@ SIDEBAR — Application Shell
                     window.clivoShowToast('Notificações em desenvolvimento', 'info');
                 });
                 if (newBriefingBtn) newBriefingBtn.addEventListener('click', function() {
-                    window.clivoShowToast('Briefings em desenvolvimento', 'info');
+                    softNavigate('/fluxo/');
                 });
                 if (newClientBtn) newClientBtn.addEventListener('click', function() {
                     gOpenNewClientModal();
                 });
+                if (configBtn) configBtn.addEventListener('click', function() {
+                    softNavigate('/configuracoes/');
+                });
             }
 
+            // ============================================================
+            // SOFT NAV
+            // ============================================================
             const navProgress = document.getElementById('softNavProgress');
             const pageCache = new Map();
             const CACHE_TTL_MS = 60000;
@@ -1534,17 +1693,7 @@ SIDEBAR — Application Shell
                         found = a;
                     } else if (a.dataset.nav === 'clientes' && path.indexOf('/clientes') === 0) {
                         found = a;
-                    } else if (a.dataset.nav === 'documents' && path.indexOf('/documents') === 0) {
-                        found = a;
-                    } else if (a.dataset.nav === 'briefings' && path.indexOf('/briefings') === 0) {
-                        found = a;
-                    } else if (a.dataset.nav === 'projetos' && path.indexOf('/projetos') === 0) {
-                        found = a;
-                    } else if (a.dataset.nav === 'financeiro' && path.indexOf('/financeiro') === 0) {
-                        found = a;
-                    } else if (a.dataset.nav === 'propostas' && path.indexOf('/propostas') === 0) {
-                        found = a;
-                    } else if (a.dataset.nav === 'referencias' && path.indexOf('/referencias') === 0) {
+                    } else if (a.dataset.nav === 'briefings' && path.indexOf('/fluxo') === 0) {
                         found = a;
                     }
                 });
@@ -1557,43 +1706,52 @@ SIDEBAR — Application Shell
                 });
                 const link = findLinkByPath(path);
                 if (link) link.classList.add('active');
+                const cfgBtn = document.getElementById('configToggle');
+                if (cfgBtn) {
+                    if (path.indexOf('/configuracoes') === 0) cfgBtn.classList.add('is-active');
+                    else cfgBtn.classList.remove('is-active');
+                }
             }
 
             function extractMain(html) {
                 const tpl = document.createElement('template');
                 tpl.innerHTML = html;
-
                 const mainEl = tpl.content.querySelector('main#mainContent');
                 const titleEl = tpl.content.querySelector('title');
-
+                const links = [];
+                tpl.content.querySelectorAll('link[rel="stylesheet"]').forEach(function(link) {
+                    const href = link.getAttribute('href');
+                    if (href && !isGlobalCss(href)) links.push(href);
+                });
+                const scripts = [];
+                tpl.content.querySelectorAll('script[src]').forEach(function(script) {
+                    const src = script.getAttribute('src');
+                    if (src && !isGlobalJs(src)) scripts.push(src);
+                });
                 if (!mainEl) {
                     return {
                         mainHTML: '',
                         mainPage: '',
                         title: titleEl ? titleEl.textContent : document.title,
-                        timestamp: Date.now(),
+                        links: links, scripts: scripts, timestamp: Date.now(),
                     };
                 }
-
                 return {
                     mainHTML: mainEl.innerHTML,
                     mainPage: mainEl.dataset.page || '',
                     title: titleEl ? titleEl.textContent : document.title,
-                    timestamp: Date.now(),
+                    links: links, scripts: scripts, timestamp: Date.now(),
                 };
             }
 
             async function getPage(href) {
                 const cached = pageCache.get(href);
-                if (cached && (Date.now() - cached.timestamp) < CACHE_TTL_MS) {
-                    return cached;
-                }
+                if (cached && (Date.now() - cached.timestamp) < CACHE_TTL_MS) return cached;
                 const resp = await fetch(href, {
                     credentials: 'include',
                     headers: { 'X-Requested-With': 'soft-nav' }
                 });
                 if (!resp.ok) throw new Error('HTTP ' + resp.status);
-
                 const finalUrl = resp.url || href;
                 const html = await resp.text();
                 const parsed = extractMain(html);
@@ -1624,51 +1782,47 @@ SIDEBAR — Application Shell
             async function softNavigate(href, opts) {
                 opts = opts || {};
                 if (isNavigating) return;
-
                 isNavigating = true;
                 if (navProgress) navProgress.classList.add('active');
-
                 try {
                     const page = await getPage(href);
                     const curMain = document.getElementById('mainContent');
-
                     if (!curMain || !page.mainHTML) {
                         window.location.href = href;
                         return;
                     }
-
                     const oldPage = window.Clivo.currentPage;
                     const newPage = page.mainPage || null;
-
                     if (oldPage && window.ClivoPages[oldPage] &&
                         typeof window.ClivoPages[oldPage].unmount === 'function') {
                         try { window.ClivoPages[oldPage].unmount(); }
                         catch (e) { console.error('unmount ' + oldPage + ' falhou:', e); }
                     }
-
+                    (page.links || []).forEach(ensureStylesheetLoaded);
+                    let assetsReady = Promise.resolve();
+                    (page.scripts || []).forEach(function(src) {
+                        assetsReady = assetsReady.then(function() {
+                            return ensureScriptLoaded(src);
+                        });
+                    });
+                    await assetsReady;
                     curMain.innerHTML = page.mainHTML;
                     curMain.dataset.page = newPage || '';
                     window.Clivo.currentPage = newPage;
-
                     if (page.title) document.title = page.title;
-
                     setActiveNav(page.finalUrl || href);
-
                     if (!opts.replace) {
                         const displayUrl = page.finalUrl || href;
                         history.pushState({ soft: true, path: displayUrl }, '', displayUrl);
                     }
-
                     if (newPage && window.ClivoPages[newPage] &&
                         typeof window.ClivoPages[newPage].mount === 'function') {
                         try { window.ClivoPages[newPage].mount(); }
                         catch (e) { console.error('mount ' + newPage + ' falhou:', e); }
                     }
-
                     if (typeof opts.afterMount === 'function') {
                         try { opts.afterMount(); } catch (e) { console.error(e); }
                     }
-
                     requestAnimationFrame(function() {
                         requestAnimationFrame(function() {
                             window.clivoRefreshIcons();
@@ -1678,11 +1832,7 @@ SIDEBAR — Application Shell
                             });
                         });
                     });
-
-                    requestAnimationFrame(function() {
-                        window.scrollTo(0, 0);
-                    });
-
+                    requestAnimationFrame(function() { window.scrollTo(0, 0); });
                 } catch (e) {
                     console.error('soft navigation falhou:', e);
                     window.location.href = href;
@@ -1694,26 +1844,33 @@ SIDEBAR — Application Shell
 
             window.clivoSoftNavigate = softNavigate;
 
+            // ============================================================
+            // NAV — bindSidebarNav
+            // Abas com data-nav-locked="1" não navegam.
+            // Só mostram um toast e previnem o clique.
+            // ============================================================
             function bindSidebarNav() {
                 document.querySelectorAll('.sidebar-nav a').forEach(function(link) {
                     const href = link.getAttribute('href');
+                    const isLocked = link.dataset.navLocked === '1';
 
-                    if (href && href !== '#') {
+                    if (!isLocked && href && href !== '#') {
                         link.addEventListener('mouseenter', function() {
                             preloadPage(href);
                         });
                     }
 
                     link.addEventListener('click', function(e) {
+                        if (isLocked) {
+                            e.preventDefault();
+                            window.clivoShowToast('Esta área está em desenvolvimento.', 'info');
+                            return;
+                        }
+
                         const currentHref = link.getAttribute('href');
 
                         if (!currentHref || currentHref === '#') {
                             e.preventDefault();
-                            document.querySelectorAll('.sidebar-nav a').forEach(function(l) {
-                                l.classList.remove('active');
-                            });
-                            link.classList.add('active');
-                            window.clivoShowToast('Em desenvolvimento', 'info');
                             return;
                         }
 
@@ -1733,6 +1890,9 @@ SIDEBAR — Application Shell
                 softNavigate(window.location.pathname, { replace: true });
             });
 
+            // ============================================================
+            // WORKSPACE SWITCH
+            // ============================================================
             const wsSwitch = document.getElementById('workspaceSwitch');
             const wsDropdown = document.getElementById('wsDropdown');
             const wsDropdownItems = document.getElementById('wsDropdownItems');
@@ -1753,10 +1913,8 @@ SIDEBAR — Application Shell
                 const willOpen = (typeof force === 'boolean')
                     ? force
                     : !wsDropdown.classList.contains('open');
-
                 wsDropdown.classList.toggle('open', willOpen);
                 wsSwitch.classList.toggle('open', willOpen);
-
                 if (willOpen) loadWorkspaceSwitcher();
             }
 
@@ -1767,19 +1925,18 @@ SIDEBAR — Application Shell
                     renderWsDropdownItems(list || []);
                 } catch (e) {
                     wsDropdownItems.innerHTML =
-                        '<div style="padding:8px 10px; font-size:12px; color:var(--text-tertiary);">'
-                        + 'Erro ao carregar workspaces</div>';
+                        '<div style="padding:8px 10px; font-size:12px; color:var(--text-tertiary);">' +
+                        'Erro ao carregar workspaces</div>';
                 }
             }
 
             function renderWsDropdownItems(list) {
                 if (!list.length) {
                     wsDropdownItems.innerHTML =
-                        '<div style="padding:8px 10px; font-size:12px; color:var(--text-tertiary);">'
-                        + 'Nenhum workspace</div>';
+                        '<div style="padding:8px 10px; font-size:12px; color:var(--text-tertiary);">' +
+                        'Nenhum workspace</div>';
                     return;
                 }
-
                 let html = '';
                 list.forEach(function(ws) {
                     const initial = (ws.name || 'W').charAt(0).toUpperCase();
@@ -1792,14 +1949,11 @@ SIDEBAR — Application Shell
                                 '<div class="ws-item-name">' + escapeHtml(ws.name) + '</div>' +
                                 '<div class="ws-item-role">' + escapeHtml(role) + '</div>' +
                             '</div>' +
-                            (ws.is_current
-                                ? '<i data-lucide="check" class="ws-item-check"></i>'
-                                : '') +
+                            (ws.is_current ? '<i data-lucide="check" class="ws-item-check"></i>' : '') +
                         '</div>';
                 });
                 wsDropdownItems.innerHTML = html;
                 window.clivoRefreshIcons();
-
                 wsDropdownItems.querySelectorAll('.ws-item').forEach(function(el) {
                     el.addEventListener('click', function() {
                         const publicId = this.dataset.wsPublicId;
@@ -1807,10 +1961,7 @@ SIDEBAR — Application Shell
                             toggleWsDropdown(false);
                             return;
                         }
-                        if (!publicId) {
-                            window.location.href = '/workspaces/entrar/';
-                            return;
-                        }
+                        if (!publicId) { window.location.href = '/workspaces/entrar/'; return; }
                         window.location.href = '/mesa/' + publicId + '/';
                     });
                 });
@@ -1823,7 +1974,6 @@ SIDEBAR — Application Shell
                         toggleWsDropdown();
                     });
                 }
-
                 if (wsCreateBtn) {
                     wsCreateBtn.addEventListener('click', function(e) {
                         e.stopPropagation();
@@ -1831,7 +1981,6 @@ SIDEBAR — Application Shell
                         window.location.href = '/workspaces/novo/';
                     });
                 }
-
                 document.addEventListener('click', function(e) {
                     if (!wsDropdown || !wsDropdown.classList.contains('open')) return;
                     if (wsDropdown.contains(e.target) || (wsSwitch && wsSwitch.contains(e.target))) return;
@@ -1839,60 +1988,66 @@ SIDEBAR — Application Shell
                 });
             }
 
+            // ============================================================
+            // PLANO
+            // ============================================================
             function renderSidebarPlan(workspace) {
                 const card = document.getElementById('sidebarPlan');
                 const nameEl = document.getElementById('sidebarPlanName');
                 const priceEl = document.getElementById('sidebarPlanPrice');
                 const badgeEl = document.getElementById('sidebarPlanBadge');
-
                 if (!card) return;
-
                 const plan = workspace && workspace.plan;
-
                 card.hidden = false;
-
                 if (!plan) {
-                    if (nameEl) nameEl.textContent = 'Sem plano';
-                    if (priceEl) priceEl.textContent = '—';
-                    if (badgeEl) {
-                        badgeEl.classList.add('inactive');
-                        badgeEl.textContent = 'Inativo';
-                    }
+                    if (nameEl) nameEl.textContent = 'Essencial';
+                    if (priceEl) priceEl.textContent = 'BRL 89.90 /mês';
+                    if (badgeEl) { badgeEl.classList.remove('inactive'); badgeEl.textContent = 'Ativo'; }
                     return;
                 }
-
-                if (nameEl) nameEl.textContent = plan.name || '—';
-
+                if (nameEl) nameEl.textContent = plan.name || 'Essencial';
                 if (priceEl) {
                     if (plan.price) {
-                        const cur = plan.currency || '';
+                        const cur = plan.currency || 'BRL';
                         const periodLabel = (
                             plan.billing_period === 'monthly' ? 'mês' :
                             plan.billing_period === 'yearly' ? 'ano' :
                             plan.billing_period === 'lifetime' ? 'vitalício' :
-                            plan.billing_period || ''
+                            plan.billing_period || 'mês'
                         );
-                        const period = periodLabel ? ('/' + periodLabel) : '';
-                        priceEl.textContent = cur + ' ' + plan.price + ' ' + period;
+                        priceEl.textContent = cur + ' ' + plan.price + ' /' + periodLabel;
                     } else {
-                        priceEl.textContent = 'Gratuito';
+                        priceEl.textContent = 'BRL 89.90 /mês';
                     }
                 }
-
-                if (badgeEl) {
-                    badgeEl.classList.remove('inactive');
-                    badgeEl.textContent = 'Ativo';
-                }
+                if (badgeEl) { badgeEl.classList.remove('inactive'); badgeEl.textContent = 'Ativo'; }
             }
 
             function rewriteMesaLink(workspace) {
                 if (!workspace || !workspace.public_id) return;
                 const link = document.getElementById('navMesaLink');
-                if (link) {
-                    link.setAttribute('href', '/mesa/' + workspace.public_id + '/');
+                if (link) link.setAttribute('href', '/mesa/' + workspace.public_id + '/');
+            }
+
+            // ============================================================
+            // CAPABILITIES
+            // ============================================================
+            async function loadCapabilities() {
+                try {
+                    const data = await window.clivoApi('/api/workspaces/my-capabilities/');
+                    if (data) {
+                        window.Clivo.capabilities = data.capabilities || [];
+                        window.Clivo.isOwner = !!data.is_owner;
+                        window.Clivo.governanceKey = data.governance_key || null;
+                    }
+                } catch (e) {
+                    window.Clivo.capabilities = [];
                 }
             }
 
+            // ============================================================
+            // USER + WORKSPACE
+            // ============================================================
             async function loadUserAndWorkspace() {
                 try {
                     const userResp = await fetch('/api/users/me/', {
@@ -1904,14 +2059,11 @@ SIDEBAR — Application Shell
                         const user = await userResp.json();
                         window.Clivo.user = user;
                         window.clivoCurrentUser = user;
-
                         const fullName = user.full_name || user.email || 'Usuário';
                         const initial = fullName.charAt(0).toUpperCase();
                         const avatarUrl = user.avatar_url || user.avatar || null;
-
                         const img = document.getElementById('userAvatarImg');
                         const fallback = document.getElementById('userAvatarFallback');
-
                         if (avatarUrl && img && fallback) {
                             img.onerror = function() {
                                 img.onerror = null;
@@ -1937,27 +2089,22 @@ SIDEBAR — Application Shell
                         credentials: 'include',
                         headers: { 'X-CSRFToken': window.clivoGetCookie('csrftoken') }
                     });
-
                     if (wsResp.ok) {
                         const ws = await wsResp.json();
                         window.Clivo.workspace = ws;
                         window.clivoCurrentWorkspace = ws;
-
+                        const publicIdFromUrl = window.Clivo.workspacePublicIdFromUrl;
+                        if (publicIdFromUrl) ws.public_id = publicIdFromUrl;
                         const wsName = document.getElementById('wsName');
                         const wsAvatarText = document.getElementById('wsAvatarText');
                         const wsAvatarImg = document.getElementById('wsAvatarImg');
-
                         if (wsName) wsName.textContent = ws.name || 'Workspace';
-                        if (wsAvatarText) {
-                            wsAvatarText.textContent = (ws.name || 'W').charAt(0).toUpperCase();
-                        }
-
+                        if (wsAvatarText) wsAvatarText.textContent = (ws.name || 'W').charAt(0).toUpperCase();
                         if (ws.avatar_url && wsAvatarImg && wsAvatarText) {
                             wsAvatarImg.src = ws.avatar_url;
                             wsAvatarImg.style.display = 'block';
                             wsAvatarText.style.display = 'none';
                         }
-
                         renderSidebarPlan(ws);
                         rewriteMesaLink(ws);
                     } else if (wsResp.status === 404) {
@@ -1969,53 +2116,44 @@ SIDEBAR — Application Shell
                 }
             }
 
+            // ============================================================
+            // BOOT
+            // ============================================================
             async function shellBoot() {
                 const loadingState = document.getElementById('loadingState');
                 const appContent = document.getElementById('appContent');
-
                 try {
                     const sessionResp = await fetch('/api/auth/session/', {
                         method: 'GET',
                         credentials: 'include'
                     });
-                    if (!sessionResp.ok) {
-                        window.location.href = '/login/';
-                        return;
-                    }
-
+                    if (!sessionResp.ok) { window.location.href = '/login/'; return; }
                     if (loadingState) loadingState.classList.add('hidden');
                     if (appContent) appContent.classList.remove('hidden');
-
                     window.clivoRefreshIcons();
-
                     await loadUserAndWorkspace();
-
+                    await loadCapabilities();
                     setActiveNav(window.location.pathname);
-
                     const curMain = document.getElementById('mainContent');
                     const initialPage = curMain && curMain.dataset.page;
                     window.Clivo.currentPage = initialPage || null;
-
                     if (initialPage && window.ClivoPages[initialPage] &&
                         typeof window.ClivoPages[initialPage].mount === 'function') {
                         try { window.ClivoPages[initialPage].mount(); }
                         catch (e) { console.error('mount inicial falhou:', e); }
                     }
+                    requestAnimationFrame(function() { window.clivoRefreshIcons(); });
 
-                    requestAnimationFrame(function() {
-                        window.clivoRefreshIcons();
-                    });
-
+                    // Preload apenas das 3 abas ativas
                     setTimeout(function() {
                         preloadPage('/clientes/');
-                        preloadPage('/documents/');
+                        preloadPage('/fluxo/');
                         if (window.Clivo.workspace && window.Clivo.workspace.public_id) {
                             preloadPage('/mesa/' + window.Clivo.workspace.public_id + '/');
                         } else {
                             preloadPage('/mesa/');
                         }
                     }, 800);
-
                 } catch (e) {
                     console.error('Erro na inicialização:', e);
                     if (loadingState) {
@@ -2038,7 +2176,6 @@ SIDEBAR — Application Shell
                 gSetupNewClientModal();
                 shellBoot();
             });
-
         })();
     </script>
 
