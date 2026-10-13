@@ -167,15 +167,21 @@ PINTEREST_CLIENT_ID = os.getenv("PINTEREST_CLIENT_ID", "")
 PINTEREST_CLIENT_SECRET = os.getenv("PINTEREST_CLIENT_SECRET", "")
 
 SOCIALACCOUNT_PROVIDERS = {
+    # ─────────────────────────────────────────────────────────────────
+    # GOOGLE
+    #
+    # IMPORTANTE: NÃO definimos `APP` aqui.
+    #
+    # As credenciais do Google vêm EXCLUSIVAMENTE do `SocialApp` no
+    # banco de dados (configurado via Django Admin em
+    # /admin/socialaccount/socialapp/).
+    #
+    # Motivo: o AllAuth não permite configurar o mesmo provider em
+    # dois lugares ao mesmo tempo (`settings.py` + `SocialApp`).
+    # Isso causa `MultipleObjectsReturned` ou `state mismatch` no
+    # callback, resultando em 401.
+    # ─────────────────────────────────────────────────────────────────
     'google': {
-        'APP': {
-            'client_id': GOOGLE_CLIENT_ID,
-            'secret': GOOGLE_CLIENT_SECRET,
-            'key': ''
-        },
-        # Apenas escopos básicos de identidade (openid/email/profile).
-        # Estes NÃO exigem verificação do Google — qualquer pessoa
-        # consegue fazer login sem ver a tela de "app não verificado".
         'SCOPE': [
             'profile',
             'email',
