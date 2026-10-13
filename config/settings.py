@@ -49,14 +49,6 @@ def is_production():
 def _is_running_tests():
     """
     Detecta se o Django está sendo executado em modo de teste.
-
-    Cobre três casos:
-        - `python manage.py test ...`  → 'test' em sys.argv
-        - `pytest ...`                  → 'pytest' em sys.argv[:2]
-        - `python -m pytest ...`        → 'pytest' em sys.modules
-
-    Usado para forçar SQLite em memória durante testes, evitando que
-    o Django tente criar um banco de teste no Neon (`test_neondb`).
     """
     if 'test' in sys.argv:
         return True
@@ -368,12 +360,6 @@ MEDIA_ROOT = BASE_DIR / 'media'
 #   1. Backblaze B2  (ativo — usa credenciais B2_*)
 #   2. Cloudflare R2 (reservado — usa credenciais CLOUDFLARE_R2_*)
 #   3. Local         (fallback de desenvolvimento)
-#
-# A prioridade é decidida pela presença das variáveis de ambiente.
-# B2 vence se estiver configurado. Se não, R2. Se nenhum, local.
-#
-# Para trocar de volta para R2, basta remover as variáveis B2_* do .env.
-# Para desativar os dois, remover todas.
 
 # --- Backblaze B2 ---
 B2_KEY_ID = os.getenv('B2_KEY_ID', '')
@@ -645,6 +631,16 @@ LOGGING = {
             'level': 'DEBUG',
             'propagate': False,
         },
+        'allauth.socialaccount.providers.oauth2': {
+            'handlers': ['console', 'file'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'allauth.socialaccount.providers.google': {
+            'handlers': ['console', 'file'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
         'socialaccount': {
             'handlers': ['console', 'file'],
             'level': 'DEBUG',
@@ -817,6 +813,10 @@ if is_production():
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
     SECURE_SSL_REDIRECT = True
+    # ── Corrige detecção de HTTPS atrás do proxy do Render ────────
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    USE_X_FORWARDED_HOST = True
+    # ─────────────────────────────────────────────────────────────
     print("🔒 Configurações de produção aplicadas")
 
 
