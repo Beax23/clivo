@@ -184,17 +184,12 @@ SOCIALACCOUNT_PROVIDERS = {
         # Apenas escopos básicos de identidade (openid/email/profile).
         # Estes NÃO exigem verificação do Google — qualquer pessoa
         # consegue fazer login sem ver a tela de "app não verificado".
-        #
-        # Se um dia for necessário ler o Google Drive, adicione o escopo
-        # 'https://www.googleapis.com/auth/drive.readonly' aqui — mas
-        # saiba que isso dispara a verificação obrigatória (CASA) do Google.
         'SCOPE': [
             'profile',
             'email',
         ],
         'AUTH_PARAMS': {
             'access_type': 'offline',
-            'prompt': 'consent',
         },
         'OAUTH_PKCE_ENABLED': True,
         'VERIFIED_EMAIL': True,
@@ -644,16 +639,23 @@ LOGGING = {
             'level': 'INFO',
             'propagate': False,
         },
+        # ── DEBUG para diagnosticar login Google ────────────────────
         'allauth': {
             'handlers': ['console', 'file'],
-            'level': 'INFO',
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'socialaccount': {
+            'handlers': ['console', 'file'],
+            'level': 'DEBUG',
             'propagate': False,
         },
         'accounts': {
             'handlers': ['console', 'file'],
-            'level': 'DEBUG' if DEBUG else 'INFO',
+            'level': 'DEBUG',
             'propagate': False,
         },
+        # ────────────────────────────────────────────────────────────
         'console': {
             'handlers': ['console', 'file'],
             'level': 'DEBUG' if DEBUG else 'INFO',

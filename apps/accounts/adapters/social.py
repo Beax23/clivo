@@ -57,10 +57,12 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
             2. Existe User com este email            → connect + sync
             3. Não existe User                       → deixa o allauth criar
         """
+        provider = sociallogin.account.provider
+        uid = sociallogin.account.uid
+
         logger.debug(
             "pre_social_login | provider=%s uid=%s",
-            sociallogin.account.provider,
-            sociallogin.account.uid,
+            provider, uid,
         )
 
         email = sociallogin.account.extra_data.get('email')
@@ -76,13 +78,13 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
         # CASO 1: Já existe SocialAccount com este uid
         # ---------------------------------------------------------------
         existing_social = SocialAccount.objects.filter(
-            provider=sociallogin.account.provider,
-            uid=sociallogin.account.uid,
-        ).first()
+            provider=provider,
+            uid=uid,
+        ).select_related('user').first()
 
         if existing_social:
             logger.debug(
-                "SocialAccount já existe para %s (user=%s)",
+                "SocialAccount já existe para %s (user=%s) — reutilizando",
                 email,
                 existing_social.user.email,
             )
@@ -114,22 +116,35 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
                 raise ValidationError('Email não verificado pelo Google')
 
             # Se este User já tem OUTRO SocialAccount do mesmo provider,
-            # não emparelha — evita que duas contas Google diferentes
-            # disputem o mesmo User.
+            # precisamos distinguir:
+            #   - mesmo uid → é a MESMA conta Google, permitir login
+            #   - uid diferente → é OUTRA conta Google, recusar
             other_social = SocialAccount.objects.filter(
                 user=user,
-                provider=sociallogin.account.provider,
+                provider=provider,
             ).first()
 
             if other_social:
+                if str(other_social.uid) == str(uid):
+                    # Mesma conta Google — permite login normalmente
+                    logger.debug(
+                        "User %s já tem SocialAccount com o MESMO uid %s — ok",
+                        email, uid,
+                    )
+                    self._sync_profile_from_google(
+                        user, sociallogin.account.extra_data,
+                    )
+                    self._mark_email_verified(user, email)
+                    return
+
                 logger.warning(
                     "User %s já tem SocialAccount do provider %s "
-                    "(uid=%s) — emparelhamento recusado",
-                    email,
-                    sociallogin.account.provider,
-                    other_social.uid,
+                    "(uid=%s) — tentativa com uid diferente (%s) recusada",
+                    email, provider, other_social.uid, uid,
                 )
-                raise ValidationError('Conta Google já vinculada a este usuário')
+                raise ValidationError(
+                    'Este usuário já tem uma conta Google diferente vinculada.'
+                )
 
             with transaction.atomic():
                 # Cria o SocialAccount e vincula ao User existente
@@ -139,8 +154,7 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
 
             logger.info(
                 "Emparelhamento Google → User existente: %s (id=%s)",
-                user.email,
-                user.id,
+                user.email, user.id,
             )
             return
 
@@ -217,46 +231,50 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
 
         O Google já confirmou que o usuário controla este email, então
         não faz sentido pedir confirmação por link depois.
-
-        Se o EmailAddress não existir (fluxo antigo sem allauth.account),
-        apenas ignora silenciosamente.
         """
         if not user or not email:
             return
         try:
             from allauth.account.models import EmailAddress
         except ImportError:
-            # allauth.account não instalado — nada a fazer
             return
 
         try:
-            ea, created = EmailAddress.objects.get_or_create(
+            # Procura por user+email case-insensitive
+            ea = EmailAddress.objects.filter(
                 user=user,
                 email__iexact=email,
-                defaults={
-                    'email': email,
-                    'verified': True,
-                    'primary': True,
-                },
-            )
-            update_fields = []
-            if not ea.verified:
-                ea.verified = True
-                update_fields.append('verified')
-            if not ea.primary:
-                ea.primary = True
-                update_fields.append('primary')
-            if update_fields:
-                ea.save(update_fields=update_fields)
-                logger.debug(
-                    "EmailAddress marcado como verificado: %s (user=%s)",
-                    email,
-                    user.email,
+            ).first()
+
+            if ea is None:
+                # Cria o EmailAddress
+                ea = EmailAddress.objects.create(
+                    user=user,
+                    email=email,
+                    verified=True,
+                    primary=True,
                 )
+                logger.debug(
+                    "EmailAddress criado como verificado: %s (user=%s)",
+                    email, user.email,
+                )
+            else:
+                update_fields = []
+                if not ea.verified:
+                    ea.verified = True
+                    update_fields.append('verified')
+                if not ea.primary:
+                    ea.primary = True
+                    update_fields.append('primary')
+                if update_fields:
+                    ea.save(update_fields=update_fields)
+                    logger.debug(
+                        "EmailAddress marcado como verificado: %s (user=%s)",
+                        email, user.email,
+                    )
         except Exception as exc:
             # Nunca deixa isso quebrar o login
             logger.warning(
                 "Falha ao marcar EmailAddress como verificado para %s: %s",
-                email,
-                exc,
+                email, exc,
             )
