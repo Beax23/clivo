@@ -18,10 +18,8 @@ Endpoints:
 """
 
 import logging
-from datetime import timedelta
 
 from django.conf import settings
-from django.utils import timezone
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -36,10 +34,6 @@ from apps.clients.api.serializers.portal_serializers import (
 )
 from apps.clients.services import PortalService
 from apps.clients.models import Client, ClientPortalSession
-from apps.clients.exceptions import (
-    PortalSessionError,
-    PortalSessionExpiredError,
-)
 
 logger = logging.getLogger('clients')
 
@@ -111,16 +105,41 @@ class ClientPortalLoginView(APIView):
             'context': client.context or {},
         })
 
-        secure = not settings.DEBUG
+        # ─────────────────────────────────────────────────────────
+        # Cookie de sessão do Portal.
+        #
+        # IMPORTANTE: `secure` deve refletir a conexão REAL da
+        # requisição, não uma flag de ambiente. Isso evita o cookie
+        # ser silenciosamente descartado pelo browser quando estamos
+        # em HTTP (dev) mesmo com DEBUG=False (ex: rodando local
+        # dentro de um container ou em Render staging).
+        #
+        # `request.is_secure()` retorna True automaticamente quando
+        # SECURE_PROXY_SSL_HEADER está configurado e o proxy envia
+        # X-Forwarded-Proto: https.
+        # ─────────────────────────────────────────────────────────
+        secure_cookie = request.is_secure()
+
         response.set_cookie(
             key=PORTAL_COOKIE_NAME,
             value=raw_token,
             max_age=PORTAL_SESSION_TTL_HOURS * 60 * 60,
             httponly=True,
-            secure=secure,
+            secure=secure_cookie,
             samesite='Lax',
             path='/',
         )
+
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                "Portal login OK — client=%s, cookie secure=%s, "
+                "is_secure=%s, scheme=%s",
+                client.id,
+                secure_cookie,
+                request.is_secure(),
+                request.scheme,
+            )
+
         return response
 
 

@@ -1,5 +1,9 @@
 """
 Testes do histórico estrutural (BriefingTemplateEvent).
+
+NOTA: os testes de `set_active` foram removidos porque o conceito
+de `is_active` foi extinto — o estado do template agora é único e
+vive em `status` (draft / published / archived).
 """
 
 import pytest
@@ -66,14 +70,7 @@ class TestTemplateEvents:
             template=draft_template, kind='question_deleted',
         ).count() == 1
 
-    def test_publish_emits_event(self, user_owner):
-        # Reaproveita o published_template — mas o publish já foi feito
-        # na fixture. Aqui criamos um novo.
-        pass  # ver test_publish_emits_event_below
-
-    def test_publish_emits_event_below(
-        self, draft_template, user_owner,
-    ):
+    def test_publish_emits_event(self, draft_template, user_owner):
         BriefingTemplateService.add_section(
             template=draft_template, title='S', actor=user_owner,
         )
@@ -82,23 +79,4 @@ class TestTemplateEvents:
         )
         assert BriefingTemplateEvent.objects.filter(
             template=draft_template, kind='template_published',
-        ).count() == 1
-
-    def test_set_active_emits_event(
-        self, published_template, user_owner,
-    ):
-        BriefingTemplateService.set_active(
-            template=published_template, is_active=False,
-            actor=user_owner,
-        )
-        assert BriefingTemplateEvent.objects.filter(
-            template=published_template, kind='template_deactivated',
-        ).count() == 1
-
-        BriefingTemplateService.set_active(
-            template=published_template, is_active=True,
-            actor=user_owner,
-        )
-        assert BriefingTemplateEvent.objects.filter(
-            template=published_template, kind='template_activated',
         ).count() == 1

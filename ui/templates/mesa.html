@@ -5,38 +5,282 @@
 {% block page_name %}mesa{% endblock %}
 
 {% block page_css %}
-<link rel="stylesheet" href="{% static 'css/mesa.css' %}">
+<link rel="stylesheet" href="{% static 'css/mesa.css' %}?v=25">
 {% endblock %}
 
 {% block content %}
-<div class="rf-page" id="msPage">
-    <div class="rf-body">
+<div class="rf-page" id="msPage"
+     data-workspace-public-id="{{ workspace_public_id|default:'' }}"
+     data-user-full-name="{{ request.user.full_name|default:'' }}"
+     data-user-first-name="{{ request.user.first_name|default:'' }}"
+     data-user-email="{{ request.user.email|default:'' }}">
 
-        <section class="rf-main" id="msMain">
+    <div hidden>{% csrf_token %}</div>
 
-            <header class="rf-header">
-                <div class="rf-header-left">
-                    <div class="rf-header-title-row">
-                        <h1>Mesa</h1>
-                        <span class="rf-header-dot" aria-hidden="true">·</span>
-                        <p class="rf-header-sub">O que precisa de mim agora?</p>
+    <!-- HEADER -->
+    <header class="fx-header" id="msTopbar">
+        <div class="fx-header-left">
+            <div class="fx-header-title-row">
+                <h1 class="fx-greeting">
+                    <span id="msGreeting">Bom dia</span>, <span id="msUserName">{{ request.user.first_name|default:"—" }}</span>
+                </h1>
+                <i id="msGreetingIcon" data-lucide="sun" class="fx-greeting-icon"></i>
+            </div>
+        </div>
+    </header>
+
+    <div class="cl-body" id="msBody">
+
+        <!-- COLUNA 1: KPIs + LISTA -->
+        <aside class="cl-col cl-col--list" id="msBriefings">
+
+            <section class="ms-kpis" id="msKpis" aria-label="Indicadores">
+                <button type="button" class="ms-kpi" data-kpi="done">
+                    <span class="ms-kpi-value" id="msKpiDone">0</span>
+                    <span class="ms-kpi-label">Concluídos</span>
+                </button>
+                <button type="button" class="ms-kpi" data-kpi="open">
+                    <span class="ms-kpi-value" id="msKpiOpen">0</span>
+                    <span class="ms-kpi-label">Andamento</span>
+                </button>
+                <button type="button" class="ms-kpi" data-kpi="doubts">
+                    <span class="ms-kpi-value" id="msKpiDoubts">0</span>
+                    <span class="ms-kpi-label">Dúvidas</span>
+                </button>
+                <button type="button" class="ms-kpi" data-kpi="attention">
+                    <span class="ms-kpi-value" id="msKpiAttention">0</span>
+                    <span class="ms-kpi-label">Atenção</span>
+                </button>
+            </section>
+
+            <header class="cl-col-head">
+                <div class="cl-col-head-row">
+                    <h2 class="cl-col-title">Briefings</h2>
+                </div>
+                <div class="cl-toolbar">
+                    <div class="cl-search">
+                        <i data-lucide="search" class="cl-search-icon"></i>
+                        <input type="search" id="msBriefingsSearch" placeholder="Buscar briefings…" autocomplete="off">
                     </div>
                 </div>
             </header>
 
-            <div class="rf-scroll" id="msScroll">
-                <div class="rf-list-empty">
-                    <i data-lucide="layout-list"></i>
-                    <p>Em breve.</p>
-                </div>
+            <div class="cl-col-scroll">
+                <ul class="cl-list ms-brief-list" id="msBriefingsList">
+                    <li class="cl-empty">Carregando…</li>
+                </ul>
             </div>
 
+            <!-- v25 — card reorganizado -->
+            <template id="msBriefItemTpl">
+                <li class="ms-brief" data-id="">
+                    <span class="ms-brief-thumb"><img src="" alt=""></span>
+                    <div class="ms-brief-body">
+                        <div class="ms-brief-top">
+                            <span class="ms-brief-name">—</span>
+                            <span class="ms-brief-status" data-status="waiting">
+                                <span class="ms-brief-status-dot"></span>
+                                <span class="ms-brief-status-label">—</span>
+                            </span>
+                        </div>
+                        <span class="ms-brief-client"><span class="ms-brief-client-name">—</span></span>
+                        <div class="ms-brief-foot">
+                            <span class="ms-brief-questions">— perguntas</span>
+                            <span class="ms-brief-when">—</span>
+                            <span class="ms-brief-progress-pct">0%</span>
+                        </div>
+                        <div class="ms-brief-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                            <span class="ms-brief-bar-fill" style="width: 0%"></span>
+                        </div>
+                    </div>
+                </li>
+            </template>
+        </aside>
+
+        <!-- COLUNA 2: DETALHE -->
+        <section class="cl-col cl-col--detail" id="msDetail">
+            <div class="cl-detail" id="msDetailContent">
+
+                <div class="cl-center">
+
+                    <div class="ms-detail-top">
+                        <nav class="ms-crumbs" aria-label="Navegação">
+                            <button type="button" class="ms-crumbs-back" id="msBack" aria-label="Voltar"><i data-lucide="arrow-left"></i></button>
+                            <span>Briefings</span>
+                            <i data-lucide="chevron-right"></i>
+                            <span id="msCrumbCurrent" aria-current="page">—</span>
+                        </nav>
+                        <div class="cl-head-actions">
+                            <button type="button" class="cl-btn cl-btn--sm" id="msViewBtn">
+                                <i data-lucide="external-link"></i>
+                                <span>Ver briefing</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <header class="cl-head">
+                        <div class="cl-head-info">
+                            <div class="cl-head-title-row">
+                                <h1 class="cl-head-name" id="msDetailTitle">—</h1>
+                                <span class="ms-status-pill" id="msDetailStatus" data-status="progress">
+                                    <span class="ms-status-pill-dot"></span>
+                                    <span id="msDetailStatusLabel">—</span>
+                                </span>
+                            </div>
+                            <div class="cl-head-meta">
+                                <span><i data-lucide="user"></i><span id="msDetailClient">—</span></span>
+                                <span><i data-lucide="calendar-plus"></i>Criado em <span id="msDetailCreated">—</span></span>
+                                <span><i data-lucide="calendar-clock"></i>Vence em <span id="msDetailExpires">—</span></span>
+                                <span><i data-lucide="clock"></i>Última atividade: <span id="msDetailActivity">—</span></span>
+                            </div>
+                        </div>
+                    </header>
+
+                    <nav class="cl-tabs" id="msTabs" role="tablist">
+                        <button type="button" class="cl-tab is-active" role="tab" data-tab="summary" aria-selected="true">Resumo</button>
+                        <button type="button" class="cl-tab" role="tab" data-tab="questions" aria-selected="false">Perguntas adicionais</button>
+                        <button type="button" class="cl-tab" role="tab" data-tab="history" aria-selected="false">Histórico</button>
+                    </nav>
+
+                    <div class="cl-center-stack" id="msDetailScroll">
+
+                        <div class="ms-tabpanel ms-tabpanel--summary" data-panel="summary">
+
+                            <section class="ms-notes" id="msOfficeNotes">
+                                <header class="ms-notes-header">
+                                    <h3 class="cl-card-title">Notas</h3>
+                                    <button type="button" class="ms-notes-add" id="msNoteAdd" aria-expanded="true">
+                                        <i data-lucide="plus"></i>
+                                        <span>Nova nota</span>
+                                    </button>
+                                </header>
+
+                                <div class="ms-compose" id="msNoteComposer">
+                                    <div class="ms-note-box">
+                                        <textarea id="msBriefNoteInput" rows="3" placeholder="Escreva uma nota…"></textarea>
+                                        <div class="ms-note-toolbar">
+                                            <button type="button" class="ms-note-tool" id="msNoteAttach" title="Anexar arquivo" aria-label="Anexar arquivo"><i data-lucide="paperclip"></i></button>
+                                            <button type="button" class="ms-note-tool" id="msNoteImage" title="Adicionar imagem" aria-label="Adicionar imagem"><i data-lucide="image"></i></button>
+                                            <button type="button" class="ms-note-tool" id="msNoteMention" title="Mencionar alguém" aria-label="Mencionar alguém"><i data-lucide="at-sign"></i></button>
+                                            <button type="button" class="cl-btn cl-btn--sm cl-btn--primary" id="msBriefNoteSave">Salvar</button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="ms-notes-scroll">
+                                    <ul class="ms-notes-list" id="msOfficeNotesList">
+                                        <li class="cl-empty">Nenhuma nota ainda.</li>
+                                    </ul>
+                                </div>
+
+                                <template id="msNoteItemTpl">
+                                    <li class="ms-note-item" data-id="">
+                                        <span class="ms-note-type" data-type="observation">—</span>
+                                        <span class="ms-avatar"><span class="ms-avatar-initials">—</span></span>
+                                        <div class="ms-note-body">
+                                            <div class="ms-note-who"><span class="ms-note-author">—</span><small class="ms-note-when">—</small></div>
+                                            <p class="ms-note-text">—</p>
+                                        </div>
+                                        <div class="ms-note-actions">
+                                            <button type="button" class="cl-icon-btn" data-note-action="edit" aria-label="Editar nota"><i data-lucide="pencil"></i></button>
+                                            <button type="button" class="cl-icon-btn" data-note-action="delete" aria-label="Excluir nota"><i data-lucide="trash-2"></i></button>
+                                        </div>
+                                    </li>
+                                </template>
+                            </section>
+
+                        </div>
+
+                        <div class="ms-tabpanel" data-panel="questions" hidden>
+                            <section class="cl-card">
+                                <header class="cl-card-head">
+                                    <h3 class="cl-card-title">Perguntas adicionais</h3>
+                                </header>
+                                <ul class="ms-questions-list" id="msQuestionsList">
+                                    <li class="cl-empty">Nenhuma pergunta adicional.</li>
+                                </ul>
+                            </section>
+                        </div>
+
+                        <div class="ms-tabpanel" data-panel="history" hidden>
+                            <section class="cl-card">
+                                <header class="cl-card-head">
+                                    <h3 class="cl-card-title">Histórico</h3>
+                                </header>
+                                <ul class="ms-history-list" id="msHistoryList">
+                                    <li class="cl-empty">Sem eventos registrados.</li>
+                                </ul>
+                            </section>
+                        </div>
+
+                    </div>
+                </div>
+
+            </div>
         </section>
+
+        <!-- COLUNA 3: INSIGHT -->
+        <aside class="cl-side" id="msAside">
+
+            <header class="cl-side-head" id="msInsightHead">
+                <span class="ms-side-logo"><i data-lucide="sparkles"></i></span>
+                <h2 class="cl-side-title">Insight</h2>
+            </header>
+
+            <div class="cl-side-body" id="msSideBody">
+
+                <section class="ms-side-section ms-side-section--resumo" id="msBriefSummaryCard">
+                    <header class="ms-side-header">
+                        <span class="ms-side-icon"><i data-lucide="file-text"></i></span>
+                        <h3 class="ms-side-title">Resumo</h3>
+                    </header>
+                    <p class="ms-summary-lead" id="msBriefSummary">—</p>
+                </section>
+
+                <section class="ms-side-section ms-side-section--wishes" id="msWishesCard">
+                    <header class="ms-side-header">
+                        <span class="ms-side-icon"><i data-lucide="heart"></i></span>
+                        <h3 class="ms-side-title">Desejos</h3>
+                        <span class="ms-side-count"><b id="msWishesCount">0</b></span>
+                    </header>
+                    <ul class="ms-checks ms-checks--wishes" id="msWishesList">
+                        <li class="ms-check-slot is-empty" data-slot="1"><span class="ms-check-bullet"><i class="ms-dot"></i></span><span class="ms-check-text"><strong>—</strong><small></small></span></li>
+                        <li class="ms-check-slot is-empty" data-slot="2"><span class="ms-check-bullet"><i class="ms-dot"></i></span><span class="ms-check-text"><strong>—</strong><small></small></span></li>
+                        <li class="ms-check-slot is-empty" data-slot="3"><span class="ms-check-bullet"><i class="ms-dot"></i></span><span class="ms-check-text"><strong>—</strong><small></small></span></li>
+                        <li class="ms-check-slot is-empty" data-slot="4"><span class="ms-check-bullet"><i class="ms-dot"></i></span><span class="ms-check-text"><strong>—</strong><small></small></span></li>
+                    </ul>
+                </section>
+
+                <section class="ms-side-section ms-side-section--attention" id="msAttentionCard">
+                    <header class="ms-side-header">
+                        <span class="ms-side-icon"><i data-lucide="triangle-alert"></i></span>
+                        <h3 class="ms-side-title">Atenção</h3>
+                        <span class="ms-side-count"><b id="msAttentionCount">0</b></span>
+                    </header>
+                    <ul class="ms-checks ms-checks--attention" id="msAttentionList">
+                        <li class="ms-check-slot is-empty" data-slot="1"><span class="ms-check-bullet"></span><span class="ms-check-text"><strong>—</strong><small></small></span></li>
+                        <li class="ms-check-slot is-empty" data-slot="2"><span class="ms-check-bullet"></span><span class="ms-check-text"><strong>—</strong><small></small></span></li>
+                        <li class="ms-check-slot is-empty" data-slot="3"><span class="ms-check-bullet"></span><span class="ms-check-text"><strong>—</strong><small></small></span></li>
+                    </ul>
+                </section>
+
+                <section class="ms-side-section ms-side-section--tags" id="msTagsCard">
+                    <header class="ms-side-header">
+                        <span class="ms-side-icon"><i data-lucide="tag"></i></span>
+                        <h3 class="ms-side-title">Tags</h3>
+                    </header>
+                    <div class="ms-tags" id="msTagsList">
+                        <span class="ms-tag ms-tag--empty">—</span>
+                    </div>
+                </section>
+
+            </div>
+        </aside>
 
     </div>
 </div>
 {% endblock %}
 
 {% block page_js %}
-<script src="{% static 'js/mesa.js' %}"></script>
+<script src="{% static 'js/mesa.js' %}?v=25"></script>
 {% endblock %}

@@ -43,10 +43,10 @@ class BriefingSectionInline(admin.TabularInline):
 class BriefingTemplateAdmin(admin.ModelAdmin):
     list_display = [
         'name', 'workspace', 'category', 'status',
-        'is_active', 'sections_count', 'questions_count',
+        'sections_count', 'questions_count',
         'created_at',
     ]
-    list_filter = ['status', 'is_active', 'category', 'workspace']
+    list_filter = ['status', 'category', 'workspace']
     search_fields = ['name', 'description', 'category']
     readonly_fields = ['id', 'created_at', 'updated_at']
     ordering = ['-created_at']
@@ -58,7 +58,7 @@ class BriefingTemplateAdmin(admin.ModelAdmin):
             'fields': ('id', 'workspace', 'name', 'description', 'category'),
         }),
         ('Editorial', {
-            'fields': ('status', 'is_active'),
+            'fields': ('status',),
         }),
         ('Capa', {
             'fields': ('cover',),
@@ -130,13 +130,14 @@ class BriefingTemplateEventAdmin(admin.ModelAdmin):
 class BriefingAdmin(admin.ModelAdmin):
     list_display = [
         'title', 'client', 'workspace', 'status',
-        'expires_at', 'created_at',
+        'expires_at', 'first_opened_at', 'created_at',
     ]
     list_filter = ['status', 'workspace']
     search_fields = ['title', 'client__name']
     readonly_fields = [
         'id', 'structure_snapshot',
-        'started_at', 'completed_at', 'closed_at',
+        'started_at', 'first_opened_at',
+        'completed_at', 'cancelled_at',
         'created_at', 'updated_at',
     ]
     autocomplete_fields = ['workspace', 'client', 'template', 'created_by']
@@ -151,7 +152,10 @@ class BriefingAdmin(admin.ModelAdmin):
             'fields': ('status', 'expires_at'),
         }),
         ('Datas', {
-            'fields': ('started_at', 'completed_at', 'closed_at'),
+            'fields': (
+                'started_at', 'first_opened_at',
+                'completed_at', 'cancelled_at',
+            ),
         }),
         ('Snapshot', {
             'fields': ('structure_snapshot',),

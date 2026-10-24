@@ -11,12 +11,14 @@ REGRA ARQUITETURAL
 ------------------
 Template é ESTRUTURA. Não é execução.
 
-Estados:
-    `status`: draft / published / archived
-    `is_active`: eixo independente. Um template ativo pode estar
-                 em rascunho; um template publicado pode estar
-                 inativo. `is_active=False` bloqueia NOVAS execuções,
-                 mas preserva as execuções existentes.
+Estados (via `status`):
+    draft / published / archived
+
+INTRO
+-----
+`intro_message` é o texto de apresentação mostrado ao cliente
+antes da primeira pergunta. Se vazio, o cliente vai direto para a
+primeira pergunta.
 """
 
 import uuid
@@ -67,11 +69,10 @@ class BriefingTemplate(models.Model):
         db_index=True,
         help_text=_(
             'Categoria livre do operador (ex: "residencial", '
-            '"comercial"). Sem FK no MVP.'
+            '"comercial").'
         ),
     )
 
-    # FK opcional para a categoria estruturada
     category_fk = models.ForeignKey(
         'briefings.BriefingTemplateCategory',
         on_delete=models.SET_NULL,
@@ -81,8 +82,6 @@ class BriefingTemplate(models.Model):
         db_index=True,
     )
 
-    # Sem `storage=` explícito — usa o default storage
-    # (B2/R2/local conforme settings.STORAGES).
     cover = models.FileField(
         upload_to='briefing-templates/covers/',
         max_length=500,
@@ -91,21 +90,22 @@ class BriefingTemplate(models.Model):
         help_text=_('Imagem de capa opcional do template.'),
     )
 
+    intro_message = models.TextField(
+        blank=True,
+        help_text=_(
+            'Texto de apresentação mostrado ao cliente antes da '
+            'primeira pergunta. Se preenchido, o cliente verá '
+            'uma tela inicial com esse texto e um botão '
+            '"Iniciar jornada".'
+        ),
+    )
+
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
         default=STATUS_DRAFT,
         db_index=True,
         help_text=_('Estado editorial do template'),
-    )
-
-    is_active = models.BooleanField(
-        default=True,
-        db_index=True,
-        help_text=_(
-            'Eixo independente do status. Se False, bloqueia NOVAS '
-            'execuções, mas preserva as execuções existentes.'
-        ),
     )
 
     position = models.IntegerField(
@@ -132,7 +132,6 @@ class BriefingTemplate(models.Model):
         ordering = ['position', '-created_at']
         indexes = [
             models.Index(fields=['workspace', 'status']),
-            models.Index(fields=['workspace', 'is_active']),
             models.Index(fields=['workspace', 'category']),
             models.Index(fields=['workspace', '-created_at']),
             models.Index(fields=['workspace', 'position']),
@@ -153,10 +152,7 @@ class BriefingTemplate(models.Model):
         return self.status == self.STATUS_DRAFT
 
     def can_start_execution(self) -> bool:
-        return (
-            self.status == self.STATUS_PUBLISHED
-            and self.is_active
-        )
+        return self.status == self.STATUS_PUBLISHED
 
 
 class BriefingSection(models.Model):
@@ -215,30 +211,57 @@ class BriefingQuestion(models.Model):
     QUESTION_TYPE_TEXT = 'text'
     QUESTION_TYPE_SHORT_TEXT = 'short_text'
     QUESTION_TYPE_LONG_TEXT = 'long_text'
+
     QUESTION_TYPE_SINGLE_CHOICE = 'single_choice'
     QUESTION_TYPE_MULTIPLE_CHOICE = 'multiple_choice'
+    QUESTION_TYPE_DROPDOWN = 'dropdown'
+    QUESTION_TYPE_CHOICE = 'choice'
+
     QUESTION_TYPE_SCALE = 'scale'
     QUESTION_TYPE_RATING = 'rating'
-    QUESTION_TYPE_YES_NO = 'yes_no'
-    QUESTION_TYPE_DATE = 'date'
     QUESTION_TYPE_NUMBER = 'number'
+
+    QUESTION_TYPE_GRID_SINGLE = 'grid_single'
+    QUESTION_TYPE_GRID_MULTIPLE = 'grid_multiple'
+
+    QUESTION_TYPE_DATE = 'date'
+    QUESTION_TYPE_TIME = 'time'
     QUESTION_TYPE_URL = 'url'
-    QUESTION_TYPE_CHOICE = 'choice'  # legado
+
+    QUESTION_TYPE_YES_NO = 'yes_no'
+    QUESTION_TYPE_FILE_UPLOAD = 'file_upload'
 
     QUESTION_TYPE_CHOICES = [
         (QUESTION_TYPE_TEXT, 'Texto livre'),
-        (QUESTION_TYPE_SHORT_TEXT, 'Texto curto'),
-        (QUESTION_TYPE_LONG_TEXT, 'Texto longo'),
-        (QUESTION_TYPE_SINGLE_CHOICE, 'Escolha única'),
-        (QUESTION_TYPE_MULTIPLE_CHOICE, 'Múltipla escolha'),
-        (QUESTION_TYPE_SCALE, 'Escala (1–10)'),
-        (QUESTION_TYPE_RATING, 'Avaliação (estrelas)'),
-        (QUESTION_TYPE_YES_NO, 'Sim / Não'),
-        (QUESTION_TYPE_DATE, 'Data'),
-        (QUESTION_TYPE_NUMBER, 'Número'),
-        (QUESTION_TYPE_URL, 'Link'),
+        (QUESTION_TYPE_SHORT_TEXT, 'Resposta curta'),
+        (QUESTION_TYPE_LONG_TEXT, 'Parágrafo'),
+        (QUESTION_TYPE_SINGLE_CHOICE, 'Múltipla escolha'),
+        (QUESTION_TYPE_MULTIPLE_CHOICE, 'Caixas de seleção'),
+        (QUESTION_TYPE_DROPDOWN, 'Lista suspensa'),
         (QUESTION_TYPE_CHOICE, 'Escolha (legado)'),
+        (QUESTION_TYPE_SCALE, 'Escala linear'),
+        (QUESTION_TYPE_RATING, 'Classificação'),
+        (QUESTION_TYPE_NUMBER, 'Número'),
+        (QUESTION_TYPE_GRID_SINGLE, 'Grade de múltipla escolha'),
+        (QUESTION_TYPE_GRID_MULTIPLE, 'Grade da caixa de seleção'),
+        (QUESTION_TYPE_DATE, 'Data'),
+        (QUESTION_TYPE_TIME, 'Horário'),
+        (QUESTION_TYPE_URL, 'Link'),
+        (QUESTION_TYPE_YES_NO, 'Sim / Não'),
+        (QUESTION_TYPE_FILE_UPLOAD, 'Upload de arquivo'),
     ]
+
+    CHOICE_TYPES = {
+        QUESTION_TYPE_SINGLE_CHOICE,
+        QUESTION_TYPE_MULTIPLE_CHOICE,
+        QUESTION_TYPE_DROPDOWN,
+        QUESTION_TYPE_CHOICE,
+    }
+
+    GRID_TYPES = {
+        QUESTION_TYPE_GRID_SINGLE,
+        QUESTION_TYPE_GRID_MULTIPLE,
+    }
 
     RESPONSE_FORMAT_TEXT = 'text'
     RESPONSE_FORMAT_AUDIO = 'audio'
@@ -287,9 +310,8 @@ class BriefingQuestion(models.Model):
         default=list,
         blank=True,
         help_text=_(
-            'Para perguntas de escolha única/múltipla: lista de '
-            'opções. Cada item é um dict '
-            '{"text": str, "image_document_id": uuid|null}.'
+            'Para perguntas de escolha: lista de opções. '
+            'Para grids: dict {"rows": [...], "columns": [...]}.'
         ),
     )
 
@@ -356,15 +378,25 @@ class BriefingQuestion(models.Model):
                 )
             })
 
-        choice_types = {
-            self.QUESTION_TYPE_SINGLE_CHOICE,
-            self.QUESTION_TYPE_MULTIPLE_CHOICE,
-            self.QUESTION_TYPE_CHOICE,
-        }
-        if self.question_type in choice_types:
+        if self.question_type in self.CHOICE_TYPES:
             if not isinstance(self.options, list):
                 raise ValidationError({
-                    'options': 'Deve ser uma lista.'
+                    'options': 'Para perguntas de escolha, deve ser '
+                               'uma lista de {text, image_document_id}.'
+                })
+
+        if self.question_type in self.GRID_TYPES:
+            if not isinstance(self.options, dict):
+                raise ValidationError({
+                    'options': 'Para grades, deve ser um dict com '
+                               '"rows" e "columns".'
+                })
+            rows = self.options.get('rows')
+            columns = self.options.get('columns')
+            if not isinstance(rows, list) or not isinstance(columns, list):
+                raise ValidationError({
+                    'options': 'Grid precisa de "rows" (list) e '
+                               '"columns" (list).'
                 })
 
     def save(self, *args, **kwargs):

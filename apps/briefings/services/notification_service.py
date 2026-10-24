@@ -122,7 +122,8 @@ class NotificationService:
             if briefing.created_by else None
         )
 
-        # Gera PDF moodboard do cliente (sem notas internas)
+        # Gera PDF do cliente (sem notas internas).
+        # O `render_pdf` usa o template default `portal/briefing_raw_client_pdf.html`.
         client_pdf_bytes = None
         client_pdf_filename = None
         try:
@@ -132,7 +133,6 @@ class NotificationService:
             client_pdf_bytes, client_pdf_filename = (
                 BriefingExportService.render_pdf(
                     briefing,
-                    template_name='briefings/export_client.html',
                     mode='client',
                 )
             )

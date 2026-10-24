@@ -116,6 +116,7 @@ INSTALLED_APPS = [
     'apps.projects',
     'apps.timeline',
     'apps.intelligence',
+    'apps.integrations',
 ]
 
 
@@ -162,6 +163,12 @@ SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT = True
 
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
+# ============ INTEGRATIONS — GOOGLE (Drive + Forms) ============
+# OAuth Client DEDICADO para o app `integrations`.
+# Separado do GOOGLE_CLIENT_ID do allauth (que é para login).
+# Ver `apps/integrations/providers/google/connector.py` para uso.
+INTEGRATIONS_GOOGLE_CLIENT_ID = os.getenv("INTEGRATIONS_GOOGLE_CLIENT_ID")
+INTEGRATIONS_GOOGLE_CLIENT_SECRET = os.getenv("INTEGRATIONS_GOOGLE_CLIENT_SECRET")
 
 PINTEREST_CLIENT_ID = os.getenv("PINTEREST_CLIENT_ID", "")
 PINTEREST_CLIENT_SECRET = os.getenv("PINTEREST_CLIENT_SECRET", "")
@@ -260,6 +267,14 @@ MIDDLEWARE = [
     'allauth.account.middleware.AccountMiddleware',
     'core.middleware.correlation_id.CorrelationIdMiddleware',
     'apps.accounts.middleware.SessionTrackingMiddleware',
+
+    # ── Portal do Cliente ──────────────────────────────────────────
+    # Resolve a sessão do portal a partir do cookie `clivo_portal`
+    # e popula request.portal_session / request.portal_client.
+    #
+    # DEVE vir depois de SessionMiddleware (precisa dos cookies
+    # disponíveis) e pode ser o último da lista.
+    'apps.clients.middleware.ClientPortalMiddleware',
 ]
 
 
@@ -492,7 +507,22 @@ CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 
 
 # ============ ENCRYPTION ============
+# Chave de infraestrutura da Clivo (usada por sistemas internos).
 INFRASTRUCTURE_ENCRYPTION_KEY = os.getenv("PROVIDER_ENCRYPTION_KEY")
+
+# Chave dedicada ao módulo `integrations`.
+#
+# Fallback explícito: no V1, reutiliza a chave de infraestrutura para
+# evitar duas chaves em dev. Em produção, defina
+# INTEGRATIONS_ENCRYPTION_KEY no .env com uma chave Fernet dedicada.
+#
+# Formato esperado: base64-url de 32 bytes (44 caracteres).
+# Gerar com:
+#   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+INTEGRATIONS_ENCRYPTION_KEY = os.getenv(
+    "INTEGRATIONS_ENCRYPTION_KEY",
+    INFRASTRUCTURE_ENCRYPTION_KEY,   # ← NOVO: fallback para V1
+)
 
 
 # ============ CACHE ============
@@ -782,18 +812,34 @@ except Exception as e:
 # ============ ENVIRONMENT OVERRIDES ============
 if not os.getenv('RENDER'):
     DEBUG = True
-    ALLOWED_HOSTS = ['127.0.0.1', 'localhost', 'clivoos.com', 'clivo-mvp.onrender.com', 'clivo.onrender.com', 'testserver']
+    ALLOWED_HOSTS = [
+        '127.0.0.1',
+        'localhost',
+        'clivoos.com',
+        'clivo-mvp.onrender.com',
+        'clivo.onrender.com',
+        'testserver',
+    ]
+    # ─────────────────────────────────────────────────────────────
+    # CSRF_TRUSTED_ORIGINS — inclui AMBAS as portas 8000 e 9000
+    # para evitar problemas durante o desenvolvimento.
+    # ─────────────────────────────────────────────────────────────
     CSRF_TRUSTED_ORIGINS = [
+        'http://127.0.0.1:8000',
+        'http://localhost:8000',
         'http://127.0.0.1:9000',
         'http://localhost:9000',
         'https://clivoos.com',
         'https://clivo-mvp.onrender.com',
-        'https://clivo.onrender.com'
+        'https://clivo.onrender.com',
     ]
     SESSION_COOKIE_SECURE = False
     CSRF_COOKIE_SECURE = False
     SECURE_SSL_REDIRECT = False
-    FRONTEND_URL = 'http://localhost:9000'
+    FRONTEND_URL = 'http://localhost:8000'
+    # ─────────────────────────────────────────────────────────────
+    # CORS_ALLOWED_ORIGINS — inclui AMBAS as portas 8000 e 9000
+    # ─────────────────────────────────────────────────────────────
     CORS_ALLOWED_ORIGINS = [
         'http://localhost:3000',
         'http://localhost:8000',
@@ -803,7 +849,7 @@ if not os.getenv('RENDER'):
         'https://clivoos.com',
         'https://www.clivoos.com',
         'https://clivo-mvp.onrender.com',
-        'https://clivo.onrender.com'
+        'https://clivo.onrender.com',
     ]
     print("🔧 Overrides locais aplicados (DEBUG=True)")
 
@@ -900,7 +946,8 @@ print(f"Google Auth:          {'✅' if GOOGLE_CLIENT_ID else '❌'}")
 print(f"Pinterest Auth:       {'✅' if ENABLE_PINTEREST_LOGIN else '❌'}")
 print(f"Email Verification:   {ACCOUNT_EMAIL_VERIFICATION}")
 print(f"Workspace Public ID:  {'✅ salt configurado' if WORKSPACE_PUBLIC_ID_SALT else '❌ salt ausente'}")
-print(f"Encryption Key:       {'✅' if INFRASTRUCTURE_ENCRYPTION_KEY else '❌ ausente'}")
+print(f"Encryption (Infra):   {'✅' if INFRASTRUCTURE_ENCRYPTION_KEY else '❌ ausente'}")
+print(f"Encryption (Integr):  {'✅' if INTEGRATIONS_ENCRYPTION_KEY else '❌ ausente'}")
 print(f"Cota Arquivos:        {DOCUMENTS_STORAGE_QUOTA_BYTES // (1024 ** 3)} GB por workspace")
 print(f"Cota Referências:     {REFERENCES_STORAGE_QUOTA_BYTES // (1024 ** 3)} GB por workspace")
 print(f"Pillow:               {'✅ v' + _pillow_version if _pillow_ok else '❌ ausente'}")

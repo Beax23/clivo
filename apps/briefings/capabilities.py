@@ -15,10 +15,9 @@ CAPABILITIES = [
         'code': 'briefings.template.manage',
         'name': 'Gerenciar modelos de briefing',
         'description': (
-            'Permite criar, editar, publicar e arquivar modelos de '
+            'Permite criar, editar, publicar e despublicar modelos de '
             'briefing, incluindo suas sessões, perguntas, ordem, '
-            'formatos de resposta permitidos, categoria, capa e '
-            'estado ativo/inativo.'
+            'formatos de resposta permitidos, categoria e capa.'
         ),
     },
 

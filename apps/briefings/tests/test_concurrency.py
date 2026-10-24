@@ -1,18 +1,5 @@
 """
 Testes de concorrência no submit_answer.
-
-Estratégia em duas camadas:
-
-1. Teste de CONTRATO (`test_submit_answer_uses_select_for_update`)
-   Verifica que o serviço usa `select_for_update` no Briefing,
-   garantindo que o lock existe. Roda em qualquer banco — inclusive
-   SQLite.
-
-2. Teste REAL de concorrência (`test_simultaneous_answers_create_single_event`)
-   Duas threads chamam `submit_answer` ao mesmo tempo. Só roda em
-   PostgreSQL (SQLite em memória não compartilha o banco entre
-   conexões de threads). Em CI com Postgres, roda. Localmente em
-   SQLite, é pulado.
 """
 
 import threading
@@ -25,21 +12,12 @@ from apps.briefings.models import BriefingEvent
 from apps.briefings.services import BriefingService
 
 
-# =========================================================================
-# 1. TESTE DE CONTRATO — roda sempre
-# =========================================================================
-
 @pytest.mark.django_db
 def test_submit_answer_uses_select_for_update(
     briefing_a, portal_session_a,
 ):
     """
     Verifica que `submit_answer` usa `select_for_update` no Briefing.
-
-    Não substitui um teste real de concorrência, mas documenta o
-    contrato: o lock existe e é chamado no caminho crítico. Se
-    alguém remover o `select_for_update` no futuro, este teste
-    quebra e a intenção fica registrada.
     """
     from unittest.mock import patch
     from django.db.models import QuerySet
@@ -64,19 +42,13 @@ def test_submit_answer_uses_select_for_update(
             content_text='Resposta.',
         )
 
-    # Pelo menos uma chamada — a do Briefing.
     assert called['count'] >= 1, (
         'submit_answer não chamou select_for_update. '
         'O lock de concorrência pode ter sido removido.'
     )
 
 
-# =========================================================================
-# 2. TESTE REAL — só roda em Postgres
-# =========================================================================
-
 def _running_on_postgres() -> bool:
-    """Detecta se o banco atual é Postgres."""
     try:
         return connection.vendor == 'postgresql'
     except Exception:
@@ -92,13 +64,6 @@ def _running_on_postgres() -> bool:
     ),
 )
 class TestConcurrencyReal(TransactionTestCase):
-    """
-    Duas threads chamam `submit_answer` na mesma pergunta.
-
-    Com `select_for_update` correto, uma vence, a outra recebe
-    erro de sequência. Apenas UM `BriefingEvent` do tipo `answered`
-    é persistido.
-    """
 
     reset_sequences = False
 
@@ -116,7 +81,10 @@ class TestConcurrencyReal(TransactionTestCase):
         from apps.briefings.models import (
             BriefingTemplate, BriefingSection, BriefingQuestion,
         )
-        from apps.briefings.services import BriefingService
+        from apps.briefings.services import (
+            BriefingService,
+            BriefingTemplateVersionService,
+        )
 
         User = get_user_model()
 
@@ -149,7 +117,7 @@ class TestConcurrencyReal(TransactionTestCase):
 
         tpl = BriefingTemplate.objects.create(
             workspace=self.ws, name='T', status='published',
-            is_active=True, created_by=self.user,
+            created_by=self.user,
         )
         s = BriefingSection.objects.create(
             template=tpl, title='S', position=1,
@@ -158,6 +126,14 @@ class TestConcurrencyReal(TransactionTestCase):
             section=s, text='Q1', position=1, is_required=True,
             allowed_response_formats=['text'],
         )
+
+        version = BriefingTemplateVersionService.create_draft_from_template(
+            template=tpl, actor=self.user,
+        )
+        BriefingTemplateVersionService.publish(
+            version=version, actor=self.user,
+        )
+
         self.briefing = BriefingService.create_briefing(
             template=tpl, client=self.client,
             workspace=self.ws, actor=self.user,

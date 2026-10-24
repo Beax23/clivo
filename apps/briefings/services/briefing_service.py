@@ -3,26 +3,13 @@ BriefingService — ciclo de vida da execução.
 
 REGRA ARQUITETURAL
 ------------------
-Toda mutação passa por este service. Nenhuma view escreve
-diretamente em `Briefing`, `BriefingAnswer` ou `BriefingEvent`.
+Toda mutação passa por este service.
 
-Concorrência:
-    `submit_answer` roda dentro de `transaction.atomic` e usa
-    `select_for_update` no Briefing para serializar envios
-    concorrentes do mesmo cliente.
-
-Sequência:
-    O cliente só pode responder a próxima pergunta elegível.
-    Validação é feita aqui, com base no snapshot.
-
-ANÁLISE
--------
-Este service NÃO gera análise. Análise pertence ao app `intelligence`.
-
-NOTIFICAÇÃO
------------
-Ao concluir, agenda (via `on_commit`) o envio de e-mail através
-do `NotificationService`.
+INTRO
+-----
+`intro_message` é copiada do template na criação. O cliente pode
+"consumir" a intro uma vez (via `mark_intro_seen`), e a partir daí
+ela não aparece mais.
 """
 
 import logging
@@ -36,6 +23,8 @@ from apps.briefings.models import (
     BriefingAnswer,
     BriefingEvent,
     BriefingTemplate,
+    BriefingTemplateVersion,
+    BriefingQuestionInstance,
 )
 from apps.briefings.exceptions import (
     BriefingError,
@@ -68,15 +57,16 @@ class BriefingService:
         actor=None,
         expires_at=None,
         title: Optional[str] = None,
+        intro_message: Optional[str] = None,
     ) -> Briefing:
         """
         Cria uma execução a partir de um template publicado.
 
-        Copia a estrutura do template para `structure_snapshot`.
+        `intro_message`: se passado (mesmo que ''), sobrescreve a
+        intro herdada do template. Se `None`, herda do template.
         """
         if template.workspace_id != workspace.id:
             raise BriefingError('Template não pertence a este workspace.')
-
         if client.workspace_id != workspace.id:
             raise BriefingError('Cliente não pertence a este workspace.')
 
@@ -85,25 +75,36 @@ class BriefingService:
                 'Só templates publicados podem originar execuções.'
             )
 
-        if not template.is_active:
-            raise BriefingError(
-                'O template está inativo e não pode originar novas '
-                'execuções.'
-            )
-
         if not template.sections.exists():
             raise BriefingError(
                 'O template não possui sessões para executar.'
             )
 
-        snapshot = BriefingService._build_structure_snapshot(template)
+        from apps.briefings.services.template_version_service import (
+            BriefingTemplateVersionService,
+        )
+        current_version = (
+            BriefingTemplateVersionService.get_current_published(template)
+        )
+
+        snapshot = BriefingService._build_structure_snapshot(
+            template, version=current_version,
+        )
+
+        # Resolve a intro: sobrescrita explícita > herdada do template.
+        if intro_message is not None:
+            resolved_intro = (intro_message or '').strip()
+        else:
+            resolved_intro = (template.intro_message or '').strip()
 
         briefing = Briefing.objects.create(
             workspace=workspace,
             client=client,
             template=template,
+            template_version=current_version,
             title=(title or template.name).strip(),
             structure_snapshot=snapshot,
+            intro_message=resolved_intro,
             status=Briefing.STATUS_IN_PROGRESS,
             expires_at=expires_at,
             created_by=actor,
@@ -116,6 +117,9 @@ class BriefingService:
             content={
                 'action': 'created',
                 'template_id': str(template.id),
+                'template_version_id': (
+                    str(current_version.id) if current_version else None
+                ),
                 'expires_at': (
                     expires_at.isoformat() if expires_at else None
                 ),
@@ -125,10 +129,18 @@ class BriefingService:
         return briefing
 
     @staticmethod
-    def _build_structure_snapshot(template: BriefingTemplate) -> dict:
-        """
-        Serializa a estrutura do template num dict imutável.
-        """
+    def _build_structure_snapshot(
+        template: BriefingTemplate,
+        version: Optional[BriefingTemplateVersion] = None,
+    ) -> dict:
+        if version and version.structure and version.structure.get('sections'):
+            import copy
+            data = copy.deepcopy(version.structure)
+            for s in data.get('sections', []):
+                for q in s.get('questions', []):
+                    q['is_custom'] = False
+            return data
+
         sections = list(
             template.sections
             .prefetch_related('questions__reference_documents')
@@ -149,12 +161,14 @@ class BriefingService:
                     'allowed_response_formats': list(
                         question.allowed_response_formats or []
                     ),
+                    'options': list(question.options or []),
                     'position': question.position,
                     'is_required': question.is_required,
                     'reference_document_ids': [
                         str(d.id)
                         for d in question.reference_documents.all()
                     ],
+                    'is_custom': False,
                 })
             payload_sections.append({
                 'id': str(section.id),
@@ -169,6 +183,118 @@ class BriefingService:
             'template_name': template.name,
             'sections': payload_sections,
         }
+
+    # ==================================================================
+    # INTRO
+    # ==================================================================
+
+    @staticmethod
+    @transaction.atomic
+    def mark_intro_seen(briefing: Briefing) -> Briefing:
+        """
+        Marca que o cliente viu a apresentação. Idempotente.
+        Não faz nada se o briefing não tem intro.
+        """
+        if not briefing.has_intro():
+            return briefing
+        briefing.mark_intro_seen()
+        return briefing
+
+    # ==================================================================
+    # CUSTOM QUESTIONS + REFERÊNCIAS
+    # ==================================================================
+
+    @staticmethod
+    @transaction.atomic
+    def freeze_custom_questions_into_snapshot(briefing: Briefing) -> bool:
+        if briefing.answers.exists():
+            return False
+
+        custom_qs = list(
+            BriefingQuestionInstance.objects
+            .filter(briefing=briefing)
+            .order_by('section_ref', 'position', 'created_at')
+        )
+        if not custom_qs:
+            return False
+
+        snapshot = dict(briefing.structure_snapshot or {})
+        sections = list(snapshot.get('sections', []))
+        sections_by_id = {str(s.get('id')): s for s in sections}
+
+        for inst in custom_qs:
+            section = sections_by_id.get(str(inst.section_ref))
+            if section is None:
+                continue
+            questions = list(section.get('questions', []))
+            already = any(
+                str(q.get('id')) == str(inst.id) for q in questions
+            )
+            if already:
+                continue
+            questions.append(inst.to_snapshot_dict())
+            section['questions'] = questions
+
+        snapshot['sections'] = sections
+        briefing.structure_snapshot = snapshot
+        briefing.has_custom_questions = True
+        briefing.save(update_fields=[
+            'structure_snapshot', 'has_custom_questions', 'updated_at',
+        ])
+        return True
+
+    @staticmethod
+    @transaction.atomic
+    def sync_snapshot_references(briefing: Briefing) -> bool:
+        if briefing.answers.exists():
+            return False
+
+        if briefing.template_id is None:
+            return False
+
+        snapshot = dict(briefing.structure_snapshot or {})
+        sections = list(snapshot.get('sections', []))
+        if not sections:
+            return False
+
+        from apps.briefings.models import BriefingQuestion
+
+        current_refs = {}
+        for q in (
+            BriefingQuestion.objects
+            .filter(section__template_id=briefing.template_id)
+            .prefetch_related('reference_documents')
+        ):
+            current_refs[str(q.id)] = [
+                str(d.id) for d in q.reference_documents.all()
+            ]
+
+        changed = False
+        for section in sections:
+            for q in section.get('questions', []):
+                qid = str(q.get('id'))
+                if q.get('is_custom'):
+                    continue
+                new_ids = current_refs.get(qid)
+                if new_ids is None:
+                    continue
+                old_ids = list(q.get('reference_document_ids') or [])
+                if old_ids != new_ids:
+                    q['reference_document_ids'] = new_ids
+                    changed = True
+
+        if changed:
+            snapshot['sections'] = sections
+            briefing.structure_snapshot = snapshot
+            briefing.save(update_fields=[
+                'structure_snapshot', 'updated_at',
+            ])
+            logger.info(
+                'Snapshot references sincronizadas | briefing=%s',
+                briefing.id,
+            )
+
+        return changed
 
     # ==================================================================
     # LEITURA / PROGRESSO
@@ -190,9 +316,6 @@ class BriefingService:
 
     @staticmethod
     def compute_progress(briefing: Briefing) -> dict:
-        """
-        Cálculo canônico de progresso.
-        """
         questions = briefing.snapshot_questions()
         required_ids = [
             str(q['id']) for q in questions if q.get('is_required')
@@ -235,7 +358,7 @@ class BriefingService:
         }
 
     # ==================================================================
-    # RESPOSTA (fluxo do portal)
+    # RESPOSTA
     # ==================================================================
 
     @staticmethod
@@ -249,9 +372,6 @@ class BriefingService:
         audio_document=None,
         attachment_documents=None,
     ) -> BriefingAnswer:
-        """
-        Registra uma resposta do cliente.
-        """
         briefing = (
             Briefing.objects
             .select_for_update()
@@ -270,16 +390,27 @@ class BriefingService:
 
         if briefing.status == Briefing.STATUS_PAUSED:
             raise BriefingPausedError('O briefing está pausado.')
-        if briefing.status == Briefing.STATUS_CLOSED:
-            raise BriefingClosedError('O briefing foi encerrado.')
-        if briefing.status == Briefing.STATUS_EXPIRED:
-            raise BriefingExpiredError('O briefing expirou.')
+
         if briefing.has_expired():
-            briefing.status = Briefing.STATUS_EXPIRED
-            briefing.save(update_fields=['status', 'updated_at'])
+            if briefing.status != Briefing.STATUS_CANCELLED:
+                briefing.status = Briefing.STATUS_CANCELLED
+                briefing.cancelled_at = timezone.now()
+                briefing.save(update_fields=[
+                    'status', 'cancelled_at', 'updated_at',
+                ])
             raise BriefingExpiredError('O briefing expirou.')
+
+        if briefing.status == Briefing.STATUS_CANCELLED:
+            raise BriefingClosedError('O briefing foi cancelado.')
+
         if briefing.status == Briefing.STATUS_COMPLETED:
             raise BriefingError('O briefing já foi concluído.')
+
+        BriefingService.freeze_custom_questions_into_snapshot(briefing)
+        BriefingService.sync_snapshot_references(briefing)
+        briefing.refresh_from_db(
+            fields=['structure_snapshot', 'has_custom_questions'],
+        )
 
         next_question = BriefingService.get_next_eligible_question(briefing)
         if next_question is None:
@@ -290,9 +421,17 @@ class BriefingService:
             )
 
         allowed = set(next_question.get('allowed_response_formats') or [])
-        has_text = bool((content_text or '').strip())
+        content_text_clean = (content_text or '').strip()
+        has_text = bool(content_text_clean)
         has_audio = audio_document is not None
         has_attachments = bool(attachment_documents)
+
+        logger.debug(
+            'submit_answer validation | q=%s | allowed=%s | '
+            'has_text=%s | has_audio=%s | has_attachments=%s',
+            next_question['id'], sorted(allowed),
+            has_text, has_audio, has_attachments,
+        )
 
         if has_text and 'text' not in allowed:
             raise InvalidResponseFormatError(
@@ -306,19 +445,20 @@ class BriefingService:
             raise InvalidResponseFormatError(
                 'Esta pergunta não aceita anexos de imagem.'
             )
-        if not (has_text or has_audio):
+        if not (has_text or has_audio or has_attachments):
             raise InvalidResponseFormatError(
-                'Envie um texto ou um áudio.'
+                'Envie um texto, um áudio ou uma imagem.'
             )
 
         content_payload = {
-            'text': (content_text or '').strip() or None,
+            'text': content_text_clean or None,
             'audio_document_id': (
                 str(audio_document.id) if audio_document else None
             ),
             'attachment_document_ids': [
                 str(d.id) for d in (attachment_documents or [])
             ],
+            'is_custom': bool(next_question.get('is_custom')),
         }
 
         event = BriefingEventService.log(
@@ -335,7 +475,7 @@ class BriefingService:
             defaults={'state': BriefingAnswer.STATE_ANSWERED},
         )
         answer.state = BriefingAnswer.STATE_ANSWERED
-        answer.latest_content = (content_text or '').strip()
+        answer.latest_content = content_text_clean
         answer.latest_event = event
 
         if audio_document is not None:
@@ -351,10 +491,17 @@ class BriefingService:
 
         answer.save()
 
+        logger.info(
+            'Answer saved | briefing=%s | q=%s | state=%s | '
+            'has_text=%s | has_audio=%s | attachments=%d',
+            briefing.id, next_question['id'], answer.state,
+            bool(content_text_clean), bool(audio_document),
+            len(attachment_documents or []),
+        )
+
         if attachment_documents:
             answer.attachments.set(attachment_documents)
 
-        # 8. Conclusão automática?
         if BriefingService._all_required_answered(briefing):
             briefing.status = Briefing.STATUS_COMPLETED
             briefing.completed_at = timezone.now()
@@ -368,7 +515,6 @@ class BriefingService:
                 content={'auto': True},
             )
 
-            # Notificação por e-mail — FORA da transação
             from django.db import transaction as _tx
             _briefing_id = briefing.id
             _tx.on_commit(
@@ -377,7 +523,6 @@ class BriefingService:
                 )
             )
 
-        # 9. Agenda transcrição (best-effort)
         if audio_document is not None:
             try:
                 from django.db import transaction as _tx
@@ -392,7 +537,7 @@ class BriefingService:
         return answer
 
     # ==================================================================
-    # FLUXO / SEQUÊNCIA
+    # FLUXO
     # ==================================================================
 
     @staticmethod
@@ -476,20 +621,26 @@ class BriefingService:
 
     @staticmethod
     @transaction.atomic
-    def close(*, briefing: Briefing, actor) -> Briefing:
-        if briefing.status == Briefing.STATUS_CLOSED:
+    def cancel(*, briefing: Briefing, actor) -> Briefing:
+        if briefing.status == Briefing.STATUS_CANCELLED:
             return briefing
-        briefing.status = Briefing.STATUS_CLOSED
-        briefing.closed_at = timezone.now()
+        briefing.status = Briefing.STATUS_CANCELLED
+        briefing.cancelled_at = timezone.now()
         briefing.save(update_fields=[
-            'status', 'closed_at', 'updated_at',
+            'status', 'cancelled_at', 'updated_at',
         ])
         BriefingEventService.log(
             briefing=briefing,
             kind=BriefingEvent.KIND_CLOSED,
             user=actor,
+            content={'reason': 'architect_cancelled'},
         )
         return briefing
+
+    @staticmethod
+    @transaction.atomic
+    def close(*, briefing: Briefing, actor) -> Briefing:
+        return BriefingService.cancel(briefing=briefing, actor=actor)
 
     @staticmethod
     @transaction.atomic
@@ -502,8 +653,7 @@ class BriefingService:
     ) -> Briefing:
         allowed_states = {
             Briefing.STATUS_PAUSED,
-            Briefing.STATUS_CLOSED,
-            Briefing.STATUS_EXPIRED,
+            Briefing.STATUS_CANCELLED,
             Briefing.STATUS_COMPLETED,
         }
         if briefing.status not in allowed_states:
@@ -513,8 +663,8 @@ class BriefingService:
             )
 
         needs_new_deadline = (
-            briefing.status == Briefing.STATUS_EXPIRED
-            or briefing.has_expired()
+            briefing.status == Briefing.STATUS_CANCELLED
+            and briefing.has_expired()
         )
         if needs_new_deadline and new_expires_at is None:
             raise BriefingReopenError(
@@ -529,10 +679,10 @@ class BriefingService:
             briefing.expires_at = new_expires_at
 
         briefing.status = Briefing.STATUS_IN_PROGRESS
-        briefing.closed_at = None
+        briefing.cancelled_at = None
         briefing.completed_at = None
         briefing.save(update_fields=[
-            'status', 'closed_at', 'completed_at',
+            'status', 'cancelled_at', 'completed_at',
             'expires_at', 'updated_at',
         ])
 
@@ -614,7 +764,7 @@ class BriefingService:
         return answer
 
     # ==================================================================
-    # TRANSCRIÇÃO — agenda
+    # TRANSCRIÇÃO / NOTIFICAÇÃO — agendamento
     # ==================================================================
 
     @staticmethod
@@ -626,22 +776,12 @@ class BriefingService:
             TranscriptionService.run_async(answer_id)
         except Exception:
             logger.exception(
-                'Não foi possível agendar transcrição (answer=%s). '
-                'Verifique se Celery está configurado.', answer_id,
+                'Não foi possível agendar transcrição (answer=%s).',
+                answer_id,
             )
-
-    # ==================================================================
-    # NOTIFICAÇÃO DE CONCLUSÃO — agenda
-    # ==================================================================
 
     @staticmethod
     def _schedule_completion_notification(briefing_id) -> None:
-        """
-        Dispara a notificação de conclusão após o commit.
-
-        Nunca levanta: falha de e-mail não pode derrubar a conclusão
-        do briefing.
-        """
         try:
             from apps.briefings.services.notification_service import (
                 NotificationService,

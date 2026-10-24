@@ -13,6 +13,50 @@ from apps.briefings.services.briefing_service import BriefingService
 
 
 # =========================================================================
+# HELPERS
+# =========================================================================
+
+def _absolute_url(request, url):
+    """
+    Retorna URL absoluta quando possível.
+
+    B2/R2 com `AWS_QUERYSTRING_AUTH=True` já devolvem URLs assinadas
+    absolutas. Local devolve `/media/...` — precisa do request para
+    virar absoluta.
+    """
+    if not url:
+        return ''
+    if url.startswith(('http://', 'https://')):
+        return url
+    if request is not None:
+        try:
+            return request.build_absolute_uri(url)
+        except Exception:
+            return url
+    return url
+
+
+def _briefing_cover_url(briefing, request=None):
+    """
+    Resolve a URL da capa de um briefing.
+
+    A capa vive em `template.cover`. O briefing é uma execução — só
+    referencia o template. Se o template foi excluído ou não tem
+    capa, devolve string vazia.
+    """
+    template = briefing.template
+    if template is None:
+        return ''
+    if not template.cover:
+        return ''
+    try:
+        url = template.cover.url
+    except Exception:
+        return ''
+    return _absolute_url(request, url)
+
+
+# =========================================================================
 # ANSWER (leitura)
 # =========================================================================
 
@@ -112,6 +156,7 @@ class BriefingListSerializer(serializers.ModelSerializer):
     template_name = serializers.CharField(
         source='template.name', read_only=True, allow_null=True,
     )
+    cover_url = serializers.SerializerMethodField()
     progress = serializers.SerializerMethodField()
 
     class Meta:
@@ -125,12 +170,17 @@ class BriefingListSerializer(serializers.ModelSerializer):
             'client_name',
             'template',
             'template_name',
+            'cover_url',
             'expires_at',
             'progress',
             'created_at',
             'updated_at',
         ]
         read_only_fields = fields
+
+    def get_cover_url(self, obj):
+        request = self.context.get('request') if self.context else None
+        return _briefing_cover_url(obj, request)
 
     def get_progress(self, obj):
         return BriefingService.compute_progress(obj)
@@ -150,6 +200,7 @@ class BriefingDetailSerializer(serializers.ModelSerializer):
     template_name = serializers.CharField(
         source='template.name', read_only=True, allow_null=True,
     )
+    cover_url = serializers.SerializerMethodField()
     progress = serializers.SerializerMethodField()
     answers = serializers.SerializerMethodField()
     workspace_id = serializers.UUIDField(
@@ -168,17 +219,22 @@ class BriefingDetailSerializer(serializers.ModelSerializer):
             'client_name',
             'template',
             'template_name',
+            'cover_url',
             'structure_snapshot',
             'expires_at',
             'started_at',
             'completed_at',
-            'closed_at',
+            'cancelled_at',
             'progress',
             'answers',
             'created_at',
             'updated_at',
         ]
         read_only_fields = fields
+
+    def get_cover_url(self, obj):
+        request = self.context.get('request') if self.context else None
+        return _briefing_cover_url(obj, request)
 
     def get_progress(self, obj):
         return BriefingService.compute_progress(obj)

@@ -3,92 +3,273 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Meus briefings · Clivo</title>
-    <meta name="csrf-token" content="{{ csrf_token }}">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#101014">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Clivo">
+    <title>Meu Portal · Clivo</title>
+
+    <!-- Favicon / Ícone da Aba do Navegador -->
+    <link rel="icon" type="image/jfif" href="{% static 'img/c1.jfif' %}">
+
+    <!-- PWA -->
+    <link rel="manifest" href="{% static 'manifest.json' %}">
+    <link rel="apple-touch-icon" href="{% static 'icons/icon-192.png' %}">
+    <link rel="icon" type="image/png" sizes="192x192" href="{% static 'icons/icon-192.png' %}">
+    <link rel="icon" type="image/png" sizes="512x512" href="{% static 'icons/icon-512.png' %}">
+    <meta name="mobile-web-app-capable" content="yes">
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap" rel="stylesheet">
+
+    <meta name="csrf-token" content="{{ csrf_token }}">
 
     <style>
         :root {
-            --bg: #FFFFFF;
-            --bg-soft: #F7F7F9;
-            --border: #E9E9EC;
-            --text: #101014;
-            --text-soft: #6B6B76;
-            --text-mute: #9797A1;
+            --bg-page: #FFFFFF;
+            --bg-secondary: #F7F7F9;
+            --bg-hover: #F0F0F2;
+            --bg-elevated: #FFFFFF;
+            --border-color: #E9E9EC;
+            --border-light: #EFEFF1;
+
+            --text-primary: #101014;
+            --text-secondary: #6B6B76;
+            --text-tertiary: #9797A1;
+
             --green: #17B26A;
-            --radius: 12px;
-            --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            --green-bg: #E6F8EF;
+            --blue: #3B82F6;
+            --blue-bg: #EEF2FF;
+            --purple: #8B5CF6;
+            --purple-bg: #F5F3FF;
+            --amber: #F59E0B;
+            --amber-bg: #FEF3C7;
+            --red: #E5484D;
+            --red-bg: #FDECEC;
+
+            --radius-sm: 6px;
+            --radius-md: 10px;
+            --radius-lg: 14px;
+            --radius-xl: 18px;
+
+            --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            --transition: 140ms ease-out;
+            --transition-smooth: 260ms cubic-bezier(0.16, 1, 0.3, 1);
+
+            --safe-top: env(safe-area-inset-top, 0px);
+            --safe-bottom: env(safe-area-inset-bottom, 0px);
+            --safe-left: env(safe-area-inset-left, 0px);
+            --safe-right: env(safe-area-inset-right, 0px);
+
+            --glow-1: rgba(139, 92, 246, 0.10);
+            --glow-2: rgba(59, 130, 246, 0.08);
         }
+
         [data-theme="dark"] {
-            --bg: #0A0A0A;
-            --bg-soft: #141414;
-            --border: #1F1F1F;
-            --text: #F5F5F5;
-            --text-soft: #A0A0A0;
-            --text-mute: #666666;
+            --bg-page: #0A0A0A;
+            --bg-secondary: #0F0F0F;
+            --bg-hover: #1A1A1A;
+            --bg-elevated: #141414;
+            --border-color: #1F1F1F;
+            --border-light: #1F1F1F;
+
+            --text-primary: #F5F5F5;
+            --text-secondary: #A0A0A0;
+            --text-tertiary: #666666;
+
+            --green: #4ADE80;
+            --green-bg: rgba(74, 222, 128, 0.08);
+            --blue: #60A5FA;
+            --blue-bg: rgba(96, 165, 250, 0.08);
+            --purple: #A78BFA;
+            --purple-bg: rgba(167, 139, 250, 0.08);
+            --amber: #FBBF24;
+            --amber-bg: rgba(251, 191, 36, 0.08);
+            --red: #F87171;
+            --red-bg: rgba(248, 113, 113, 0.08);
+
+            --glow-1: rgba(139, 92, 246, 0.08);
+            --glow-2: rgba(59, 130, 246, 0.06);
         }
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+
+        *, *::before, *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
         html, body { height: 100%; }
+
         body {
-            font-family: var(--font);
-            background: var(--bg);
-            color: var(--text);
+            font-family: var(--font-family);
+            background: var(--bg-page);
+            color: var(--text-primary);
             -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
             min-height: 100vh;
+            min-height: 100dvh;
+            overflow-x: hidden;
+            font-size: 14px;
+            line-height: 1.5;
             display: flex;
             flex-direction: column;
+            position: relative;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: -10%;
+            right: -20%;
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, var(--glow-1) 0%, transparent 70%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        a { color: inherit; text-decoration: none; }
+        button {
+            font-family: var(--font-family);
+            cursor: pointer;
+            background: none;
+            border: none;
+            color: inherit;
         }
 
         .p-header {
-            padding: 18px 22px;
-            border-bottom: 1px solid var(--border);
+            position: relative;
+            z-index: 1;
+            padding: 14px 18px;
             display: flex;
             align-items: center;
             gap: 10px;
             flex-shrink: 0;
+            padding-top: calc(14px + var(--safe-top));
+            padding-left: calc(18px + var(--safe-left));
+            padding-right: calc(18px + var(--safe-right));
+            animation: fadeIn 0.4s ease forwards;
         }
+
         .p-logo {
-            width: 26px; height: 26px; border-radius: 6px;
-            background: var(--text); color: var(--bg);
-            display: flex; align-items: center; justify-content: center;
-            font-size: 12px; font-weight: 700;
+            width: 28px;
+            height: 28px;
+            border-radius: 8px;
+            background: var(--text-primary);
+            color: var(--bg-page);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            font-weight: 800;
+            flex-shrink: 0;
+            letter-spacing: -0.03em;
         }
-        .p-name { font-size: 13px; font-weight: 600; flex: 1; }
-        .p-logout {
-            font-size: 12px;
-            color: var(--text-soft);
-            background: none;
-            border: none;
-            cursor: pointer;
-            padding: 6px 10px;
-            border-radius: 6px;
-            transition: background-color 140ms ease;
+
+        .p-name {
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: -0.1px;
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            min-width: 0;
         }
-        .p-logout:hover { background: var(--bg-soft); color: var(--text); }
+
+        .p-actions {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            flex-shrink: 0;
+        }
+
+        .p-icon-btn {
+            width: 30px;
+            height: 30px;
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-tertiary);
+            transition: background-color var(--transition), color var(--transition);
+        }
+
+        .p-icon-btn:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+
+        .p-icon-btn svg {
+            width: 16px;
+            height: 16px;
+            stroke-width: 1.6;
+        }
 
         .p-main {
+            position: relative;
+            z-index: 1;
             flex: 1;
-            padding: 32px 22px 60px;
-            max-width: 640px;
+            padding: 16px 16px 60px;
+            max-width: 840px;
             width: 100%;
             margin: 0 auto;
+            padding-left: calc(16px + var(--safe-left));
+            padding-right: calc(16px + var(--safe-right));
+            padding-bottom: calc(60px + var(--safe-bottom));
         }
 
-        .p-page-title {
-            font-size: 22px;
+        .p-greeting {
+            margin-bottom: 20px;
+            animation: fadeInUp 0.5s var(--transition-smooth) forwards;
+        }
+
+        .p-greeting h1 {
+            font-size: 20px;
             font-weight: 700;
             letter-spacing: -0.4px;
-            margin-bottom: 6px;
+            line-height: 1.2;
+            margin-bottom: 4px;
         }
-        .p-page-sub {
-            font-size: 13.5px;
-            color: var(--text-soft);
-            margin-bottom: 24px;
+
+        .p-greeting p {
+            font-size: 12.5px;
+            color: var(--text-tertiary);
+            line-height: 1.5;
+        }
+
+        .p-section-head {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            gap: 8px;
+        }
+
+        .p-section-title {
+            font-size: 11.5px;
+            font-weight: 600;
+            color: var(--text-tertiary);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
+        .p-section-count {
+            font-size: 11px;
+            color: var(--text-tertiary);
+            font-variant-numeric: tabular-nums;
         }
 
         .p-state {
@@ -96,108 +277,481 @@
             flex-direction: column;
             align-items: center;
             text-align: center;
-            gap: 12px;
-            padding: 50px 20px;
-        }
-        .p-state.is-active { display: flex; }
-        .p-state-icon {
-            width: 46px; height: 46px;
-            border-radius: 50%;
-            background: var(--bg-soft);
-            color: var(--text-soft);
-            display: flex; align-items: center; justify-content: center;
-            font-size: 20px;
-        }
-        .p-state h2 { font-size: 16px; font-weight: 700; }
-        .p-state p {
-            font-size: 13px;
-            color: var(--text-soft);
-            max-width: 340px;
-            line-height: 1.55;
-        }
-        .p-spinner {
-            width: 22px; height: 22px;
-            border: 2px solid var(--border);
-            border-top-color: var(--text);
-            border-radius: 50%;
-            animation: spin 0.7s linear infinite;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-
-        .p-list {
-            display: flex;
-            flex-direction: column;
             gap: 10px;
+            padding: 44px 16px;
         }
-        .p-card {
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            padding: 16px 18px;
+
+        .p-state.is-active { display: flex; }
+
+        .p-state-icon {
+            width: 46px;
+            height: 46px;
+            border-radius: 14px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            color: var(--text-tertiary);
             display: flex;
             align-items: center;
-            gap: 14px;
-            cursor: pointer;
-            transition: border-color 140ms ease, background-color 140ms ease;
-            background: var(--bg);
-            text-decoration: none;
-            color: inherit;
+            justify-content: center;
+            margin-bottom: 2px;
         }
-        .p-card:hover {
-            border-color: var(--text-mute);
-            background: var(--bg-soft);
+
+        .p-state-icon svg {
+            width: 20px;
+            height: 20px;
+            stroke-width: 1.6;
         }
-        .p-card-info {
-            flex: 1;
-            min-width: 0;
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-        }
-        .p-card-title {
+
+        .p-state h2 {
             font-size: 14px;
             font-weight: 600;
             letter-spacing: -0.1px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
         }
-        .p-card-meta {
+
+        .p-state p {
+            font-size: 12.5px;
+            color: var(--text-tertiary);
+            max-width: 300px;
+            line-height: 1.55;
+        }
+
+        .p-spinner {
+            width: 22px;
+            height: 22px;
+            border: 2px solid var(--border-color);
+            border-top-color: var(--text-primary);
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+        }
+
+        .p-list {
+            display: none;
+            gap: 12px;
+            margin-bottom: 28px;
+        }
+
+        .p-list.is-active { display: grid; }
+        .p-list { grid-template-columns: 1fr; }
+
+        @media (min-width: 560px) {
+            .p-list { grid-template-columns: repeat(2, 1fr); gap: 14px; }
+        }
+
+        .p-card {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            background: var(--bg-elevated);
+            cursor: pointer;
+            transition: transform var(--transition-smooth),
+                        border-color var(--transition),
+                        box-shadow var(--transition);
+            color: inherit;
+        }
+
+        .p-card:hover {
+            transform: translateY(-2px);
+            border-color: var(--text-tertiary);
+            box-shadow: 0 10px 24px -12px rgba(0, 0, 0, 0.15);
+        }
+
+        [data-theme="dark"] .p-card:hover {
+            box-shadow: 0 10px 24px -12px rgba(0, 0, 0, 0.6);
+        }
+
+        .p-card:active {
+            transform: translateY(-1px) scale(0.998);
+        }
+
+        .p-cover {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 30 / 9;
+            background: linear-gradient(135deg, var(--purple-bg) 0%, var(--blue-bg) 100%);
+            overflow: hidden;
             display: flex;
             align-items: center;
-            gap: 8px;
-            font-size: 12px;
-            color: var(--text-soft);
+            justify-content: center;
+            color: var(--purple);
         }
-        .p-badge {
+
+        .p-cover img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            transition: transform 500ms var(--transition-smooth);
+        }
+
+        .p-card:hover .p-cover img {
+            transform: scale(1.05);
+        }
+
+        .p-cover-fallback {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        .p-cover-fallback::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background:
+                radial-gradient(circle at 25% 30%, rgba(139, 92, 246, 0.22) 0%, transparent 55%),
+                radial-gradient(circle at 75% 70%, rgba(59, 130, 246, 0.20) 0%, transparent 55%);
+            pointer-events: none;
+        }
+
+        .p-cover-fallback svg {
+            width: 26px;
+            height: 26px;
+            stroke-width: 1.4;
+            position: relative;
+            z-index: 1;
+            opacity: 0.65;
+        }
+
+        .p-cover-fallback-text {
+            font-size: 10px;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--text-tertiary);
+            position: relative;
+            z-index: 1;
+        }
+
+        .p-cover-status {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 6px;
+            pointer-events: none;
+        }
+
+        .p-status-chip {
             display: inline-flex;
             align-items: center;
             gap: 4px;
-            font-size: 11px;
-            font-weight: 500;
-            padding: 2px 8px;
+            font-size: 10.5px;
+            font-weight: 600;
+            padding: 4px 9px;
             border-radius: 999px;
-            background: var(--bg-soft);
-            border: 1px solid var(--border);
-            color: var(--text-soft);
+            background: rgba(255, 255, 255, 0.92);
+            color: var(--text-primary);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            letter-spacing: 0.01em;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            white-space: nowrap;
         }
-        .p-badge.is-done {
-            color: var(--green);
-            border-color: var(--green);
-            background: transparent;
+
+        [data-theme="dark"] .p-status-chip {
+            background: rgba(20, 20, 20, 0.85);
+            border-color: rgba(255, 255, 255, 0.08);
+            color: var(--text-primary);
         }
-        .p-card-arrow {
-            color: var(--text-mute);
-            font-size: 14px;
+
+        .p-status-chip svg {
+            width: 11px;
+            height: 11px;
+            stroke-width: 2.2;
             flex-shrink: 0;
         }
 
-        .p-progress {
+        .p-status-chip.is-deadline { color: var(--text-secondary); }
+        .p-status-chip.is-deadline.is-soon { color: var(--amber); }
+        .p-status-chip.is-deadline.is-late { color: var(--red); }
+        .p-status-chip.is-done { color: var(--green); }
+        .p-status-chip.is-progress { color: var(--blue); }
+
+        .p-card-body {
+            padding: 12px 14px 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 9px;
+        }
+
+        .p-card-title {
+            font-size: 13.5px;
+            font-weight: 700;
+            letter-spacing: -0.2px;
+            color: var(--text-primary);
+            line-height: 1.3;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            min-height: 35px;
+        }
+
+        .p-card-meta {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            font-size: 11px;
+            color: var(--text-tertiary);
+        }
+
+        .p-card-cta {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 11.5px;
+            font-weight: 600;
+            color: var(--text-primary);
+            flex-shrink: 0;
+        }
+
+        .p-card-cta svg {
+            width: 11px;
+            height: 11px;
+            stroke-width: 2;
+            transition: transform var(--transition);
+        }
+
+        .p-card:hover .p-card-cta svg {
+            transform: translateX(2px);
+        }
+
+        .p-progress-bar {
+            height: 3px;
+            width: 100%;
+            background: var(--bg-hover);
+            border-radius: 999px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .p-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--purple), var(--blue));
+            border-radius: 999px;
+            transition: width 500ms var(--transition-smooth);
+        }
+
+        .p-progress-fill.is-done {
+            background: linear-gradient(90deg, var(--green), #34D399);
+        }
+
+        .p-progress-text {
+            font-size: 10.5px;
+            color: var(--text-tertiary);
+            font-variant-numeric: tabular-nums;
+            font-weight: 500;
+        }
+
+        .p-footer-docs {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 50;
+            background: var(--bg-page);
+            border-top: 1px solid var(--border-color);
+            padding: 10px 16px calc(10px + var(--safe-bottom));
+            padding-left: calc(16px + var(--safe-left));
+            padding-right: calc(16px + var(--safe-right));
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            background: color-mix(in srgb, var(--bg-page) 88%, transparent);
+            animation: footerIn 0.5s var(--transition-smooth) forwards;
+        }
+
+        @supports not (background: color-mix(in srgb, white, white)) {
+            .p-footer-docs { background: var(--bg-page); }
+        }
+
+        @keyframes footerIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        .p-footer-docs-inner {
+            max-width: 840px;
+            margin: 0 auto;
+        }
+
+        .p-doc-card {
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 14px;
+            border: 1px dashed var(--border-color);
+            border-radius: var(--radius-md);
+            background: var(--bg-secondary);
+            cursor: pointer;
+            transition: border-color var(--transition), background-color var(--transition);
+            overflow: hidden;
+        }
+
+        .p-doc-card:hover {
+            border-color: var(--text-tertiary);
+            background: var(--bg-hover);
+        }
+
+        .p-doc-card:active { transform: scale(0.998); }
+
+        .p-doc-card.locked::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(120deg, transparent 30%, rgba(255, 255, 255, 0.08) 50%, transparent 70%);
+            animation: shimmer 3.2s ease-in-out infinite;
+            pointer-events: none;
+        }
+
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+
+        .p-doc-icon {
+            width: 34px;
+            height: 34px;
+            border-radius: 10px;
+            background: var(--bg-page);
+            border: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-secondary);
+            flex-shrink: 0;
+        }
+
+        .p-doc-icon svg { width: 15px; height: 15px; stroke-width: 1.6; }
+
+        .p-doc-body { flex: 1; min-width: 0; }
+
+        .p-doc-title {
+            font-size: 12.5px;
+            font-weight: 600;
+            color: var(--text-primary);
             display: flex;
             align-items: center;
             gap: 6px;
-            font-size: 11px;
-            color: var(--text-mute);
-            font-variant-numeric: tabular-nums;
+            letter-spacing: -0.1px;
+            line-height: 1.3;
+        }
+
+        .p-doc-title svg {
+            width: 11px;
+            height: 11px;
+            stroke-width: 2;
+            color: var(--amber);
+        }
+
+        .p-doc-desc {
+            font-size: 10.5px;
+            color: var(--text-tertiary);
+            margin-top: 1px;
+            line-height: 1.35;
+        }
+
+        .p-doc-arrow { color: var(--text-tertiary); flex-shrink: 0; }
+        .p-doc-arrow svg { width: 13px; height: 13px; stroke-width: 1.8; }
+
+        .p-toast {
+            position: fixed;
+            bottom: calc(96px + var(--safe-bottom));
+            left: 50%;
+            transform: translateX(-50%) translateY(140%);
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            padding: 12px 16px;
+            border-radius: var(--radius-md);
+            font-size: 12.5px;
+            font-weight: 500;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            z-index: 9999;
+            box-shadow: 0 16px 40px -12px rgba(0, 0, 0, 0.25);
+            transition: transform 320ms cubic-bezier(0.16, 1, 0.3, 1), opacity 200ms ease;
+            pointer-events: none;
+            max-width: calc(100% - 32px);
+            width: max-content;
+            line-height: 1.4;
+            opacity: 0;
+            visibility: hidden;
+        }
+
+        [data-theme="dark"] .p-toast {
+            box-shadow: 0 16px 40px -12px rgba(0, 0, 0, 0.8);
+        }
+
+        .p-toast.is-visible {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .p-toast-icon {
+            width: 26px;
+            height: 26px;
+            border-radius: 8px;
+            background: var(--amber-bg);
+            color: var(--amber);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            margin-top: -1px;
+        }
+
+        .p-toast-icon svg { width: 13px; height: 13px; stroke-width: 2; }
+
+        .p-toast-body {
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+            min-width: 0;
+        }
+
+        .p-toast-title { font-weight: 600; font-size: 12.5px; color: var(--text-primary); }
+        .p-toast-desc { font-weight: 400; font-size: 11.5px; color: var(--text-tertiary); }
+
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        @media (min-width: 480px) {
+            .p-header { padding: 16px 22px; padding-top: calc(16px + var(--safe-top)); }
+            .p-main { padding: 20px 22px 100px; }
+            .p-greeting h1 { font-size: 24px; }
+            .p-greeting p { font-size: 13px; }
+        }
+
+        @media (min-width: 720px) {
+            .p-main { padding: 28px 28px 110px; }
+            .p-greeting h1 { font-size: 28px; }
+            .p-greeting { margin-bottom: 24px; }
+            .p-card-title { font-size: 14px; }
+        }
+
+        @media (min-width: 1024px) {
+            .p-header { padding: 20px 32px; }
+            .p-main { padding: 32px 32px 120px; }
         }
     </style>
 </head>
@@ -206,74 +760,168 @@
 <header class="p-header">
     <div class="p-logo">C</div>
     <div class="p-name" id="pClientName">…</div>
-    <button class="p-logout" id="pLogout" type="button">Sair</button>
+
+    <div class="p-actions">
+        <button class="p-icon-btn" id="themeToggle" type="button" title="Alternar tema" aria-label="Alternar tema">
+            <span id="themeIconWrapper"></span>
+        </button>
+        <button class="p-icon-btn" id="pLogout" type="button" title="Sair" aria-label="Sair">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                <polyline points="16 17 21 12 16 7"/>
+                <line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+        </button>
+    </div>
 </header>
 
 <main class="p-main">
-    <h1 class="p-page-title">Meus briefings</h1>
-    <p class="p-page-sub">Responda quando puder — você pode voltar depois.</p>
+
+    <div class="p-greeting">
+        <h1 id="pGreeting">Olá 👋</h1>
+        <p>Vamos conversar sobre o seu projeto? Responda quando puder — você pode voltar depois.</p>
+    </div>
 
     <div class="p-state is-active" id="pStateLoading">
         <div class="p-spinner"></div>
     </div>
 
     <div class="p-state" id="pStateError">
-        <div class="p-state-icon"><i class="fas fa-exclamation-triangle"></i></div>
+        <div class="p-state-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/>
+                <line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+        </div>
         <h2 id="pErrorTitle">Erro</h2>
         <p id="pErrorMessage"></p>
     </div>
 
     <div class="p-state" id="pStateEmpty">
-        <div class="p-state-icon"><i class="fas fa-inbox"></i></div>
+        <div class="p-state-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/>
+                <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>
+            </svg>
+        </div>
         <h2>Nada por aqui ainda</h2>
         <p>Assim que seu arquiteto enviar um briefing, ele aparecerá nesta lista.</p>
     </div>
 
-    <div class="p-list" id="pList" style="display:none;"></div>
+    <div id="pBriefingsSection" style="display:none;">
+        <div class="p-section-head">
+            <span class="p-section-title">Meus briefings</span>
+            <span class="p-section-count" id="pBriefingsCount"></span>
+        </div>
+        <div class="p-list" id="pList"></div>
+    </div>
+
 </main>
+
+<footer class="p-footer-docs" id="pDocsFooter">
+    <div class="p-footer-docs-inner">
+        <div class="p-doc-card locked" id="pDocsCard" role="button" tabindex="0" aria-label="Documentos — funcionalidade ainda não liberada">
+            <div class="p-doc-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                </svg>
+            </div>
+            <div class="p-doc-body">
+                <div class="p-doc-title">
+                    Arquivos e documentos
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                    </svg>
+                </div>
+                <div class="p-doc-desc">Funcionalidade ainda não liberada.</div>
+            </div>
+            <div class="p-doc-arrow">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="9 18 15 12 9 6"/>
+                </svg>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<div class="p-toast" id="pToast" role="status" aria-live="polite">
+    <div class="p-toast-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M2 20h20"/>
+            <path d="M5 20V8l7-5 7 5v12"/>
+            <path d="M9 20v-6h6v6"/>
+        </svg>
+    </div>
+    <div class="p-toast-body">
+        <div class="p-toast-title" id="pToastTitle">Funcionalidade ainda não liberada</div>
+        <div class="p-toast-desc" id="pToastDesc">Estamos trabalhando nisso. Em breve estará disponível.</div>
+    </div>
+</div>
 
 <script>
 (function () {
     'use strict';
 
-    const nameEl = document.getElementById('pClientName');
-    const stateLoading = document.getElementById('pStateLoading');
-    const stateError = document.getElementById('pStateError');
-    const stateEmpty = document.getElementById('pStateEmpty');
-    const listEl = document.getElementById('pList');
+    // TEMA
+    var THEME_KEY = 'clivo-theme';
+    var currentTheme = localStorage.getItem(THEME_KEY) || 'light';
+    document.documentElement.setAttribute('data-theme', currentTheme);
 
+    var SUN_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">' +
+        '<circle cx="12" cy="12" r="4"/>' +
+        '<path d="M12 2v2"/><path d="M12 20v2"/>' +
+        '<path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/>' +
+        '<path d="M2 12h2"/><path d="M20 12h2"/>' +
+        '<path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>' +
+        '</svg>';
+
+    var MOON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">' +
+        '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>' +
+        '</svg>';
+
+    function updateThemeIcon(theme) {
+        var wrapper = document.getElementById('themeIconWrapper');
+        if (!wrapper) return;
+        wrapper.innerHTML = theme === 'dark' ? SUN_SVG : MOON_SVG;
+    }
+    updateThemeIcon(currentTheme);
+
+    document.getElementById('themeToggle').addEventListener('click', function () {
+        currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', currentTheme);
+        localStorage.setItem(THEME_KEY, currentTheme);
+        updateThemeIcon(currentTheme);
+    });
+
+    // REFS
+    var nameEl = document.getElementById('pClientName');
+    var greetingEl = document.getElementById('pGreeting');
+    var stateLoading = document.getElementById('pStateLoading');
+    var stateError = document.getElementById('pStateError');
+    var stateEmpty = document.getElementById('pStateEmpty');
+    var briefingsSection = document.getElementById('pBriefingsSection');
+    var briefingsCount = document.getElementById('pBriefingsCount');
+    var listEl = document.getElementById('pList');
+    var docsCard = document.getElementById('pDocsCard');
+    var toast = document.getElementById('pToast');
+    var toastTitle = document.getElementById('pToastTitle');
+    var toastDesc = document.getElementById('pToastDesc');
+
+    // HELPERS
     function showState(id) {
-        [stateLoading, stateError, stateEmpty].forEach(el => {
+        [stateLoading, stateError, stateEmpty].forEach(function (el) {
             el.classList.toggle('is-active', el.id === id);
         });
-        listEl.style.display = (id === null) ? 'flex' : 'none';
+        listEl.classList.toggle('is-active', id === null);
+        briefingsSection.style.display = (id === null) ? 'block' : 'none';
     }
 
     function getCookie(name) {
-        const v = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+        var v = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
         return v ? v.pop() : '';
-    }
-
-    async function api(url, options = {}) {
-        const opts = {
-            method: options.method || 'GET',
-            credentials: 'include',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken'),
-                'X-Requested-With': 'XMLHttpRequest',
-            },
-        };
-        if (options.body) opts.body = JSON.stringify(options.body);
-        const res = await fetch(url, opts);
-        let data = null;
-        try { data = await res.json(); } catch (_) {}
-        if (!res.ok) {
-            const err = new Error((data && (data.error || data.detail)) || `Erro ${res.status}`);
-            err.status = res.status;
-            throw err;
-        }
-        return data;
     }
 
     function escapeHtml(str) {
@@ -286,67 +934,335 @@
             .replace(/'/g, '&#39;');
     }
 
-    function renderList(briefings) {
+    async function api(url, options) {
+        options = options || {};
+        var opts = {
+            method: options.method || 'GET',
+            credentials: 'include',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken'),
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        };
+        if (options.body) opts.body = JSON.stringify(options.body);
+        var res = await fetch(url, opts);
+        var data = null;
+        try { data = await res.json(); } catch (_) {}
+        if (!res.ok) {
+            var err = new Error((data && (data.error || data.detail)) || ('Erro ' + res.status));
+            err.status = res.status;
+            throw err;
+        }
+        return data;
+    }
+
+    var toastTimeout = null;
+    function showToast(title, desc) {
+        toastTitle.textContent = title || 'Funcionalidade ainda não liberada';
+        toastDesc.textContent = desc || 'Estamos trabalhando nisso. Em breve estará disponível.';
+        toast.classList.add('is-visible');
+        clearTimeout(toastTimeout);
+        toastTimeout = setTimeout(function () {
+            toast.classList.remove('is-visible');
+        }, 3200);
+    }
+
+    // FORMATAÇÃO DE PRAZO
+    function formatDeadline(isoString) {
+        if (!isoString) return null;
+
+        var d = new Date(isoString);
+        if (isNaN(d.getTime())) return null;
+
+        var now = new Date();
+        var diffMs = d.getTime() - now.getTime();
+        var diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+        var isLate = diffMs < 0;
+        var isSoon = !isLate && diffDays <= 2;
+
+        var hh = ('0' + d.getHours()).slice(-2);
+        var mm = ('0' + d.getMinutes()).slice(-2);
+        var timeStr = hh + ':' + mm;
+
+        var dayStr;
+        if (isLate) {
+            dayStr = 'Atrasado';
+        } else if (diffDays <= 0) {
+            dayStr = 'Hoje';
+        } else if (diffDays === 1) {
+            dayStr = 'Amanhã';
+        } else if (diffDays <= 7) {
+            dayStr = 'Em ' + diffDays + 'd';
+        } else {
+            var months = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun',
+                          'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+            dayStr = d.getDate() + ' ' + months[d.getMonth()];
+        }
+
+        return {
+            text: dayStr + ' · ' + timeStr,
+            isLate: isLate,
+            isSoon: isSoon,
+            raw: d
+        };
+    }
+
+    // ÍCONES SVG
+    var ICON_CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">' +
+        '<polyline points="20 6 9 17 4 12"/>' +
+        '</svg>';
+    var ICON_CLOCK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">' +
+        '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>' +
+        '</svg>';
+    var ICON_CALENDAR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">' +
+        '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>' +
+        '<line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>' +
+        '<line x1="3" y1="10" x2="21" y2="10"/>' +
+        '</svg>';
+    var ICON_ARROW = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">' +
+        '<line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>' +
+        '</svg>';
+    var ICON_SPARKLE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">' +
+        '<path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M5.6 18.4 18.4 5.6"/>' +
+        '</svg>';
+
+    // MAPA DE STATUS (backend → portal)
+    var STATUS_MAP = {
+        'not_started': { label: 'Não iniciado', cls: '',          icon: ICON_CLOCK },
+        'in_progress': { label: 'Em andamento', cls: 'is-progress', icon: ICON_CLOCK },
+        'reopened':    { label: 'Reaberto',     cls: 'is-progress', icon: ICON_CLOCK },
+        'paused':      { label: 'Pausado',      cls: 'is-deadline', icon: ICON_CALENDAR },
+        'completed':   { label: 'Concluído',    cls: 'is-done',     icon: ICON_CHECK },
+        'cancelled':   { label: 'Cancelado',    cls: 'is-deadline is-late', icon: ICON_CALENDAR },
+    };
+
+    // RENDER — CARDS
+    function renderBriefings(briefings) {
         listEl.innerHTML = '';
+
         if (!briefings.length) {
             showState('pStateEmpty');
             return;
         }
+
+        briefingsCount.textContent = briefings.length + (briefings.length === 1 ? ' item' : ' itens');
         showState(null);
 
-        briefings.forEach(b => {
-            const progress = b.progress || { answered: 0, total_required: 0 };
-            const total = progress.total_required || 0;
-            const done = progress.answered || 0;
-            const isDone = b.status === 'completed';
+        briefings.forEach(function (b, idx) {
+            var progress = b.progress || { answered: 0, total_required: 0 };
+            var total = progress.total_required || 0;
+            var done = progress.answered || 0;
+            var percent = total > 0 ? Math.round((done / total) * 100) : 0;
 
-            const card = document.createElement('a');
+            var statusKey = b.portal_status || 'in_progress';
+            var sMeta = STATUS_MAP[statusKey] || STATUS_MAP.in_progress;
+            var isDone = statusKey === 'completed';
+
+            // ---- Capa ----
+            var coverImg;
+            if (b.cover_url) {
+                coverImg = document.createElement('img');
+                coverImg.src = b.cover_url;
+                coverImg.alt = '';
+                coverImg.loading = 'lazy';
+                coverImg.addEventListener('error', function () {
+                    coverImg.style.display = 'none';
+                    var fb = coverImg.nextElementSibling;
+                    if (fb) fb.style.display = 'flex';
+                });
+            }
+
+            var coverFallback = document.createElement('div');
+            coverFallback.className = 'p-cover-fallback';
+            coverFallback.style.display = b.cover_url ? 'none' : 'flex';
+            coverFallback.innerHTML = ICON_SPARKLE + '<span class="p-cover-fallback-text">Briefing</span>';
+
+            // ---- Status chip ----
+            var statusChip = document.createElement('span');
+            statusChip.className = 'p-status-chip ' + sMeta.cls;
+            statusChip.innerHTML = sMeta.icon + sMeta.label;
+
+            // ---- Deadline chip ----
+            var deadline = formatDeadline(b.expires_at);
+            var deadlineChip = null;
+            if (deadline) {
+                deadlineChip = document.createElement('span');
+                var dcls = 'p-status-chip is-deadline';
+                if (deadline.isLate) dcls += ' is-late';
+                else if (deadline.isSoon) dcls += ' is-soon';
+                deadlineChip.className = dcls;
+                deadlineChip.innerHTML = ICON_CALENDAR + escapeHtml(deadline.text);
+            }
+
+            // ---- Card ----
+            var card = document.createElement('a');
             card.className = 'p-card';
-            card.href = `/portal/briefings/${b.id}/`;
-            card.innerHTML = `
-                <div class="p-card-info">
-                    <div class="p-card-title">${escapeHtml(b.title || 'Briefing')}</div>
-                    <div class="p-card-meta">
-                        <span class="p-badge ${isDone ? 'is-done' : ''}">
-                            ${isDone ? '✓ Concluído' : 'Em andamento'}
-                        </span>
-                        ${total ? `<span class="p-progress">${done}/${total}</span>` : ''}
-                    </div>
-                </div>
-                <i class="fas fa-chevron-right p-card-arrow"></i>
-            `;
+            card.href = '/portal/briefings/' + b.id + '/';
+            card.style.animation = 'fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) ' + (idx * 0.05) + 's forwards';
+            card.style.opacity = '0';
+
+            var cover = document.createElement('div');
+            cover.className = 'p-cover';
+            if (coverImg) cover.appendChild(coverImg);
+            cover.appendChild(coverFallback);
+
+            var statusBar = document.createElement('div');
+            statusBar.className = 'p-cover-status';
+            if (deadlineChip) {
+                statusBar.appendChild(deadlineChip);
+            } else {
+                statusBar.appendChild(document.createElement('span'));
+            }
+            statusBar.appendChild(statusChip);
+            cover.appendChild(statusBar);
+
+            var body = document.createElement('div');
+            body.className = 'p-card-body';
+
+            var titleEl = document.createElement('div');
+            titleEl.className = 'p-card-title';
+            titleEl.textContent = b.title || 'Briefing';
+
+            if (total > 0) {
+                var progressWrap = document.createElement('div');
+                progressWrap.style.display = 'flex';
+                progressWrap.style.flexDirection = 'column';
+                progressWrap.style.gap = '5px';
+
+                var bar = document.createElement('div');
+                bar.className = 'p-progress-bar';
+                var fill = document.createElement('div');
+                fill.className = 'p-progress-fill' + (isDone ? ' is-done' : '');
+                fill.style.width = percent + '%';
+                bar.appendChild(fill);
+
+                var row = document.createElement('div');
+                row.style.display = 'flex';
+                row.style.justifyContent = 'space-between';
+                row.style.alignItems = 'center';
+                row.style.gap = '8px';
+
+                var left = document.createElement('span');
+                left.className = 'p-progress-text';
+                left.textContent = done + ' de ' + total;
+                var right = document.createElement('span');
+                right.className = 'p-progress-text';
+                right.textContent = percent + '%';
+
+                row.appendChild(left);
+                row.appendChild(right);
+
+                progressWrap.appendChild(bar);
+                progressWrap.appendChild(row);
+                body.appendChild(titleEl);
+                body.appendChild(progressWrap);
+            } else {
+                body.appendChild(titleEl);
+            }
+
+            var meta = document.createElement('div');
+            meta.className = 'p-card-meta';
+
+            var metaLeft = document.createElement('span');
+            if (statusKey === 'completed') {
+                metaLeft.textContent = 'Concluído';
+            } else if (statusKey === 'cancelled') {
+                metaLeft.textContent = 'Cancelado';
+            } else if (statusKey === 'paused') {
+                metaLeft.textContent = 'Pausado';
+            } else if (statusKey === 'not_started') {
+                metaLeft.textContent = 'Começar agora';
+            } else if (statusKey === 'reopened') {
+                metaLeft.textContent = 'Reaberto';
+            } else {
+                metaLeft.textContent = total > 0 ? 'Continuar respondendo' : 'Sem perguntas obrigatórias';
+            }
+
+            var cta = document.createElement('span');
+            cta.className = 'p-card-cta';
+            if (statusKey === 'completed') {
+                cta.innerHTML = 'Rever ' + ICON_ARROW;
+            } else if (statusKey === 'cancelled' || statusKey === 'paused') {
+                cta.innerHTML = 'Ver ' + ICON_ARROW;
+            } else if (statusKey === 'not_started') {
+                cta.innerHTML = 'Começar ' + ICON_ARROW;
+            } else {
+                cta.innerHTML = 'Continuar ' + ICON_ARROW;
+            }
+
+            meta.appendChild(metaLeft);
+            meta.appendChild(cta);
+
+            body.appendChild(meta);
+
+            card.appendChild(cover);
+            card.appendChild(body);
             listEl.appendChild(card);
         });
     }
 
+    // BOOT
     async function boot() {
         try {
-            const me = await api('/api/portal/me/');
+            var me = await api('/api/portal/me/');
+            var firstName = (me.name || 'Cliente').split(' ')[0];
             nameEl.textContent = me.name || 'Cliente';
+            greetingEl.textContent = 'Olá, ' + firstName + ' 👋';
         } catch (err) {
             window.location.href = '/portal/';
             return;
         }
 
         try {
-            const briefings = await api('/api/portal/briefings/');
-            const list = Array.isArray(briefings) ? briefings : (briefings.results || []);
-            renderList(list);
+            var briefings = await api('/api/portal/briefings/');
+            var list = Array.isArray(briefings) ? briefings : (briefings.results || []);
+            renderBriefings(list);
         } catch (err) {
             console.error(err);
             document.getElementById('pErrorTitle').textContent = 'Erro ao carregar';
             document.getElementById('pErrorMessage').textContent =
-                'Não foi possível carregar seus briefings.';
+                'Não foi possível carregar seus briefings. Tente novamente.';
             showState('pStateError');
         }
     }
 
-    document.getElementById('pLogout').addEventListener('click', async () => {
+    // DOCUMENTOS BLOQUEADOS
+    function onDocsClick() {
+        showToast(
+            'Funcionalidade ainda não liberada',
+            'Documentos e arquivos estarão disponíveis em uma próxima atualização.'
+        );
+    }
+
+    docsCard.addEventListener('click', onDocsClick);
+    docsCard.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onDocsClick();
+        }
+    });
+
+    // LOGOUT
+    document.getElementById('pLogout').addEventListener('click', async function () {
         try {
             await api('/api/portal/logout/', { method: 'POST' });
         } catch (_) {}
         window.location.href = '/portal/';
     });
+
+    // SERVICE WORKER (PWA)
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+            navigator.serviceWorker.register('/sw.js', { scope: '/' })
+                .then(function (reg) {
+                    console.log('[PWA] Service Worker registrado:', reg.scope);
+                })
+                .catch(function (err) {
+                    console.warn('[PWA] Falha ao registrar SW:', err);
+                });
+        });
+    }
 
     boot();
 })();

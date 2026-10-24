@@ -2,6 +2,24 @@
 BriefingTemplateService — ciclo de vida do template reutilizável.
 
 Emite `BriefingTemplateEvent` para toda alteração estrutural.
+
+REGRA P0:
+    - `delete_template` NÃO apaga execuções em cascata.
+    - Versões (`BriefingTemplateVersion`) sobrevivem com
+      `template=NULL` quando o modelo lógico é excluído.
+    - O snapshot do briefing já contém tudo que precisa para
+      continuar funcionando.
+
+PUBLICAÇÃO / DESPUBLICAÇÃO:
+    - `publish_template` valida que existem sessões, cria uma nova
+      `BriefingTemplateVersion` (rascunho), popula `structure` a partir
+      das tabelas atuais, e publica essa versão.
+    - `unpublish_template` volta o status do template para `draft`
+      SEM tocar em versões publicadas.
+    - `archive_template` move o template para `archived`.
+
+Briefings em execução NUNCA são afetados por essas transições —
+usam `structure_snapshot` imutável.
 """
 
 import logging
@@ -13,11 +31,11 @@ from apps.briefings.models import (
     BriefingSection,
     BriefingQuestion,
     BriefingTemplateEvent,
+    BriefingTemplateVersion,
 )
 from apps.briefings.exceptions import (
     BriefingTemplateNotFoundError,
     BriefingTemplateNotDraftError,
-    BriefingTemplateInactiveError,
     BriefingSectionNotFoundError,
     BriefingQuestionNotFoundError,
     BriefingError,
@@ -57,7 +75,7 @@ class BriefingTemplateService:
     @transaction.atomic
     def create_template(
         *, workspace, name: str, description: str = '',
-        category: str = '', actor=None,
+        category: str = '', intro_message: str = '', actor=None,
     ) -> BriefingTemplate:
         name = (name or '').strip()
         if not name:
@@ -75,11 +93,20 @@ class BriefingTemplateService:
             name=name,
             description=(description or '').strip(),
             category=(category or '').strip(),
+            intro_message=(intro_message or '').strip(),
             status=BriefingTemplate.STATUS_DRAFT,
-            is_active=True,
-            created_by=actor,
             position=(last.position + 1 if last else 1),
+            created_by=actor,
         )
+
+        BriefingTemplateVersion.objects.create(
+            template=template,
+            version_number=1,
+            status=BriefingTemplateVersion.STATUS_DRAFT,
+            structure={},
+            created_by=actor,
+        )
+
         BriefingTemplateService._log_event(
             template=template,
             kind=BriefingTemplateEvent.KIND_TEMPLATE_CREATED,
@@ -93,7 +120,7 @@ class BriefingTemplateService:
     def update_template(
         *, template: BriefingTemplate,
         name: str = None, description: str = None, category: str = None,
-        actor=None,
+        intro_message: str = None, actor=None,
     ) -> BriefingTemplate:
         fields = []
         changes = {}
@@ -123,6 +150,13 @@ class BriefingTemplateService:
                 template.category = new_cat
                 fields.append('category')
 
+        if intro_message is not None:
+            new_intro = (intro_message or '').strip()
+            if template.intro_message != new_intro:
+                changes['intro_message'] = True
+                template.intro_message = new_intro
+                fields.append('intro_message')
+
         if fields:
             template.save(update_fields=fields + ['updated_at'])
             BriefingTemplateService._log_event(
@@ -136,20 +170,6 @@ class BriefingTemplateService:
     @staticmethod
     @transaction.atomic
     def set_cover(*, template: BriefingTemplate, uploaded_file, actor=None):
-        """
-        Salva a capa do template.
-
-        Usa o default storage (B2/R2/local conforme settings). Não
-        força storage local.
-
-        Fluxo:
-            1. Valida extensão.
-            2. Guarda referência ao arquivo antigo (para apagar depois).
-            3. `template.cover.save(name, file, save=False)` — escreve
-               no storage configurado.
-            4. `template.save(update_fields=['cover', ...])` — persiste.
-            5. Remove o arquivo antigo do storage.
-        """
         if uploaded_file is None:
             raise BriefingError('Nenhuma imagem enviada.')
 
@@ -160,7 +180,6 @@ class BriefingTemplateService:
                 'Formato inválido. Envie JPG, PNG, WEBP ou GIF.'
             )
 
-        # Guarda info do arquivo antigo para remover depois
         old_name = None
         old_storage = None
         if template.cover:
@@ -171,7 +190,6 @@ class BriefingTemplateService:
                 pass
 
         try:
-            # Importante: `save=False` para não persistir duas vezes.
             template.cover.save(name, uploaded_file, save=False)
         except Exception as exc:
             logger.exception('Falha ao salvar capa do template')
@@ -179,7 +197,6 @@ class BriefingTemplateService:
 
         template.save(update_fields=['cover', 'updated_at'])
 
-        # Remove o arquivo antigo do storage
         if old_name and old_storage:
             try:
                 old_storage.delete(old_name)
@@ -220,16 +237,16 @@ class BriefingTemplateService:
     @staticmethod
     @transaction.atomic
     def delete_template(*, template: BriefingTemplate, actor=None) -> None:
-        if template.executions.exists():
-            raise BriefingError(
-                'Não é possível excluir um template que já possui '
-                'execuções. Arquive-o em vez disso.'
-            )
+        BriefingTemplateVersion.objects.filter(template=template).update(
+            template=None,
+        )
+
         if template.cover:
             try:
                 template.cover.delete(save=False)
             except Exception:
                 logger.warning('Falha ao remover capa ao excluir template')
+
         template.delete()
 
     @staticmethod
@@ -243,11 +260,48 @@ class BriefingTemplateService:
             )
         if not template.sections.exists():
             raise BriefingError('Não é possível publicar sem sessões.')
+
+        from apps.briefings.services.template_version_service import (
+            BriefingTemplateVersionService,
+        )
+
+        version = BriefingTemplateVersionService.create_draft_from_template(
+            template=template, actor=actor,
+        )
+        BriefingTemplateVersionService.publish(
+            version=version, actor=actor,
+        )
+
         template.status = BriefingTemplate.STATUS_PUBLISHED
         template.save(update_fields=['status', 'updated_at'])
+
         BriefingTemplateService._log_event(
             template=template,
             kind=BriefingTemplateEvent.KIND_TEMPLATE_PUBLISHED,
+            user=actor,
+            content={
+                'version_id': str(version.id),
+                'version_number': version.version_number,
+            },
+        )
+        return template
+
+    @staticmethod
+    @transaction.atomic
+    def unpublish_template(
+        *, template: BriefingTemplate, actor=None,
+    ) -> BriefingTemplate:
+        if template.status != BriefingTemplate.STATUS_PUBLISHED:
+            raise BriefingError(
+                'Só templates publicados podem voltar para rascunho.'
+            )
+
+        template.status = BriefingTemplate.STATUS_DRAFT
+        template.save(update_fields=['status', 'updated_at'])
+
+        BriefingTemplateService._log_event(
+            template=template,
+            kind=BriefingTemplateEvent.KIND_TEMPLATE_UNPUBLISHED,
             user=actor,
         )
         return template
@@ -257,31 +311,23 @@ class BriefingTemplateService:
     def archive_template(
         *, template: BriefingTemplate, actor=None,
     ) -> BriefingTemplate:
+        if template.status == BriefingTemplate.STATUS_ARCHIVED:
+            return template
+
         template.status = BriefingTemplate.STATUS_ARCHIVED
         template.save(update_fields=['status', 'updated_at'])
+
+        BriefingTemplateVersion.objects.filter(
+            template=template,
+            status=BriefingTemplateVersion.STATUS_PUBLISHED,
+        ).update(
+            status=BriefingTemplateVersion.STATUS_ARCHIVED,
+        )
+
         BriefingTemplateService._log_event(
             template=template,
             kind=BriefingTemplateEvent.KIND_TEMPLATE_ARCHIVED,
             user=actor,
-        )
-        return template
-
-    @staticmethod
-    @transaction.atomic
-    def set_active(
-        *, template: BriefingTemplate, is_active: bool, actor=None,
-    ) -> BriefingTemplate:
-        if template.is_active == bool(is_active):
-            return template
-        template.is_active = bool(is_active)
-        template.save(update_fields=['is_active', 'updated_at'])
-        kind = (
-            BriefingTemplateEvent.KIND_TEMPLATE_ACTIVATED
-            if template.is_active
-            else BriefingTemplateEvent.KIND_TEMPLATE_DEACTIVATED
-        )
-        BriefingTemplateService._log_event(
-            template=template, kind=kind, user=actor,
         )
         return template
 

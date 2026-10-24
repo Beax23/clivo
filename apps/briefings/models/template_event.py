@@ -24,9 +24,7 @@ class BriefingTemplateEvent(models.Model):
     KIND_TEMPLATE_CREATED = 'template_created'
     KIND_TEMPLATE_UPDATED = 'template_updated'
     KIND_TEMPLATE_PUBLISHED = 'template_published'
-    KIND_TEMPLATE_ARCHIVED = 'template_archived'
-    KIND_TEMPLATE_ACTIVATED = 'template_activated'
-    KIND_TEMPLATE_DEACTIVATED = 'template_deactivated'
+    KIND_TEMPLATE_UNPUBLISHED = 'template_unpublished'
     KIND_SECTION_CREATED = 'section_created'
     KIND_SECTION_UPDATED = 'section_updated'
     KIND_SECTION_DELETED = 'section_deleted'
@@ -40,9 +38,7 @@ class BriefingTemplateEvent(models.Model):
         (KIND_TEMPLATE_CREATED, 'Template criado'),
         (KIND_TEMPLATE_UPDATED, 'Template editado'),
         (KIND_TEMPLATE_PUBLISHED, 'Template publicado'),
-        (KIND_TEMPLATE_ARCHIVED, 'Template arquivado'),
-        (KIND_TEMPLATE_ACTIVATED, 'Template ativado'),
-        (KIND_TEMPLATE_DEACTIVATED, 'Template inativado'),
+        (KIND_TEMPLATE_UNPUBLISHED, 'Template voltou para rascunho'),
         (KIND_SECTION_CREATED, 'Sessão criada'),
         (KIND_SECTION_UPDATED, 'Sessão editada'),
         (KIND_SECTION_DELETED, 'Sessão removida'),

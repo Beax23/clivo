@@ -1,10 +1,10 @@
 ================================================================================
 LISTAGEM COMPLETA DO MÓDULO workspaces
-Gerado em: 13/10/2026 12:23:42
-Total de arquivos: 49
+Gerado em: 16/10/2026 10:05:36
+Total de arquivos: 51
 ================================================================================
 ================================================================================
-ARQUIVO 1 DE 49
+ARQUIVO 1 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces
 ARQUIVO: __init__.py
@@ -69,7 +69,7 @@ FRONTEIRA CONGELADA (V1)
 default_app_config = 'apps.workspaces.apps.WorkspacesConfig'
 
 ================================================================================
-ARQUIVO 2 DE 49
+ARQUIVO 2 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces
 ARQUIVO: admin.py
@@ -221,7 +221,7 @@ class WorkspaceSubscriptionAdmin(admin.ModelAdmin):
     )
 
 ================================================================================
-ARQUIVO 3 DE 49
+ARQUIVO 3 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces\api\serializers
 ARQUIVO: __init__.py
@@ -267,7 +267,7 @@ __all__ = [
 ]
 
 ================================================================================
-ARQUIVO 4 DE 49
+ARQUIVO 4 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces\api\serializers
 ARQUIVO: invitation_serializers.py
@@ -338,7 +338,7 @@ class WorkspaceInvitationUpdateSerializer(serializers.Serializer):
         return value
 
 ================================================================================
-ARQUIVO 5 DE 49
+ARQUIVO 5 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces\api\serializers
 ARQUIVO: membership_serializers.py
@@ -457,7 +457,7 @@ class WorkspaceMembershipUpdateSerializer(serializers.Serializer):
         return value
 
 ================================================================================
-ARQUIVO 6 DE 49
+ARQUIVO 6 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces\api\serializers
 ARQUIVO: storage_serializers.py
@@ -521,7 +521,7 @@ class WorkspaceStorageSerializer(serializers.Serializer):
     )
 
 ================================================================================
-ARQUIVO 7 DE 49
+ARQUIVO 7 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces\api\serializers
 ARQUIVO: subscription_serializers.py
@@ -566,7 +566,7 @@ class WorkspaceSubscriptionSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 ================================================================================
-ARQUIVO 8 DE 49
+ARQUIVO 8 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces\api\serializers
 ARQUIVO: workspace_serializers.py
@@ -699,7 +699,7 @@ class WorkspaceUpdateSerializer(serializers.ModelSerializer):
         return value
 
 ================================================================================
-ARQUIVO 9 DE 49
+ARQUIVO 9 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces\api\views
 ARQUIVO: __init__.py
@@ -717,7 +717,7 @@ __all__ = [
 ]
 
 ================================================================================
-ARQUIVO 10 DE 49
+ARQUIVO 10 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces\api\views
 ARQUIVO: storage_views.py
@@ -797,13 +797,13 @@ class WorkspaceStorageView(APIView):
         return Response(serializer.data)
 
 ================================================================================
-ARQUIVO 11 DE 49
+ARQUIVO 11 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces\api\views
 ARQUIVO: workspace_views.py
 TAMANHO: 22,81 KB
 EXTENSAO: .py
-LINHAS: 588
+LINHAS: 592
 ================================================================================
 
 from rest_framework import viewsets, status
@@ -818,6 +818,10 @@ from apps.workspaces.models import (
 )
 from apps.workspaces.queries import WorkspaceQueries
 from apps.workspaces.public_id import encode_workspace_id
+from apps.workspaces.permissions.workspace_permissions import (
+    OWNER_KEY,
+    user_has_capability,
+)
 from apps.workspaces.api.serializers import (
     WorkspaceSerializer,
     WorkspaceCreateSerializer,
@@ -884,15 +888,23 @@ class WorkspaceViewSet(viewsets.ModelViewSet):
 
     @staticmethod
     def _capabilities_for_membership(membership) -> list:
+        """
+        Apresentação das capabilities de uma membership.
+
+        NÃO é autorização — é projeção para o endpoint
+        `GET /api/workspaces/my-capabilities/`. A autorização real
+        vive em `user_has_capability`.
+
+        Convenção:
+            - Proprietário devolve `['*']`.
+            - Demais devolvem a lista de códigos ativos.
+        """
         from apps.console.models import ConsoleGovernanceCapability
 
         if membership is None:
             return []
 
-        # Proprietário é a invariante estrutural do tenant.
-        # Ele sempre tem todas as capabilities, sem precisar
-        # que o operador configure isso no Console UI.
-        if membership.governance.key == 'proprietario':
+        if membership.governance.key == OWNER_KEY:
             return ['*']
 
         return list(
@@ -906,18 +918,15 @@ class WorkspaceViewSet(viewsets.ModelViewSet):
         )
 
     def _has_capability(self, request, workspace, capability_code) -> bool:
-        membership = WorkspaceMembership.objects.filter(
-            workspace=workspace,
-            user=request.user,
-        ).select_related('governance').first()
+        """
+        Delega para `user_has_capability` — fonte única de verdade.
 
-        if membership is None:
-            return False
-
-        caps = self._capabilities_for_membership(membership)
-        if '*' in caps:
-            return True
-        return capability_code in caps
+        Método mantido como wrapper para preservar a assinatura usada
+        em `_require_capability` e nas demais actions.
+        """
+        return user_has_capability(
+            workspace, request.user, capability_code,
+        )
 
     def _require_capability(self, request, workspace, capability_code):
         membership = WorkspaceMembership.objects.filter(
@@ -971,9 +980,6 @@ class WorkspaceViewSet(viewsets.ModelViewSet):
         workspace = WorkspaceQueries.get_with_subscription(workspace.id)
         request.session['current_workspace_id'] = str(workspace.id)
 
-        # Mantém `last_access_at` coerente para `get_last_accessed_for_user`.
-        # Sem isso, o Workspace recém-criado entra com last_access_at=NULL
-        # e perde a prioridade na ordenação por último acesso.
         WorkspaceMembershipService.touch_last_access(workspace, request.user)
 
         return Response(
@@ -1133,7 +1139,7 @@ class WorkspaceViewSet(viewsets.ModelViewSet):
             'governance_key': membership.governance.key,
             'governance_name': membership.governance.name,
             'capabilities': caps,
-            'is_owner': membership.governance.key == 'proprietario',
+            'is_owner': membership.governance.key == OWNER_KEY,
         })
 
     # ==================================================================
@@ -1158,7 +1164,6 @@ class WorkspaceViewSet(viewsets.ModelViewSet):
             memberships = WorkspaceMembershipService.list_members(workspace)
             return Response(WorkspaceMembershipSerializer(memberships, many=True).data)
 
-        # POST
         err = self._require_capability(
             request, workspace, 'workspaces.member.invite'
         )
@@ -1268,7 +1273,6 @@ class WorkspaceViewSet(viewsets.ModelViewSet):
             invitations = WorkspaceInvitationService.list_pending_for_workspace(workspace)
             return Response(WorkspaceInvitationSerializer(invitations, many=True).data)
 
-        # POST
         err = self._require_capability(
             request, workspace, 'workspaces.member.invite'
         )
@@ -1396,7 +1400,7 @@ class WorkspaceViewSet(viewsets.ModelViewSet):
         return Response(WorkspaceSubscriptionSerializer(subscription).data)
 
 ================================================================================
-ARQUIVO 12 DE 49
+ARQUIVO 12 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces
 ARQUIVO: apps.py
@@ -1419,7 +1423,7 @@ class WorkspacesConfig(AppConfig):
         import apps.workspaces.signals  # noqa: F401
 
 ================================================================================
-ARQUIVO 13 DE 49
+ARQUIVO 13 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces
 ARQUIVO: capabilities.py
@@ -1521,7 +1525,7 @@ CAPABILITIES = [
 ]
 
 ================================================================================
-ARQUIVO 14 DE 49
+ARQUIVO 14 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces
 ARQUIVO: context.py
@@ -1561,7 +1565,7 @@ def workspace_public_id(request):
     return {'workspace_public_id': public_id}
 
 ================================================================================
-ARQUIVO 15 DE 49
+ARQUIVO 15 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces\exceptions
 ARQUIVO: __init__.py
@@ -1619,7 +1623,7 @@ __all__ = [
 ]
 
 ================================================================================
-ARQUIVO 16 DE 49
+ARQUIVO 16 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces\exceptions
 ARQUIVO: workspace_exceptions.py
@@ -1810,7 +1814,7 @@ class InvitationResendLimitError(WorkspaceInvitationError):
     pass
 
 ================================================================================
-ARQUIVO 17 DE 49
+ARQUIVO 17 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces
 ARQUIVO: helpers.py
@@ -1894,7 +1898,7 @@ def resolve_workspace_or_redirect(request, public_id):
     return workspace, None
 
 ================================================================================
-ARQUIVO 18 DE 49
+ARQUIVO 18 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces\migrations
 ARQUIVO: __init__.py
@@ -1905,7 +1909,7 @@ LINHAS: 0
 
 
 ================================================================================
-ARQUIVO 19 DE 49
+ARQUIVO 19 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces\migrations
 ARQUIVO: 0001_initial.py
@@ -1997,7 +2001,7 @@ class Migration(migrations.Migration):
 
 
 ================================================================================
-ARQUIVO 20 DE 49
+ARQUIVO 20 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces\migrations
 ARQUIVO: 0002_workspaceinvitation.py
@@ -2054,7 +2058,7 @@ class Migration(migrations.Migration):
 
 
 ================================================================================
-ARQUIVO 21 DE 49
+ARQUIVO 21 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces\migrations
 ARQUIVO: 0003_alter_workspaceinvitation_expires_at.py
@@ -2084,7 +2088,7 @@ class Migration(migrations.Migration):
 
 
 ================================================================================
-ARQUIVO 22 DE 49
+ARQUIVO 22 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces\migrations
 ARQUIVO: 0004_workspacesubscription_changed_by_and_more.py
@@ -2203,7 +2207,7 @@ class Migration(migrations.Migration):
     ]
 
 ================================================================================
-ARQUIVO 23 DE 49
+ARQUIVO 23 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces\models
 ARQUIVO: __init__.py
@@ -2225,7 +2229,7 @@ __all__ = [
 ]
 
 ================================================================================
-ARQUIVO 24 DE 49
+ARQUIVO 24 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces\models
 ARQUIVO: invitation.py
@@ -2408,7 +2412,7 @@ class WorkspaceInvitation(models.Model):
         super().save(*args, **kwargs)
 
 ================================================================================
-ARQUIVO 25 DE 49
+ARQUIVO 25 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces\models
 ARQUIVO: membership.py
@@ -2541,7 +2545,7 @@ class WorkspaceMembership(models.Model):
         super().save(*args, **kwargs)
 
 ================================================================================
-ARQUIVO 26 DE 49
+ARQUIVO 26 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces\models
 ARQUIVO: subscription.py
@@ -2709,7 +2713,7 @@ class WorkspaceSubscription(models.Model):
         super().save(*args, **kwargs)
 
 ================================================================================
-ARQUIVO 27 DE 49
+ARQUIVO 27 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces\models
 ARQUIVO: workspace.py
@@ -2880,7 +2884,7 @@ class Workspace(models.Model):
         )
 
 ================================================================================
-ARQUIVO 28 DE 49
+ARQUIVO 28 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces\permissions
 ARQUIVO: __init__.py
@@ -2902,13 +2906,13 @@ __all__ = [
 ]
 
 ================================================================================
-ARQUIVO 29 DE 49
+ARQUIVO 29 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces\permissions
 ARQUIVO: workspace_permissions.py
-TAMANHO: 4,08 KB
+TAMANHO: 5,95 KB
 EXTENSAO: .py
-LINHAS: 122
+LINHAS: 176
 ================================================================================
 
 """
@@ -2925,16 +2929,87 @@ REGRA ARQUITETURAL:
                 → ConsoleGovernanceCapability
                     → ConsoleCapability
 
-    Este módulo expõe:
-        IsWorkspaceMember   — qualquer membro
-        IsWorkspaceOwner    — invariante estrutural (proprietário)
-        RequireCapability   — autorização baseada em capability do Console
+    Este é o ÚNICO ponto do módulo `workspaces` que consulta
+    ConsoleGovernanceCapability. Apps de domínio (integrations,
+    clients, briefings) consomem esta interface pública e NÃO
+    importam `apps.console` diretamente.
+
+API PÚBLICA:
+    user_has_capability(workspace, user, code) → bool
+        Fonte única de verdade da pergunta
+        "esse usuário tem essa capability nesse workspace?".
+
+    RequireCapability
+        Permission class do DRF. Delega para `user_has_capability`.
+
+    IsWorkspaceMember / IsWorkspaceOwner
+        Permissions estruturais. `IsWorkspaceOwner` verifica a
+        invariante do tenant (última pessoa com governance
+        `proprietario` não pode sair).
 """
 
 from rest_framework.permissions import BasePermission
 
 from apps.workspaces.models import Workspace, WorkspaceMembership
+from apps.workspaces.services.membership_service import (
+    WorkspaceMembershipService,
+)
 
+
+# Reexporta a constante para uso interno do módulo, evitando que
+# outros pontos do projeto a dupliquem. A FONTE continua sendo
+# `WorkspaceMembershipService.PROPRIETARIO_KEY`.
+OWNER_KEY = WorkspaceMembershipService.PROPRIETARIO_KEY
+
+
+# =========================================================================
+# API PÚBLICA — AUTORIZAÇÃO POR CAPABILITY
+# =========================================================================
+
+def user_has_capability(workspace, user, code: str) -> bool:
+    """
+    Verifica se o usuário tem a capability `code` no workspace.
+
+    Regras (nesta ordem):
+        1. Usuário anônimo ou None      → False
+        2. Sem membership               → False
+        3. Governance == proprietario   → True (tem todas)
+        4. ConsoleGovernanceCapability com is_active=True → True / False
+
+    Nunca levanta. Único ponto do módulo que consulta
+    `ConsoleGovernanceCapability`.
+
+    Contrato público: apps externos podem depender desta função.
+    """
+    if not user or not user.is_authenticated:
+        return False
+
+    membership = (
+        WorkspaceMembership.objects
+        .filter(workspace=workspace, user=user)
+        .select_related('governance')
+        .first()
+    )
+    if membership is None:
+        return False
+
+    if membership.governance.key == OWNER_KEY:
+        return True
+
+    # Import local — único ponto do módulo que toca o Console.
+    # Mantido aqui para deixar explícito que esta é a fronteira.
+    from apps.console.models import ConsoleGovernanceCapability
+
+    return ConsoleGovernanceCapability.objects.filter(
+        governance=membership.governance,
+        capability__code=code,
+        capability__is_active=True,
+    ).exists()
+
+
+# =========================================================================
+# HELPERS INTERNOS
+# =========================================================================
 
 def _extract_workspace(obj):
     """Extrai o Workspace de um objeto do domínio."""
@@ -2944,6 +3019,10 @@ def _extract_workspace(obj):
         return obj.workspace
     return getattr(obj, 'workspace', None)
 
+
+# =========================================================================
+# PERMISSIONS
+# =========================================================================
 
 class IsWorkspaceMember(BasePermission):
     """Requer que o usuário seja membro do Workspace."""
@@ -2965,12 +3044,10 @@ class IsWorkspaceOwner(BasePermission):
     """
     Requer que o usuário seja proprietário do Workspace.
 
-    Este é o ÚNICO lugar em que o Workspace referencia uma Governance
-    por nome. "proprietario" é uma invariante estrutural do tenant,
-    não uma regra de autorização configurável.
+    "proprietario" é a invariante estrutural do tenant. É a única
+    exceção documentada ao princípio "o Workspace não conhece
+    governanças pelo nome".
     """
-
-    OWNER_KEY = 'proprietario'
 
     def has_permission(self, request, view):
         return bool(request.user and request.user.is_authenticated)
@@ -2982,7 +3059,7 @@ class IsWorkspaceOwner(BasePermission):
         return WorkspaceMembership.objects.filter(
             workspace=workspace,
             user=request.user,
-            governance__key=self.OWNER_KEY,
+            governance__key=OWNER_KEY,
         ).exists()
 
 
@@ -2995,13 +3072,8 @@ class RequireCapability(BasePermission):
             permission_classes = [IsAuthenticated, RequireCapability]
             required_capability = 'workspaces.member.invite'
 
-    Este permission classe NÃO define capabilities aqui — apenas
-    verifica se a governança da membership do usuário possui a
-    capability requerida pela view.
-
-    A cadeia é:
-        user → WorkspaceMembership → ConsoleGovernance
-             → ConsoleGovernanceCapability → ConsoleCapability
+    Delega toda a verificação para `user_has_capability`. Não
+    duplica regra alguma.
     """
 
     def has_permission(self, request, view):
@@ -3011,31 +3083,17 @@ class RequireCapability(BasePermission):
         capability_code = getattr(view, 'required_capability', None)
         if not capability_code:
             # Se a view não declarou capability, deixa passar —
-            # quem configurou a view é responsável por declarar.
+            # contrato preservado do arquivo original.
             return True
 
         workspace = _extract_workspace(obj)
         if workspace is None:
             return False
 
-        membership = WorkspaceMembership.objects.filter(
-            workspace=workspace,
-            user=request.user,
-        ).select_related('governance').first()
-
-        if membership is None:
-            return False
-
-        # Consulta ConsoleGovernanceCapability → ConsoleCapability
-        from apps.console.models import ConsoleGovernanceCapability
-        return ConsoleGovernanceCapability.objects.filter(
-            governance=membership.governance,
-            capability__code=capability_code,
-            capability__is_active=True,
-        ).exists()
+        return user_has_capability(workspace, request.user, capability_code)
 
 ================================================================================
-ARQUIVO 30 DE 49
+ARQUIVO 30 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces
 ARQUIVO: public_id.py
@@ -3126,7 +3184,7 @@ def decode_workspace_id(token: str) -> Optional[str]:
     return str(UUID(int=value))
 
 ================================================================================
-ARQUIVO 31 DE 49
+ARQUIVO 31 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces\queries
 ARQUIVO: __init__.py
@@ -3144,7 +3202,7 @@ __all__ = [
 ]
 
 ================================================================================
-ARQUIVO 32 DE 49
+ARQUIVO 32 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces\queries
 ARQUIVO: membership_queries.py
@@ -3175,7 +3233,7 @@ class MembershipQueries:
         ).count()
 
 ================================================================================
-ARQUIVO 33 DE 49
+ARQUIVO 33 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces\queries
 ARQUIVO: workspace_queries.py
@@ -3336,7 +3394,7 @@ class WorkspaceQueries:
         )
 
 ================================================================================
-ARQUIVO 34 DE 49
+ARQUIVO 34 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces\services
 ARQUIVO: __init__.py
@@ -3360,7 +3418,7 @@ __all__ = [
 ]
 
 ================================================================================
-ARQUIVO 35 DE 49
+ARQUIVO 35 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces\services
 ARQUIVO: invitation_service.py
@@ -3655,7 +3713,7 @@ class WorkspaceInvitationService:
         invitation.save(update_fields=['last_sent_at', 'send_count', 'updated_at'])
 
 ================================================================================
-ARQUIVO 36 DE 49
+ARQUIVO 36 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces\services
 ARQUIVO: membership_service.py
@@ -3871,7 +3929,7 @@ class WorkspaceMembershipService:
         ).update(last_access_at=timezone.now())
 
 ================================================================================
-ARQUIVO 37 DE 49
+ARQUIVO 37 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces\services
 ARQUIVO: storage_service.py
@@ -4106,7 +4164,7 @@ class WorkspaceStorageService:
         return 'plano sem limite configurado para storage.bytes'
 
 ================================================================================
-ARQUIVO 38 DE 49
+ARQUIVO 38 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces\services
 ARQUIVO: subscription_service.py
@@ -4287,7 +4345,7 @@ class WorkspaceSubscriptionService:
         return new_sub
 
 ================================================================================
-ARQUIVO 39 DE 49
+ARQUIVO 39 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces\services
 ARQUIVO: workspace_service.py
@@ -4529,7 +4587,7 @@ class WorkspaceService:
         ).exists()
 
 ================================================================================
-ARQUIVO 40 DE 49
+ARQUIVO 40 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces
 ARQUIVO: signals.py
@@ -4576,7 +4634,7 @@ def accept_pending_invitations(sender, request, user, **kwargs):
         logger.exception(f"Falha ao aceitar convites para {user.email}: {e}")
 
 ================================================================================
-ARQUIVO 41 DE 49
+ARQUIVO 41 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces\tests
 ARQUIVO: __init__.py
@@ -4587,7 +4645,7 @@ LINHAS: 0
 
 
 ================================================================================
-ARQUIVO 42 DE 49
+ARQUIVO 42 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces\tests
 ARQUIVO: conftest.py
@@ -4653,7 +4711,403 @@ def outsider_client(api_client, user_outsider):
     return api_client
 
 ================================================================================
-ARQUIVO 43 DE 49
+ARQUIVO 43 DE 51
+================================================================================
+PASTA: C:\clivo-v1\apps\workspaces\tests
+ARQUIVO: test_capabilities.py
+TAMANHO: 5,73 KB
+EXTENSAO: .py
+LINHAS: 190
+================================================================================
+
+"""
+Testes de `user_has_capability`.
+
+Cobrem:
+    - Usuário sem associação ao workspace.
+    - Usuário com associação e governance sem a capability.
+    - Usuário com associação e governance com a capability ativa.
+    - Usuário com associação e governance com a capability INATIVA.
+    - Usuário proprietário (governance key='proprietario').
+
+Não testa DRF. Apenas a função pública.
+"""
+
+import pytest
+from django.contrib.auth import get_user_model
+
+from apps.console.models import (
+    ConsoleCapability,
+    ConsoleGovernance,
+    ConsoleGovernanceCapability,
+)
+from apps.workspaces.models import (
+    Workspace,
+    WorkspaceMembership,
+)
+from apps.workspaces.permissions.workspace_permissions import (
+    user_has_capability,
+)
+from apps.workspaces.services.membership_service import (
+    WorkspaceMembershipService,
+)
+
+
+User = get_user_model()
+
+
+# =========================================================================
+# FIXTURES
+# =========================================================================
+
+@pytest.fixture
+def workspace(db):
+    return Workspace.objects.create(name='WS', slug='ws-cap-test')
+
+
+@pytest.fixture
+def user_member(db):
+    return User.objects.create_user(
+        email='member-cap@example.com', password='x',
+    )
+
+
+@pytest.fixture
+def user_outsider(db):
+    return User.objects.create_user(
+        email='outsider-cap@example.com', password='x',
+    )
+
+
+@pytest.fixture
+def gov_proprietario(db):
+    return ConsoleGovernance.objects.create(
+        key=WorkspaceMembershipService.PROPRIETARIO_KEY,
+        name='Proprietário',
+        description='',
+        scope='workspace',
+        is_system=True,
+        is_protected=True,
+    )
+
+
+@pytest.fixture
+def gov_regular(db):
+    return ConsoleGovernance.objects.create(
+        key='membro', name='Membro',
+        description='', scope='workspace',
+    )
+
+
+@pytest.fixture
+def capability_active(db):
+    return ConsoleCapability.objects.create(
+        code='workspaces.member.invite',
+        name='Convidar membro',
+        description='',
+        source_app='workspaces',
+        is_active=True,
+    )
+
+
+@pytest.fixture
+def capability_inactive(db):
+    return ConsoleCapability.objects.create(
+        code='workspaces.member.remove',
+        name='Remover membro',
+        description='',
+        source_app='workspaces',
+        is_active=False,
+    )
+
+
+# =========================================================================
+# TESTES
+# =========================================================================
+
+@pytest.mark.django_db
+class TestUserHasCapability:
+
+    def test_anonymous_returns_false(self, workspace):
+        """Usuário anônimo → False."""
+        assert user_has_capability(workspace, None, 'any.code') is False
+
+    def test_none_user_returns_false(self, workspace):
+        """user=None → False."""
+        assert user_has_capability(workspace, None, 'any.code') is False
+
+    def test_outsider_returns_false(
+        self, workspace, user_outsider, capability_active,
+    ):
+        """
+        Usuário autenticado sem membership → False.
+        Nem precisa de capability existente.
+        """
+        assert user_has_capability(
+            workspace, user_outsider, capability_active.code,
+        ) is False
+
+    def test_regular_without_capability_returns_false(
+        self, workspace, user_member, gov_regular, capability_active,
+    ):
+        """
+        Membro com governance regular, mas SEM ConsoleGovernanceCapability
+        atribuída → False.
+        """
+        WorkspaceMembership.objects.create(
+            workspace=workspace, user=user_member, governance=gov_regular,
+        )
+        # capability_active existe no catálogo, mas a governance
+        # não a tem.
+        assert user_has_capability(
+            workspace, user_member, capability_active.code,
+        ) is False
+
+    def test_regular_with_active_capability_returns_true(
+        self, workspace, user_member, gov_regular, capability_active,
+    ):
+        """Membro com governance regular e capability ativa → True."""
+        WorkspaceMembership.objects.create(
+            workspace=workspace, user=user_member, governance=gov_regular,
+        )
+        ConsoleGovernanceCapability.objects.create(
+            governance=gov_regular, capability=capability_active,
+        )
+        assert user_has_capability(
+            workspace, user_member, capability_active.code,
+        ) is True
+
+    def test_regular_with_inactive_capability_returns_false(
+        self, workspace, user_member, gov_regular, capability_inactive,
+    ):
+        """
+        Membro com governance regular e ConsoleGovernanceCapability
+        apontando para uma capability INATIVA → False.
+
+        Regra: capability precisa estar ativa para conceder acesso.
+        """
+        WorkspaceMembership.objects.create(
+            workspace=workspace, user=user_member, governance=gov_regular,
+        )
+        ConsoleGovernanceCapability.objects.create(
+            governance=gov_regular, capability=capability_inactive,
+        )
+        assert user_has_capability(
+            workspace, user_member, capability_inactive.code,
+        ) is False
+
+    def test_owner_returns_true_for_any_code(
+        self, workspace, user_member, gov_proprietario,
+    ):
+        """
+        Proprietário → True para QUALQUER código, mesmo sem
+        ConsoleGovernanceCapability.
+        """
+        WorkspaceMembership.objects.create(
+            workspace=workspace, user=user_member,
+            governance=gov_proprietario,
+        )
+        assert user_has_capability(
+            workspace, user_member, 'qualquer.coisa.inventada',
+        ) is True
+
+================================================================================
+ARQUIVO 44 DE 51
+================================================================================
+PASTA: C:\clivo-v1\apps\workspaces\tests
+ARQUIVO: test_require_capability.py
+TAMANHO: 5,95 KB
+EXTENSAO: .py
+LINHAS: 184
+================================================================================
+
+"""
+Testes de `RequireCapability`.
+
+Confirma que a permission class do DRF delega corretamente para
+`user_has_capability`. Especificamente, confirma que agora TRATA
+proprietário como "tem todas as capabilities" — comportamento que
+antes divergia entre `RequireCapability` e `workspace_views._has_capability`.
+"""
+
+from types import SimpleNamespace
+
+import pytest
+from django.contrib.auth import get_user_model
+
+from apps.console.models import (
+    ConsoleCapability,
+    ConsoleGovernance,
+    ConsoleGovernanceCapability,
+)
+from apps.workspaces.models import Workspace, WorkspaceMembership
+from apps.workspaces.permissions.workspace_permissions import (
+    RequireCapability,
+)
+from apps.workspaces.services.membership_service import (
+    WorkspaceMembershipService,
+)
+
+
+User = get_user_model()
+
+
+@pytest.fixture
+def workspace(db):
+    return Workspace.objects.create(name='WS', slug='ws-req-cap')
+
+
+@pytest.fixture
+def user_member(db):
+    return User.objects.create_user(
+        email='member-req@example.com', password='x',
+    )
+
+
+@pytest.fixture
+def gov_proprietario(db):
+    return ConsoleGovernance.objects.create(
+        key=WorkspaceMembershipService.PROPRIETARIO_KEY,
+        name='Proprietário', description='',
+        scope='workspace', is_system=True, is_protected=True,
+    )
+
+
+@pytest.fixture
+def gov_regular(db):
+    return ConsoleGovernance.objects.create(
+        key='membro', name='Membro',
+        description='', scope='workspace',
+    )
+
+
+@pytest.fixture
+def capability_active(db):
+    return ConsoleCapability.objects.create(
+        code='workspaces.member.invite',
+        name='Convidar',
+        description='',
+        source_app='workspaces',
+        is_active=True,
+    )
+
+
+def _make_request(user):
+    """Cria um mock de request com `user` autenticado."""
+    return SimpleNamespace(user=user)
+
+
+def _make_view(required_capability=None):
+    """Cria um mock de view com `required_capability` opcional."""
+    return SimpleNamespace(required_capability=required_capability)
+
+
+@pytest.mark.django_db
+class TestRequireCapability:
+
+    def test_has_permission_anonymous_returns_false(self, workspace):
+        perm = RequireCapability()
+        request = SimpleNamespace(user=SimpleNamespace(is_authenticated=False))
+        assert perm.has_permission(request, _make_view()) is False
+
+    def test_no_required_capability_returns_true(
+        self, workspace, user_member,
+    ):
+        """
+        Sem `required_capability` declarada na view, a permission
+        deixa passar. Contrato preservado do arquivo original.
+        """
+        perm = RequireCapability()
+        request = _make_request(user_member)
+        assert perm.has_object_permission(
+            request, _make_view(), workspace,
+        ) is True
+
+    def test_outsider_returns_false(
+        self, workspace, user_member, capability_active,
+    ):
+        """Sem membership → False."""
+        perm = RequireCapability()
+        request = _make_request(user_member)
+        view = _make_view(capability_active.code)
+        assert perm.has_object_permission(
+            request, view, workspace,
+        ) is False
+
+    def test_regular_without_capability_returns_false(
+        self, workspace, user_member, gov_regular, capability_active,
+    ):
+        """Membro regular sem ConsoleGovernanceCapability → False."""
+        WorkspaceMembership.objects.create(
+            workspace=workspace, user=user_member, governance=gov_regular,
+        )
+        perm = RequireCapability()
+        request = _make_request(user_member)
+        view = _make_view(capability_active.code)
+        assert perm.has_object_permission(
+            request, view, workspace,
+        ) is False
+
+    def test_regular_with_capability_returns_true(
+        self, workspace, user_member, gov_regular, capability_active,
+    ):
+        """Membro regular com capability ativa → True."""
+        WorkspaceMembership.objects.create(
+            workspace=workspace, user=user_member, governance=gov_regular,
+        )
+        ConsoleGovernanceCapability.objects.create(
+            governance=gov_regular, capability=capability_active,
+        )
+        perm = RequireCapability()
+        request = _make_request(user_member)
+        view = _make_view(capability_active.code)
+        assert perm.has_object_permission(
+            request, view, workspace,
+        ) is True
+
+    def test_owner_returns_true_without_explicit_capability(
+        self, workspace, user_member, gov_proprietario,
+    ):
+        """
+        CORREÇÃO-CHAVE: proprietário tem todas as capabilities
+        mesmo SEM ConsoleGovernanceCapability atribuída.
+
+        Antes da refatoração, `RequireCapability` rejeitaria o
+        proprietário neste cenário. Agora aceita.
+        """
+        WorkspaceMembership.objects.create(
+            workspace=workspace, user=user_member,
+            governance=gov_proprietario,
+        )
+        perm = RequireCapability()
+        request = _make_request(user_member)
+        # Código arbitrário — não precisa existir no catálogo.
+        view = _make_view('qualquer.coisa.inventada')
+        assert perm.has_object_permission(
+            request, view, workspace,
+        ) is True
+
+    def test_workspace_extracted_from_membership(
+        self, workspace, user_member, gov_proprietario,
+    ):
+        """
+        Confirma que `_extract_workspace` funciona quando o objeto
+        é uma WorkspaceMembership (não um Workspace direto).
+        """
+        membership = WorkspaceMembership.objects.create(
+            workspace=workspace, user=user_member,
+            governance=gov_proprietario,
+        )
+        perm = RequireCapability()
+        request = _make_request(user_member)
+        view = _make_view('qualquer.coisa')
+        # Passa o objeto membership, não o workspace.
+        assert perm.has_object_permission(
+            request, view, membership,
+        ) is True
+
+================================================================================
+ARQUIVO 45 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces\tests
 ARQUIVO: test_storage_service.py
@@ -5061,7 +5515,7 @@ class TestShortcuts:
             WorkspaceStorageService.get_quota_bytes(workspace)
 
 ================================================================================
-ARQUIVO 44 DE 49
+ARQUIVO 46 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces\tests
 ARQUIVO: test_storage_views.py
@@ -5383,7 +5837,7 @@ class TestWorkspaceStorageBlocked:
         assert response.data['remaining_bytes'] == 0
 
 ================================================================================
-ARQUIVO 45 DE 49
+ARQUIVO 47 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces\tests
 ARQUIVO: test_subscription_model.py
@@ -5579,7 +6033,7 @@ class TestPrefetchCache:
         assert workspace.active_subscription is None
 
 ================================================================================
-ARQUIVO 46 DE 49
+ARQUIVO 48 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces\tests
 ARQUIVO: test_subscription_service.py
@@ -5751,47 +6205,49 @@ class TestGetActivePlan:
         assert plan.id == plan_b.id
 
 ================================================================================
-ARQUIVO 47 DE 49
+ARQUIVO 49 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces
 ARQUIVO: urls_workspace.py
 TAMANHO: 0,95 KB
 EXTENSAO: .py
-LINHAS: 29
+LINHAS: 31
 ================================================================================
 
 """
 Rotas do padrão /w/<public_id>/...
 
-Este arquivo centraliza as rotas HTML autenticadas que operam
-dentro de um workspace específico. Cada view resolve o workspace
-via `resolve_workspace_or_redirect`.
+Cada view resolve o workspace via `public_id` da URL + `request.user`.
+A URL vence a sessão.
 
 CONVENÇÕES:
     - O prefixo `/w/<public_id>/` é montado em config/urls.py.
     - Este arquivo registra as rotas RELATIVAS ao prefixo.
-    - Os nomes de rota usam o prefixo `w-` durante a migração
-      (`w-mesa`, `w-documents`, `w-references`, etc.), para não
-      colidir com os nomes antigos (`mesa`, `documents-page`, ...).
-    - Depois da migração total, os nomes antigos somem e estes
-      podem ser renomeados para os nomes finais.
-
-ESTADO ATUAL (Commit 1):
-    Só `mesa/` está registrada. As demais rotas são adicionadas
-    incrementalmente nos commits seguintes.
+    - A rota `integracoes/` é delegada a `apps.integrations.workspace_urls`,
+      preservando a fronteira: a view pertence a `integrations`.
 """
 
-from django.urls import path
+from django.urls import path, include
 
 from apps.workspaces.views import MesaView
+from apps.briefings.views import BriefingDetailView
 
 
 urlpatterns = [
     path('mesa/', MesaView.as_view(), name='w-mesa'),
+    path(
+        'briefings/<uuid:briefing_id>/',
+        BriefingDetailView.as_view(),
+        name='w-briefing-detail',
+    ),
+
+    # Rotas de integrações. A view vive em `apps.integrations`;
+    # este arquivo apenas agrega ao padrão /w/<public_id>/.
+    path('', include('apps.integrations.workspace_urls')),
 ]
 
 ================================================================================
-ARQUIVO 48 DE 49
+ARQUIVO 50 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces
 ARQUIVO: urls.py
@@ -5860,7 +6316,7 @@ urlpatterns = [
 ]
 
 ================================================================================
-ARQUIVO 49 DE 49
+ARQUIVO 51 DE 51
 ================================================================================
 PASTA: C:\clivo-v1\apps\workspaces
 ARQUIVO: views.py

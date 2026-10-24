@@ -89,6 +89,9 @@ class BriefingSendService:
         #
         # Falha na geração NÃO bloqueia o envio. O e-mail ainda é
         # enviado — apenas sem anexo. O evento registra has_pdf=False.
+        #
+        # O `render_pdf` usa o template default
+        # `portal/briefing_raw_client_pdf.html`.
         # ------------------------------------------------------------------
 
         pdf_bytes = None
@@ -96,7 +99,6 @@ class BriefingSendService:
         try:
             pdf_bytes, pdf_filename = BriefingExportService.render_pdf(
                 briefing,
-                template_name='briefings/export_client.html',
                 mode='client',
             )
         except Exception:

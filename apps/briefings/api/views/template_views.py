@@ -2,16 +2,39 @@
 BriefingTemplateViewSet — CRUD + actions estruturais.
 
 Capabilities:
-    briefings.template.view    → list, retrieve, history
+    briefings.template.view    → list, retrieve, history,
+                                 versions (GET list/detail)
     briefings.template.manage  → create, update, delete, cover,
-                                 publish, archive, set_active,
-                                 sections & questions CRUD/reorder
+                                 publish, unpublish, set-published,
+                                 archive, sections & questions
+                                 CRUD/reorder,
+                                 versions (POST/publish/archive/DELETE)
 
 NOTAS SOBRE PATHS:
-    - COVER usa paths distintos para POST e DELETE (evita colisão
-      no DefaultRouter):
+    - COVER usa paths distintos para POST e DELETE:
           POST   /api/briefing-templates/{id}/cover/
           DELETE /api/briefing-templates/{id}/cover/clear/
+    - PUBLISH / UNPUBLISH / SET-PUBLISHED / ARCHIVE:
+          POST   /api/briefing-templates/{id}/publish/
+          POST   /api/briefing-templates/{id}/unpublish/
+          POST   /api/briefing-templates/{id}/set-published/
+          POST   /api/briefing-templates/{id}/archive/
+    - VERSIONS:
+          GET    /api/briefing-templates/{id}/versions/            (list)
+          POST   /api/briefing-templates/{id}/versions/            (cria rascunho OU restaura)
+          GET    /api/briefing-templates/{id}/versions/{vid}/      (detalhe)
+          DELETE /api/briefing-templates/{id}/versions/{vid}/      (exclui)
+          POST   /api/briefing-templates/{id}/versions/{vid}/publish/
+          POST   /api/briefing-templates/{id}/versions/{vid}/archive/
+
+SOBRE O POST /versions/:
+    Body aceita:
+        { "mode": "clone_current" }
+        { "mode": "blank" }
+        { "mode": "restore_from_version", "source_version_id": "<uuid>" }
+
+    `restore_from_version` SUBSTITUI a estrutura atual do modelo
+    pela estrutura da versão escolhida. Requer template em `draft`.
 """
 
 import logging
@@ -32,7 +55,6 @@ from apps.briefings.api.serializers import (
     BriefingTemplateDetailSerializer,
     BriefingTemplateCreateSerializer,
     BriefingTemplateUpdateSerializer,
-    BriefingTemplateSetActiveSerializer,
     BriefingSectionSerializer,
     BriefingSectionCreateSerializer,
     BriefingSectionUpdateSerializer,
@@ -40,9 +62,15 @@ from apps.briefings.api.serializers import (
     BriefingQuestionCreateSerializer,
     BriefingQuestionUpdateSerializer,
     BriefingTemplateEventSerializer,
+    BriefingTemplateVersionSerializer,
+    BriefingTemplateVersionListSerializer,
+    BriefingTemplateVersionCreateSerializer,
     ReorderSerializer,
 )
-from apps.briefings.services import BriefingTemplateService
+from apps.briefings.services import (
+    BriefingTemplateService,
+    BriefingTemplateVersionService,
+)
 from apps.briefings.exceptions import (
     BriefingError,
     BriefingTemplateNotFoundError,
@@ -137,12 +165,6 @@ class BriefingTemplateViewSet(viewsets.GenericViewSet):
         if category_id:
             qs = qs.filter(category_fk_id=category_id)
 
-        is_active = request.query_params.get('is_active')
-        if is_active in ('1', 'true', 'True'):
-            qs = qs.filter(is_active=True)
-        elif is_active in ('0', 'false', 'False'):
-            qs = qs.filter(is_active=False)
-
         status_filter = request.query_params.get('status')
         if status_filter:
             qs = qs.filter(status=status_filter)
@@ -170,6 +192,7 @@ class BriefingTemplateViewSet(viewsets.GenericViewSet):
                 name=serializer.validated_data['name'],
                 description=serializer.validated_data.get('description', ''),
                 category=serializer.validated_data.get('category', ''),
+                intro_message=serializer.validated_data.get('intro_message', ''),
                 actor=request.user,
             )
             category_id = serializer.validated_data.get('category_id')
@@ -240,6 +263,7 @@ class BriefingTemplateViewSet(viewsets.GenericViewSet):
                 name=serializer.validated_data.get('name'),
                 description=serializer.validated_data.get('description'),
                 category=serializer.validated_data.get('category'),
+                intro_message=serializer.validated_data.get('intro_message'),
                 actor=request.user,
             )
             if 'category_id' in request.data:
@@ -282,7 +306,7 @@ class BriefingTemplateViewSet(viewsets.GenericViewSet):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     # ------------------------------------------------------------------
-    # REORDER — TEMPLATES
+    # REORDER
     # ------------------------------------------------------------------
 
     @action(detail=False, methods=['post'], url_path='reorder')
@@ -313,12 +337,7 @@ class BriefingTemplateViewSet(viewsets.GenericViewSet):
         return Response({'ok': True})
 
     # ------------------------------------------------------------------
-    # COVER — POST define / DELETE remove (paths distintos)
-    #
-    # Importante: dois @action com o MESMO url_path colidem no
-    # DefaultRouter — o Django registra duas rotas idênticas e
-    # resolve para a primeira declarada. Por isso o DELETE usa
-    # `cover/clear/`, garantindo paths únicos.
+    # COVER
     # ------------------------------------------------------------------
 
     @action(
@@ -400,7 +419,7 @@ class BriefingTemplateViewSet(viewsets.GenericViewSet):
         )
 
     # ------------------------------------------------------------------
-    # TEMPLATE — publish / archive / active
+    # PUBLISH / UNPUBLISH / SET-PUBLISHED / ARCHIVE
     # ------------------------------------------------------------------
 
     @action(detail=True, methods=['post'], url_path='publish')
@@ -422,6 +441,79 @@ class BriefingTemplateViewSet(viewsets.GenericViewSet):
             if handled is not None:
                 return handled
             logger.exception('Erro ao publicar template')
+            return Response({'error': 'Erro inesperado.'}, status=500)
+
+        return Response(
+            BriefingTemplateDetailSerializer(
+                template, context={'request': request},
+            ).data
+        )
+
+    @action(detail=True, methods=['post'], url_path='unpublish')
+    def unpublish(self, request, id=None):
+        workspace = self._current_workspace()
+        if workspace is None:
+            return Response({'error': 'Nenhum workspace ativo'}, status=400)
+        err = self._require_capability(workspace, 'briefings.template.manage')
+        if err is not None:
+            return err
+
+        try:
+            template = self._get_template_or_404(id, workspace)
+            template = BriefingTemplateService.unpublish_template(
+                template=template, actor=request.user,
+            )
+        except Exception as exc:
+            handled = self._handle_domain_error(exc)
+            if handled is not None:
+                return handled
+            logger.exception('Erro ao despublicar template')
+            return Response({'error': 'Erro inesperado.'}, status=500)
+
+        return Response(
+            BriefingTemplateDetailSerializer(
+                template, context={'request': request},
+            ).data
+        )
+
+    @action(detail=True, methods=['post'], url_path='set-published')
+    def set_published(self, request, id=None):
+        workspace = self._current_workspace()
+        if workspace is None:
+            return Response({'error': 'Nenhum workspace ativo'}, status=400)
+        err = self._require_capability(workspace, 'briefings.template.manage')
+        if err is not None:
+            return err
+
+        try:
+            template = self._get_template_or_404(id, workspace)
+        except Exception as exc:
+            handled = self._handle_domain_error(exc)
+            if handled is not None:
+                return handled
+            return Response({'error': 'Erro'}, status=500)
+
+        published = request.data.get('published')
+        if not isinstance(published, bool):
+            return Response(
+                {'error': 'Campo "published" deve ser booleano.'},
+                status=400,
+            )
+
+        try:
+            if published:
+                template = BriefingTemplateService.publish_template(
+                    template=template, actor=request.user,
+                )
+            else:
+                template = BriefingTemplateService.unpublish_template(
+                    template=template, actor=request.user,
+                )
+        except Exception as exc:
+            handled = self._handle_domain_error(exc)
+            if handled is not None:
+                return handled
+            logger.exception('Erro ao alterar estado de publicação')
             return Response({'error': 'Erro inesperado.'}, status=500)
 
         return Response(
@@ -457,47 +549,8 @@ class BriefingTemplateViewSet(viewsets.GenericViewSet):
             ).data
         )
 
-    @action(detail=True, methods=['post'], url_path='set-active')
-    def set_active(self, request, id=None):
-        workspace = self._current_workspace()
-        if workspace is None:
-            return Response({'error': 'Nenhum workspace ativo'}, status=400)
-        err = self._require_capability(workspace, 'briefings.template.manage')
-        if err is not None:
-            return err
-
-        try:
-            template = self._get_template_or_404(id, workspace)
-        except Exception as exc:
-            handled = self._handle_domain_error(exc)
-            if handled is not None:
-                return handled
-            return Response({'error': 'Erro'}, status=500)
-
-        serializer = BriefingTemplateSetActiveSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        try:
-            template = BriefingTemplateService.set_active(
-                template=template,
-                is_active=serializer.validated_data['is_active'],
-                actor=request.user,
-            )
-        except Exception as exc:
-            handled = self._handle_domain_error(exc)
-            if handled is not None:
-                return handled
-            logger.exception('Erro ao alterar ativo/inativo')
-            return Response({'error': 'Erro inesperado.'}, status=500)
-
-        return Response(
-            BriefingTemplateDetailSerializer(
-                template, context={'request': request},
-            ).data
-        )
-
     # ------------------------------------------------------------------
-    # TEMPLATE — histórico
+    # HISTORY
     # ------------------------------------------------------------------
 
     @action(detail=True, methods=['get'], url_path='history')
@@ -524,6 +577,227 @@ class BriefingTemplateViewSet(viewsets.GenericViewSet):
             .order_by('-created_at')[:200]
         )
         return Response(BriefingTemplateEventSerializer(qs, many=True).data)
+
+    # ------------------------------------------------------------------
+    # VERSIONS
+    # ------------------------------------------------------------------
+
+    @action(detail=True, methods=['get', 'post'], url_path='versions')
+    def versions(self, request, id=None):
+        """
+        GET  → lista todas as versões do template (metadados apenas,
+               SEM `structure`). Consumido pela listagem do painel.
+        POST → cria uma nova versão em rascunho OU restaura uma existente.
+
+        Body do POST:
+            { "mode": "clone_current" }        # padrão
+            { "mode": "blank" }
+            { "mode": "restore_from_version",
+              "source_version_id": "<uuid>" }
+        """
+        workspace = self._current_workspace()
+        if workspace is None:
+            return Response({'error': 'Nenhum workspace ativo'}, status=400)
+
+        if request.method == 'GET':
+            err = self._require_capability(workspace, 'briefings.template.view')
+        else:
+            err = self._require_capability(workspace, 'briefings.template.manage')
+        if err is not None:
+            return err
+
+        try:
+            template = self._get_template_or_404(id, workspace)
+        except Exception as exc:
+            handled = self._handle_domain_error(exc)
+            if handled is not None:
+                return handled
+            return Response({'error': 'Erro'}, status=500)
+
+        if request.method == 'GET':
+            qs = BriefingTemplateVersionService.list_for_template(template)
+            return Response(
+                BriefingTemplateVersionListSerializer(qs, many=True).data
+            )
+
+        # POST — cria nova versão
+        serializer = BriefingTemplateVersionCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        mode = serializer.validated_data.get('mode', 'clone_current')
+
+        try:
+            if mode == 'restore_from_version':
+                source = BriefingTemplateVersionService.get_or_raise(
+                    serializer.validated_data['source_version_id'],
+                    template,
+                )
+                version = (
+                    BriefingTemplateVersionService.restore_into_template(
+                        template=template,
+                        source_version=source,
+                        actor=request.user,
+                    )
+                )
+            else:
+                version = (
+                    BriefingTemplateVersionService.create_draft_from_template(
+                        template=template,
+                        actor=request.user,
+                        blank=(mode == 'blank'),
+                    )
+                )
+        except Exception as exc:
+            handled = self._handle_domain_error(exc)
+            if handled is not None:
+                return handled
+            logger.exception('Erro ao criar/restaurar versão em rascunho')
+            return Response({'error': 'Erro inesperado.'}, status=500)
+
+        return Response(
+            BriefingTemplateVersionSerializer(version).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(
+        detail=True,
+        methods=['get', 'delete'],
+        url_path=r'versions/(?P<version_id>[^/.]+)',
+    )
+    def version_detail(self, request, id=None, version_id=None):
+        workspace = self._current_workspace()
+        if workspace is None:
+            return Response({'error': 'Nenhum workspace ativo'}, status=400)
+
+        if request.method == 'GET':
+            err = self._require_capability(workspace, 'briefings.template.view')
+        else:
+            err = self._require_capability(workspace, 'briefings.template.manage')
+        if err is not None:
+            return err
+
+        try:
+            template = self._get_template_or_404(id, workspace)
+        except Exception as exc:
+            handled = self._handle_domain_error(exc)
+            if handled is not None:
+                return handled
+            return Response({'error': 'Erro'}, status=500)
+
+        try:
+            version = BriefingTemplateVersionService.get_or_raise(
+                version_id, template,
+            )
+        except Exception as exc:
+            handled = self._handle_domain_error(exc)
+            if handled is not None:
+                return handled
+            return Response({'error': 'Erro'}, status=500)
+
+        if request.method == 'GET':
+            return Response(
+                BriefingTemplateVersionSerializer(version).data
+            )
+
+        try:
+            BriefingTemplateVersionService.delete(
+                version=version, actor=request.user,
+            )
+        except Exception as exc:
+            handled = self._handle_domain_error(exc)
+            if handled is not None:
+                return handled
+            logger.exception('Erro ao excluir versão')
+            return Response({'error': 'Erro inesperado.'}, status=500)
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(
+        detail=True,
+        methods=['post'],
+        url_path=r'versions/(?P<version_id>[^/.]+)/publish',
+    )
+    def publish_version(self, request, id=None, version_id=None):
+        workspace = self._current_workspace()
+        if workspace is None:
+            return Response({'error': 'Nenhum workspace ativo'}, status=400)
+        err = self._require_capability(workspace, 'briefings.template.manage')
+        if err is not None:
+            return err
+
+        try:
+            template = self._get_template_or_404(id, workspace)
+        except Exception as exc:
+            handled = self._handle_domain_error(exc)
+            if handled is not None:
+                return handled
+            return Response({'error': 'Erro'}, status=500)
+
+        try:
+            version = BriefingTemplateVersionService.get_or_raise(
+                version_id, template,
+            )
+        except Exception as exc:
+            handled = self._handle_domain_error(exc)
+            if handled is not None:
+                return handled
+            return Response({'error': 'Erro'}, status=500)
+
+        try:
+            version = BriefingTemplateVersionService.publish(
+                version=version, actor=request.user,
+            )
+        except Exception as exc:
+            handled = self._handle_domain_error(exc)
+            if handled is not None:
+                return handled
+            logger.exception('Erro ao publicar versão')
+            return Response({'error': 'Erro inesperado.'}, status=500)
+
+        return Response(BriefingTemplateVersionSerializer(version).data)
+
+    @action(
+        detail=True,
+        methods=['post'],
+        url_path=r'versions/(?P<version_id>[^/.]+)/archive',
+    )
+    def archive_version(self, request, id=None, version_id=None):
+        workspace = self._current_workspace()
+        if workspace is None:
+            return Response({'error': 'Nenhum workspace ativo'}, status=400)
+        err = self._require_capability(workspace, 'briefings.template.manage')
+        if err is not None:
+            return err
+
+        try:
+            template = self._get_template_or_404(id, workspace)
+        except Exception as exc:
+            handled = self._handle_domain_error(exc)
+            if handled is not None:
+                return handled
+            return Response({'error': 'Erro'}, status=500)
+
+        try:
+            version = BriefingTemplateVersionService.get_or_raise(
+                version_id, template,
+            )
+        except Exception as exc:
+            handled = self._handle_domain_error(exc)
+            if handled is not None:
+                return handled
+            return Response({'error': 'Erro'}, status=500)
+
+        try:
+            version = BriefingTemplateVersionService.archive(
+                version=version, actor=request.user,
+            )
+        except Exception as exc:
+            handled = self._handle_domain_error(exc)
+            if handled is not None:
+                return handled
+            logger.exception('Erro ao arquivar versão')
+            return Response({'error': 'Erro inesperado.'}, status=500)
+
+        return Response(BriefingTemplateVersionSerializer(version).data)
 
     # ------------------------------------------------------------------
     # SECTIONS

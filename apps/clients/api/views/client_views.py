@@ -186,10 +186,13 @@ class ClientViewSet(viewsets.ModelViewSet):
             try:
                 from apps.accounts.services.email import EmailService
 
-                frontend_url = getattr(
-                    settings, 'FRONTEND_URL', 'http://localhost:9000'
+                frontend_url = (
+                    getattr(settings, 'FRONTEND_URL', '') or
+                    'https://clivoos.com'
                 ).rstrip('/')
-                portal_url = f"{frontend_url}/portal/{client.public_code}/"
+                # O portal é acessado em /portal/ — o cliente digita o código lá.
+                # NÃO colocar o código no path.
+                portal_url = f"{frontend_url}/portal/"
 
                 EmailService.send_client_code_email(
                     client=client,
@@ -263,6 +266,52 @@ class ClientViewSet(viewsets.ModelViewSet):
             {'detail': 'Cliente excluído com sucesso'},
             status=status.HTTP_204_NO_CONTENT,
         )
+
+    # ------------------------------------------------------------------
+    # ACTION: check-email
+    # ------------------------------------------------------------------
+
+    @action(detail=False, methods=['get'], url_path='check-email')
+    def check_email(self, request):
+        """
+        Verifica se um email já existe no workspace.
+
+        GET /api/clients/check-email/?email=joao@exemplo.com
+
+        Resposta:
+            {"exists": true, "client": {"id", "name", "email", "public_code"}}
+            ou
+            {"exists": false}
+        """
+        workspace = self._current_workspace()
+        if workspace is None:
+            return Response({'error': 'Nenhum workspace ativo'}, status=400)
+
+        err = self._require_capability(workspace, 'clients.client.view')
+        if err is not None:
+            return err
+
+        email = (request.query_params.get('email') or '').strip().lower()
+        if not email:
+            return Response({'exists': False})
+
+        client = Client.objects.filter(
+            workspace=workspace,
+            email__iexact=email,
+        ).first()
+
+        if client is None:
+            return Response({'exists': False})
+
+        return Response({
+            'exists': True,
+            'client': {
+                'id': str(client.id),
+                'name': client.name,
+                'email': client.email,
+                'public_code': client.public_code,
+            },
+        })
 
     # ------------------------------------------------------------------
     # ACTION: context
@@ -579,10 +628,12 @@ class ClientViewSet(viewsets.ModelViewSet):
 
         from apps.accounts.services.email import EmailService
 
-        frontend_url = getattr(
-            settings, 'FRONTEND_URL', 'http://localhost:9000'
+        frontend_url = (
+            getattr(settings, 'FRONTEND_URL', '') or
+            'https://clivoos.com'
         ).rstrip('/')
-        portal_url = f"{frontend_url}/portal/{client.public_code}/"
+        # O portal é acessado em /portal/ — o cliente digita o código lá.
+        portal_url = f"{frontend_url}/portal/"
 
         try:
             EmailService.send_client_code_email(

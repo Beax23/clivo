@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>{{ filename }}</title>
+<style>
+    @page {
+        size: A4;
+        margin: 16mm 14mm 18mm 14mm;
+        @bottom-center {
+            content: "{{ workspace_name }} · " counter(page) " / " counter(pages);
+            font-family: 'DejaVu Sans', sans-serif;
+            font-size: 8pt;
+            color: #999;
+        }
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+        font-family: 'Inter', 'DejaVu Sans', 'Helvetica', sans-serif;
+        font-size: 10pt;
+        line-height: 1.5;
+        color: #111111;
+        background: #FFFFFF;
+    }
+
+    /* ============================ HEADER ============================ */
+    .header {
+        border-bottom: 2px solid #111111;
+        padding-bottom: 3mm;
+        margin-bottom: 5mm;
+    }
+
+    .eyebrow {
+        font-size: 7.5pt;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: #888888;
+        margin-bottom: 1mm;
+    }
+
+    .title {
+        font-size: 18pt;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        line-height: 1.2;
+        color: #111111;
+        margin-bottom: 2mm;
+    }
+
+    .meta {
+        font-size: 9pt;
+        color: #555555;
+        margin-bottom: 2mm;
+    }
+
+    .meta strong { color: #111111; font-weight: 600; }
+
+    .progress-row { margin-top: 2mm; }
+
+    .progress-bar {
+        width: 100%;
+        height: 2mm;
+        background: #EEEEEE;
+        border-radius: 1mm;
+        overflow: hidden;
+    }
+
+    .progress-fill {
+        height: 100%;
+        background: #111111;
+        border-radius: 1mm;
+    }
+
+    /* ============================ INTRO ============================ */
+    .intro {
+        background: #FAFAFA;
+        border: 1px solid #E5E5E5;
+        border-radius: 2mm;
+        padding: 3mm 4mm;
+        font-size: 9.5pt;
+        color: #444444;
+        line-height: 1.6;
+        margin-bottom: 5mm;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+    }
+
+    /* ============================ SECTION ============================ */
+    .section {
+        margin-top: 5mm;
+        margin-bottom: 3mm;
+    }
+
+    .section-head {
+        border-bottom: 1px solid #DDDDDD;
+        padding-bottom: 1.5mm;
+        margin-bottom: 3mm;
+    }
+
+    .section-num {
+        font-size: 8pt;
+        font-weight: 700;
+        color: #AAAAAA;
+        margin-right: 2mm;
+        letter-spacing: 0.05em;
+    }
+
+    .section-title {
+        font-size: 10pt;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: #333333;
+    }
+
+    .section-desc {
+        font-size: 9pt;
+        color: #777777;
+        margin-bottom: 3mm;
+        line-height: 1.5;
+        white-space: pre-wrap;
+    }
+
+    /* ============================ Q/A CARD ============================ */
+    .qa {
+        page-break-inside: avoid;
+        break-inside: avoid;
+        border: 1px solid #E5E5E5;
+        border-radius: 2mm;
+        padding: 3mm 4mm;
+        margin-bottom: 3mm;
+        background: #FFFFFF;
+    }
+
+    .q {
+        font-size: 10pt;
+        font-weight: 600;
+        color: #111111;
+        line-height: 1.4;
+        margin-bottom: 2mm;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+    }
+
+    .q-num {
+        display: inline-block;
+        min-width: 6mm;
+        padding: 0.3mm 1.5mm;
+        background: #F0F0F0;
+        color: #666666;
+        font-size: 8pt;
+        font-weight: 700;
+        border-radius: 1mm;
+        margin-right: 2mm;
+        text-align: center;
+    }
+
+    .instructions {
+        font-size: 8.5pt;
+        color: #666666;
+        background: #F7F7F7;
+        border-radius: 1mm;
+        padding: 1.5mm 2.5mm;
+        margin-bottom: 2mm;
+        line-height: 1.5;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+    }
+
+    .tags { margin-bottom: 2mm; }
+
+    .tag {
+        display: inline-block;
+        padding: 0.3mm 1.5mm;
+        background: #F0F0F0;
+        color: #666666;
+        font-size: 7.5pt;
+        font-weight: 500;
+        border-radius: 999px;
+        margin-right: 1.5mm;
+    }
+
+    .tag.is-done { background: #E8F7EE; color: #1B7F3A; }
+    .tag.is-pending { background: #FEF6E7; color: #A56212; }
+
+    /* ============================ ANSWER ============================ */
+    .answer-label {
+        font-size: 7.5pt;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: #999999;
+        margin-bottom: 1mm;
+        margin-top: 2mm;
+    }
+
+    .answer-text {
+        background: #111111;
+        color: #FFFFFF;
+        padding: 2.5mm 3.5mm;
+        border-radius: 2mm;
+        font-size: 9.5pt;
+        line-height: 1.55;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+    }
+
+    .answer-empty {
+        background: #F0F0F0;
+        color: #888888;
+        font-style: italic;
+        padding: 2.5mm 3.5mm;
+        border-radius: 2mm;
+        font-size: 9pt;
+    }
+
+    /* ============================ IMAGENS ============================ */
+    .imgs { margin-top: 2mm; }
+
+    .img-cell {
+        display: inline-block;
+        width: 32mm;
+        height: 32mm;
+        margin: 0 2mm 2mm 0;
+        border-radius: 1.5mm;
+        overflow: hidden;
+        border: 1px solid #E0E0E0;
+        vertical-align: top;
+        background: #F5F5F5;
+    }
+
+    .img-cell img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+
+    /* ============================ MOODBOARD ============================ */
+    .moodboard-section {
+        margin-top: 8mm;
+        padding-top: 4mm;
+        border-top: 2px solid #111111;
+    }
+
+    .moodboard-title {
+        font-size: 10pt;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: #333333;
+        margin-bottom: 3mm;
+    }
+
+    .moodboard-cell {
+        display: inline-block;
+        width: 34mm;
+        height: 34mm;
+        margin: 0 2mm 2mm 0;
+        border-radius: 1.5mm;
+        overflow: hidden;
+        border: 1px solid #E0E0E0;
+        vertical-align: top;
+        background: #F5F5F5;
+    }
+
+    .moodboard-cell img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+
+    .moodboard-empty {
+        text-align: center;
+        padding: 6mm;
+        color: #999999;
+        font-size: 9pt;
+        font-style: italic;
+    }
+
+    /* ============================ FOOTER ============================ */
+    .footer {
+        margin-top: 10mm;
+        padding-top: 3mm;
+        border-top: 1px solid #DDDDDD;
+        font-size: 8pt;
+        color: #999999;
+        text-align: center;
+    }
+
+    .empty {
+        text-align: center;
+        padding: 10mm;
+        color: #999999;
+        font-size: 10pt;
+        font-style: italic;
+    }
+</style>
+</head>
+<body>
+
+<div class="header">
+    <div class="eyebrow">Minhas respostas · briefing</div>
+    <div class="title">{{ briefing.title }}</div>
+    <div class="meta">
+        {% if client_name %}<strong>{{ client_name }}</strong> · {% endif %}{{ workspace_name }}
+        · {{ progress.answered }} de {{ progress.total_required }} respondidas ({{ progress.percent }}%)
+    </div>
+    <div class="progress-row">
+        <div class="progress-bar">
+            <div class="progress-fill" style="width: {{ progress.percent }}%;"></div>
+        </div>
+    </div>
+</div>
+
+{% if intro_message %}
+<div class="intro">{{ intro_message }}</div>
+{% endif %}
+
+{% for section in sections %}
+    <div class="section">
+        {% if section.title %}
+        <div class="section-head">
+            <span class="section-num">{{ forloop.counter|stringformat:"02d" }}</span>
+            <span class="section-title">{{ section.title }}</span>
+        </div>
+        {% endif %}
+        {% if section.description %}
+        <div class="section-desc">{{ section.description }}</div>
+        {% endif %}
+
+        {% for q in section.questions %}
+            {% if q.state != 'pending' %}
+            <div class="qa">
+                <div class="q">
+                    <span class="q-num">{{ forloop.counter|stringformat:"02d" }}</span>{{ q.text }}
+                </div>
+
+                {% if q.instructions %}
+                <div class="instructions">{{ q.instructions }}</div>
+                {% endif %}
+
+                <div class="tags">
+                    <span class="tag">{{ q.question_type }}</span>
+                    {% if q.is_required %}
+                    <span class="tag">obrigatória</span>
+                    {% else %}
+                    <span class="tag">opcional</span>
+                    {% endif %}
+                    {% if q.state == 'answered' %}
+                    <span class="tag is-done">respondida</span>
+                    {% elif q.state == 'pending_clarification' %}
+                    <span class="tag is-pending">dúvida aberta</span>
+                    {% elif q.state == 'review_requested' %}
+                    <span class="tag is-pending">revisão pedida</span>
+                    {% endif %}
+                </div>
+
+                <div class="answer-label">Sua resposta</div>
+                {% if q.latest_content %}
+                <div class="answer-text">{{ q.latest_content }}</div>
+                {% elif q.audio_url %}
+                <div class="answer-empty">Resposta em áudio.</div>
+                {% else %}
+                <div class="answer-empty">Sem conteúdo textual.</div>
+                {% endif %}
+
+                {% if q.chosen_images %}
+                <div class="answer-label">Imagens escolhidas</div>
+                <div class="imgs">
+                    {% for img in q.chosen_images %}
+                    <div class="img-cell">
+                        <img src="{{ img.url }}" alt="{{ img.text }}">
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                {% if q.attachments %}
+                <div class="answer-label">Imagens enviadas</div>
+                <div class="imgs">
+                    {% for doc in q.attachments %}
+                    <div class="img-cell">
+                        <img src="{{ doc.url }}" alt="{{ doc.name }}">
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+        {% endfor %}
+    </div>
+{% empty %}
+<div class="empty">Nenhuma resposta registrada ainda.</div>
+{% endfor %}
+
+<div class="moodboard-section">
+    <div class="moodboard-title">Meu moodboard</div>
+    {% if client_images_all %}
+    <div>
+        {% for img in client_images_all %}
+        <div class="moodboard-cell">
+            <img src="{{ img.url }}" alt="">
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="moodboard-empty">Você ainda não escolheu nem enviou imagens.</div>
+    {% endif %}
+</div>
+
+<div class="footer">
+    {{ workspace_name }} · gerado em {{ generated_at|date:"d/m/Y H:i" }}
+</div>
+
+</body>
+</html>

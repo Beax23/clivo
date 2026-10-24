@@ -1,6 +1,6 @@
 ================================================================================
 LISTAGEM COMPLETA DO MÓDULO clients
-Gerado em: 13/10/2026 12:24:01
+Gerado em: 13/10/2026 19:28:40
 Total de arquivos: 42
 ================================================================================
 ================================================================================
@@ -522,17 +522,21 @@ ARQUIVO 8 DE 42
 ================================================================================
 PASTA: C:\clivo-v1\apps\clients\api\views
 ARQUIVO: __init__.py
-TAMANHO: 0,19 KB
+TAMANHO: 0,26 KB
 EXTENSAO: .py
-LINHAS: 7
+LINHAS: 11
 ================================================================================
 
 from apps.clients.api.views.client_views import ClientViewSet
-from apps.clients.api.views.portal_views import ClientPortalViewSet
+from apps.clients.api.views.portal_views import (
+    ClientPortalViewSet,
+    ClientPortalLoginView,
+)
 
 __all__ = [
     'ClientViewSet',
     'ClientPortalViewSet',
+    'ClientPortalLoginView',
 ]
 
 ================================================================================
@@ -540,9 +544,9 @@ ARQUIVO 9 DE 42
 ================================================================================
 PASTA: C:\clivo-v1\apps\clients\api\views
 ARQUIVO: client_views.py
-TAMANHO: 21,99 KB
+TAMANHO: 23,67 KB
 EXTENSAO: .py
-LINHAS: 599
+LINHAS: 650
 ================================================================================
 
 """
@@ -733,10 +737,13 @@ class ClientViewSet(viewsets.ModelViewSet):
             try:
                 from apps.accounts.services.email import EmailService
 
-                frontend_url = getattr(
-                    settings, 'FRONTEND_URL', 'http://localhost:9000'
+                frontend_url = (
+                    getattr(settings, 'FRONTEND_URL', '') or
+                    'https://clivoos.com'
                 ).rstrip('/')
-                portal_url = f"{frontend_url}/portal/{client.public_code}/"
+                # O portal é acessado em /portal/ — o cliente digita o código lá.
+                # NÃO colocar o código no path.
+                portal_url = f"{frontend_url}/portal/"
 
                 EmailService.send_client_code_email(
                     client=client,
@@ -810,6 +817,52 @@ class ClientViewSet(viewsets.ModelViewSet):
             {'detail': 'Cliente excluído com sucesso'},
             status=status.HTTP_204_NO_CONTENT,
         )
+
+    # ------------------------------------------------------------------
+    # ACTION: check-email
+    # ------------------------------------------------------------------
+
+    @action(detail=False, methods=['get'], url_path='check-email')
+    def check_email(self, request):
+        """
+        Verifica se um email já existe no workspace.
+
+        GET /api/clients/check-email/?email=joao@exemplo.com
+
+        Resposta:
+            {"exists": true, "client": {"id", "name", "email", "public_code"}}
+            ou
+            {"exists": false}
+        """
+        workspace = self._current_workspace()
+        if workspace is None:
+            return Response({'error': 'Nenhum workspace ativo'}, status=400)
+
+        err = self._require_capability(workspace, 'clients.client.view')
+        if err is not None:
+            return err
+
+        email = (request.query_params.get('email') or '').strip().lower()
+        if not email:
+            return Response({'exists': False})
+
+        client = Client.objects.filter(
+            workspace=workspace,
+            email__iexact=email,
+        ).first()
+
+        if client is None:
+            return Response({'exists': False})
+
+        return Response({
+            'exists': True,
+            'client': {
+                'id': str(client.id),
+                'name': client.name,
+                'email': client.email,
+                'public_code': client.public_code,
+            },
+        })
 
     # ------------------------------------------------------------------
     # ACTION: context
@@ -1126,10 +1179,12 @@ class ClientViewSet(viewsets.ModelViewSet):
 
         from apps.accounts.services.email import EmailService
 
-        frontend_url = getattr(
-            settings, 'FRONTEND_URL', 'http://localhost:9000'
+        frontend_url = (
+            getattr(settings, 'FRONTEND_URL', '') or
+            'https://clivoos.com'
         ).rstrip('/')
-        portal_url = f"{frontend_url}/portal/{client.public_code}/"
+        # O portal é acessado em /portal/ — o cliente digita o código lá.
+        portal_url = f"{frontend_url}/portal/"
 
         try:
             EmailService.send_client_code_email(
@@ -1150,26 +1205,40 @@ ARQUIVO 10 DE 42
 ================================================================================
 PASTA: C:\clivo-v1\apps\clients\api\views
 ARQUIVO: portal_views.py
-TAMANHO: 3,90 KB
+TAMANHO: 6,88 KB
 EXTENSAO: .py
-LINHAS: 109
+LINHAS: 207
 ================================================================================
 
 """
 ClientPortalViewSet — endpoints consumidos pelo PRÓPRIO cliente.
 
 Autenticação:
-    ClientPortalSession (via middleware), NÃO Workspace login.
+    Cliente abre /portal/ e digita o `public_code`.
+    POST /api/portal/login/ valida e cria uma ClientPortalSession.
+    O cookie `clivo_portal` guarda o token cru da sessão.
+    O middleware `ClientPortalMiddleware` resolve a sessão nas
+    requisições seguintes.
 
-Capabilities:
-    NÃO usa capability de arquiteto. O token do Portal é a autorização.
-    O middleware já validou a sessão; a view só confia em
-    `request.portal_client`.
+Endpoints:
+    POST   /api/portal/login/         → autentica por código
+    POST   /api/portal/logout/        → encerra a sessão
+    GET    /api/portal/me/            → dados do cliente
+    POST   /api/portal/feedback/      → feedback do cliente
+    POST   /api/portal/context/confirm
+    POST   /api/portal/context/edit
 """
 
+import logging
+from datetime import timedelta
+
+from django.conf import settings
+from django.utils import timezone
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework.permissions import AllowAny
 
 from apps.clients.permissions import IsPortalSessionAuthenticated
 from apps.clients.api.serializers.portal_serializers import (
@@ -1178,25 +1247,122 @@ from apps.clients.api.serializers.portal_serializers import (
     PortalFeedbackCreateSerializer,
 )
 from apps.clients.services import PortalService
+from apps.clients.models import Client, ClientPortalSession
+from apps.clients.exceptions import (
+    PortalSessionError,
+    PortalSessionExpiredError,
+)
+
+logger = logging.getLogger('clients')
+
+PORTAL_COOKIE_NAME = 'clivo_portal'
+PORTAL_SESSION_TTL_HOURS = 8
+
+
+class ClientPortalLoginView(APIView):
+    """
+    Autentica o cliente com o `public_code`.
+
+    POST /api/portal/login/
+        body: { "code": "CLI-X7K92P" }
+
+    Resposta de sucesso:
+        {
+            "public_code": "CLI-X7K92P",
+            "name": "...",
+            "context": {...}
+        }
+
+    Efeito colateral:
+        Seta o cookie `clivo_portal` (HttpOnly) com o token cru
+        da sessão. Esse cookie é resolvido pelo ClientPortalMiddleware.
+    """
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        raw_code = (request.data.get('code') or '').strip().upper()
+        if not raw_code:
+            return Response(
+                {'error': 'Informe o código de acesso.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Aceita com ou sem prefixo
+        if not raw_code.startswith('CLI-'):
+            raw_code = 'CLI-' + raw_code.lstrip('CLI-')
+
+        try:
+            client = Client.objects.select_related('workspace').get(
+                public_code=raw_code
+            )
+        except Client.DoesNotExist:
+            return Response(
+                {'error': 'Código não encontrado. Verifique e tente novamente.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if client.status != Client.STATUS_ACTIVE:
+            return Response(
+                {'error': 'Este acesso está inativo.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # Cria a sessão e retorna o token cru para o cookie
+        session, raw_token = ClientPortalSession.issue(
+            client=client,
+            ttl_minutes=PORTAL_SESSION_TTL_HOURS * 60,
+        )
+
+        # Registra o acesso
+        PortalService._register_access(session, request)
+
+        response = Response({
+            'public_code': client.public_code,
+            'name': client.name,
+            'context': client.context or {},
+        })
+
+        secure = not settings.DEBUG
+        response.set_cookie(
+            key=PORTAL_COOKIE_NAME,
+            value=raw_token,
+            max_age=PORTAL_SESSION_TTL_HOURS * 60 * 60,
+            httponly=True,
+            secure=secure,
+            samesite='Lax',
+            path='/',
+        )
+        return response
 
 
 class ClientPortalViewSet(viewsets.ViewSet):
     """
-    Endpoints do Portal do Cliente.
-
-    Todas as rotas exigem `request.portal_session` válido
-    (populado pelo ClientPortalMiddleware).
+    Endpoints do Portal (exigem cookie de sessão válida).
     """
 
     permission_classes = [IsPortalSessionAuthenticated]
 
     # ------------------------------------------------------------------
-    # CONTEXTO
+    # LOGOUT
+    # ------------------------------------------------------------------
+
+    @action(detail=False, methods=['post'], url_path='logout')
+    def logout(self, request):
+        session = getattr(request, 'portal_session', None)
+        if session:
+            session.revoke()
+
+        response = Response({'detail': 'Sessão encerrada.'})
+        response.delete_cookie(PORTAL_COOKIE_NAME, path='/')
+        return response
+
+    # ------------------------------------------------------------------
+    # ME
     # ------------------------------------------------------------------
 
     @action(detail=False, methods=['get'], url_path='me')
     def me(self, request):
-        """Retorna o contexto público do cliente."""
         client = request.portal_client
         data = {
             'public_code': client.public_code,
@@ -1211,12 +1377,6 @@ class ClientPortalViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=['post'], url_path='feedback')
     def submit_feedback(self, request):
-        """
-        Cliente envia feedback de experiência do Portal.
-
-        Autenticação: ClientPortalSession.
-        NÃO exige capability de arquiteto.
-        """
         client = request.portal_client
 
         serializer = PortalFeedbackCreateSerializer(data=request.data)
@@ -1237,12 +1397,11 @@ class ClientPortalViewSet(viewsets.ViewSet):
         )
 
     # ------------------------------------------------------------------
-    # CONFIRMAÇÃO / EDIÇÃO DE CONTEXTO
+    # CONTEXTO
     # ------------------------------------------------------------------
 
     @action(detail=False, methods=['post'], url_path='context/confirm')
     def context_confirm(self, request):
-        """Cliente confirma que o contexto publicado está correto."""
         client = request.portal_client
         from apps.clients.events import ClientEventEmitter
         ClientEventEmitter.portal_context_confirmed(
@@ -1252,12 +1411,6 @@ class ClientPortalViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=['post'], url_path='context/edit')
     def context_edit(self, request):
-        """
-        Cliente propõe uma correção ao contexto publicado.
-
-        V1: registra apenas o evento (a correção real pertence a
-        Intelligence). Não sobrescreve `Client.context` diretamente.
-        """
         client = request.portal_client
         from apps.clients.events import ClientEventEmitter
         ClientEventEmitter.portal_context_edited(
@@ -3888,33 +4041,76 @@ ARQUIVO 41 DE 42
 ================================================================================
 PASTA: C:\clivo-v1\apps\clients
 ARQUIVO: urls.py
-TAMANHO: 0,67 KB
+TAMANHO: 1,71 KB
 EXTENSAO: .py
-LINHAS: 24
+LINHAS: 67
 ================================================================================
 
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 
-from apps.clients.api.views import ClientViewSet, ClientPortalViewSet
-from apps.clients.views import ClientesView
+from apps.clients.api.views import (
+    ClientViewSet,
+    ClientPortalViewSet,
+    ClientPortalLoginView,
+)
+from apps.clients.views import (
+    ClientesView,
+    PortalLoginView,
+    PortalHomeView,
+    PortalChatView,
+)
 
+
+# =========================================================================
+# ROUTERS
+# =========================================================================
 router = DefaultRouter()
 router.register(r'clients', ClientViewSet, basename='client')
 
 portal_router = DefaultRouter()
 portal_router.register(r'portal', ClientPortalViewSet, basename='portal')
 
+
 urlpatterns = [
-    # ===== PÁGINAS HTML =====
+    # ===== PÁGINAS DO ARQUITETO =====
     path(
         'clientes/',
         ClientesView.as_view(),
         name='clientes-page',
     ),
 
-    # ===== APIs =====
+    # ===== PORTAL DO CLIENTE =====
+    # Login por código público
+    path(
+        'portal/',
+        PortalLoginView.as_view(),
+        name='portal-login',
+    ),
+    # Lista de briefings
+    path(
+        'portal/home/',
+        PortalHomeView.as_view(),
+        name='portal-home',
+    ),
+    # Chat de perguntas de um briefing
+    path(
+        'portal/briefings/<uuid:briefing_id>/',
+        PortalChatView.as_view(),
+        name='portal-chat',
+    ),
+
+    # ===== APIs DO ARQUITETO =====
     path('api/', include(router.urls)),
+
+    # ===== APIs DO PORTAL =====
+    # Ordem importa: rotas explícitas ANTES do router,
+    # para `login` não ser capturado por `portal/<pk>/`
+    path(
+        'api/portal/login/',
+        ClientPortalLoginView.as_view(),
+        name='portal-login-api',
+    ),
     path('api/', include(portal_router.urls)),
 ]
 
@@ -3923,13 +4119,24 @@ ARQUIVO 42 DE 42
 ================================================================================
 PASTA: C:\clivo-v1\apps\clients
 ARQUIVO: views.py
-TAMANHO: 0,83 KB
+TAMANHO: 2,36 KB
 EXTENSAO: .py
-LINHAS: 34
+LINHAS: 78
 ================================================================================
 
 """
 Views HTML do módulo clients.
+
+Painel do arquiteto:
+    /clientes/                          → ClientesView
+
+Portal do cliente:
+    /portal/                            → PortalLoginView
+    /portal/home/                       → PortalHomeView (lista briefings)
+    /portal/briefings/<uuid>/           → PortalChatView (chat de perguntas)
+
+O portal do cliente NÃO usa login de Workspace. Ele autentica via
+código público (`public_code`) do cliente.
 """
 
 from django.shortcuts import render, redirect
@@ -3937,31 +4144,64 @@ from django.views import View
 
 
 class ClientesView(View):
-    """
-    Página HTML de clientes.
-
-    Exige login. O sidebar resolve a sessão no client-side,
-    mas a view garante que o HTML só é servido para autenticados.
-    """
+    """Página HTML de clientes do arquiteto."""
 
     def get(self, request):
         if not request.user.is_authenticated:
             return redirect('/login/')
-        return render(request, 'cliente.html')
+        return render(request, 'clientes.html')
 
 
-class ClientPortalEntryView(View):
+# =========================================================================
+# PORTAL DO CLIENTE
+# =========================================================================
+
+class PortalLoginView(View):
     """
-    Entry point HTML do Portal do Cliente.
+    Tela de login do cliente.
 
-    Recebe o public_code no path e o token via query string.
-    V1: placeholder.
+    O cliente digita o código (public_code, ex: CLI-X7K92P).
+    O JS envia para POST /api/portal/login/ que valida e seta o cookie.
     """
 
-    def get(self, request, public_code):
-        return render(request, 'portal/entry.html', {
-            'public_code': public_code,
-        }, status=200)
+    def get(self, request):
+        session = getattr(request, 'portal_session', None)
+        if session and session.is_valid():
+            return redirect('/portal/home/')
+        return render(request, 'portal/login.html')
+
+
+class PortalHomeView(View):
+    """
+    Lista os briefings do cliente.
+
+    A view só renderiza o HTML. O JS carrega via
+    GET /api/portal/briefings/.
+    """
+
+    def get(self, request):
+        session = getattr(request, 'portal_session', None)
+        if not session or not session.is_valid():
+            return redirect('/portal/')
+        return render(request, 'portal/home.html')
+
+
+class PortalChatView(View):
+    """
+    Chat de perguntas de um briefing.
+
+    Renderiza o HTML. O JS carrega o briefing via
+    GET /api/portal/briefings/<id>/ e envia respostas via
+    POST /api/portal/briefings/<id>/questions/<qid>/answer/.
+    """
+
+    def get(self, request, briefing_id):
+        session = getattr(request, 'portal_session', None)
+        if not session or not session.is_valid():
+            return redirect('/portal/')
+        return render(request, 'portal/chat.html', {
+            'briefing_id': str(briefing_id),
+        })
 
 ================================================================================
 FIM DA LISTAGEM

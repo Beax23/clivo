@@ -5,14 +5,22 @@ from apps.briefings.api.views import (
     BriefingTemplateViewSet,
     BriefingViewSet,
     PortalBriefingView,
+    PortalBriefingStartView,
     PortalBriefingAnswerView,
     PortalBriefingClarificationView,
     PortalBriefingReviewView,
+    PortalBriefingListView,
+    PortalBriefingExportPdfView,
 )
 from apps.briefings.api.views.category_views import (
     BriefingTemplateCategoryViewSet,
 )
-from apps.briefings.views import FluxoView
+from apps.briefings.views import (
+    FluxoView,
+    BriefingDetailView,
+    BriefingRawAnswersView,
+    BriefingArchitectRawView,
+)
 
 
 templates_router = DefaultRouter()
@@ -38,16 +46,51 @@ categories_router.register(
 
 
 urlpatterns = [
+    # ===== PÁGINA HTML DO ARQUITETO =====
     path('fluxo/', FluxoView.as_view(), name='fluxo-page'),
+    path(
+        'w/<str:public_id>/briefings/<uuid:briefing_id>/',
+        BriefingDetailView.as_view(),
+        name='briefing-detail-page',
+    ),
+    path(
+        'w/<str:public_id>/briefings/<uuid:briefing_id>/resumo/',
+        BriefingArchitectRawView.as_view(),
+        name='briefing-architect-raw',
+    ),
 
+    # ===== PÁGINA HTML DO CLIENTE =====
+    path(
+        'portal/briefings/<uuid:briefing_id>/respostas/',
+        BriefingRawAnswersView.as_view(),
+        name='portal-briefing-raw-answers',
+    ),
+
+    # ===== APIs DO ARQUITETO =====
     path('api/', include(categories_router.urls)),
     path('api/', include(templates_router.urls)),
     path('api/', include(briefings_router.urls)),
 
+    # ===== APIs DO PORTAL DO CLIENTE =====
+    path(
+        'api/portal/briefings/',
+        PortalBriefingListView.as_view(),
+        name='portal-briefing-list',
+    ),
     path(
         'api/portal/briefings/<uuid:briefing_id>/',
         PortalBriefingView.as_view(),
         name='portal-briefing-detail',
+    ),
+    path(
+        'api/portal/briefings/<uuid:briefing_id>/start/',
+        PortalBriefingStartView.as_view(),
+        name='portal-briefing-start',
+    ),
+    path(
+        'api/portal/briefings/<uuid:briefing_id>/export-pdf/',
+        PortalBriefingExportPdfView.as_view(),
+        name='portal-briefing-export-pdf',
     ),
     path(
         'api/portal/briefings/<uuid:briefing_id>/questions/<uuid:question_id>/answer/',

@@ -10,6 +10,10 @@ from apps.workspaces.models import (
 )
 from apps.workspaces.queries import WorkspaceQueries
 from apps.workspaces.public_id import encode_workspace_id
+from apps.workspaces.permissions.workspace_permissions import (
+    OWNER_KEY,
+    user_has_capability,
+)
 from apps.workspaces.api.serializers import (
     WorkspaceSerializer,
     WorkspaceCreateSerializer,
@@ -76,15 +80,23 @@ class WorkspaceViewSet(viewsets.ModelViewSet):
 
     @staticmethod
     def _capabilities_for_membership(membership) -> list:
+        """
+        Apresentação das capabilities de uma membership.
+
+        NÃO é autorização — é projeção para o endpoint
+        `GET /api/workspaces/my-capabilities/`. A autorização real
+        vive em `user_has_capability`.
+
+        Convenção:
+            - Proprietário devolve `['*']`.
+            - Demais devolvem a lista de códigos ativos.
+        """
         from apps.console.models import ConsoleGovernanceCapability
 
         if membership is None:
             return []
 
-        # Proprietário é a invariante estrutural do tenant.
-        # Ele sempre tem todas as capabilities, sem precisar
-        # que o operador configure isso no Console UI.
-        if membership.governance.key == 'proprietario':
+        if membership.governance.key == OWNER_KEY:
             return ['*']
 
         return list(
@@ -98,18 +110,15 @@ class WorkspaceViewSet(viewsets.ModelViewSet):
         )
 
     def _has_capability(self, request, workspace, capability_code) -> bool:
-        membership = WorkspaceMembership.objects.filter(
-            workspace=workspace,
-            user=request.user,
-        ).select_related('governance').first()
+        """
+        Delega para `user_has_capability` — fonte única de verdade.
 
-        if membership is None:
-            return False
-
-        caps = self._capabilities_for_membership(membership)
-        if '*' in caps:
-            return True
-        return capability_code in caps
+        Método mantido como wrapper para preservar a assinatura usada
+        em `_require_capability` e nas demais actions.
+        """
+        return user_has_capability(
+            workspace, request.user, capability_code,
+        )
 
     def _require_capability(self, request, workspace, capability_code):
         membership = WorkspaceMembership.objects.filter(
@@ -163,9 +172,6 @@ class WorkspaceViewSet(viewsets.ModelViewSet):
         workspace = WorkspaceQueries.get_with_subscription(workspace.id)
         request.session['current_workspace_id'] = str(workspace.id)
 
-        # Mantém `last_access_at` coerente para `get_last_accessed_for_user`.
-        # Sem isso, o Workspace recém-criado entra com last_access_at=NULL
-        # e perde a prioridade na ordenação por último acesso.
         WorkspaceMembershipService.touch_last_access(workspace, request.user)
 
         return Response(
@@ -325,7 +331,7 @@ class WorkspaceViewSet(viewsets.ModelViewSet):
             'governance_key': membership.governance.key,
             'governance_name': membership.governance.name,
             'capabilities': caps,
-            'is_owner': membership.governance.key == 'proprietario',
+            'is_owner': membership.governance.key == OWNER_KEY,
         })
 
     # ==================================================================
@@ -350,7 +356,6 @@ class WorkspaceViewSet(viewsets.ModelViewSet):
             memberships = WorkspaceMembershipService.list_members(workspace)
             return Response(WorkspaceMembershipSerializer(memberships, many=True).data)
 
-        # POST
         err = self._require_capability(
             request, workspace, 'workspaces.member.invite'
         )
@@ -460,7 +465,6 @@ class WorkspaceViewSet(viewsets.ModelViewSet):
             invitations = WorkspaceInvitationService.list_pending_for_workspace(workspace)
             return Response(WorkspaceInvitationSerializer(invitations, many=True).data)
 
-        # POST
         err = self._require_capability(
             request, workspace, 'workspaces.member.invite'
         )

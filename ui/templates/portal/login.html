@@ -3,281 +3,917 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#101014">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Clivo">
     <title>Entrar · Clivo</title>
-    <meta name="csrf-token" content="{{ csrf_token }}">
+
+        <!-- Favicon / Ícone da Aba do Navegador -->
+    <link rel="icon" type="image/jfif" href="{% static 'img/c1.jfif' %}">
+    
+    <!-- ============ PWA ============ -->
+    <link rel="manifest" href="{% static 'manifest.json' %}">
+    <link rel="apple-touch-icon" href="{% static 'icons/icon-192.png' %}">
+    <link rel="icon" type="image/png" sizes="192x192" href="{% static 'icons/icon-192.png' %}">
+    <link rel="icon" type="image/png" sizes="512x512" href="{% static 'icons/icon-512.png' %}">
+    <meta name="mobile-web-app-capable" content="yes">
+    <!-- ================================ -->
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap" rel="stylesheet">
+
+    <meta name="csrf-token" content="{{ csrf_token }}">
 
     <style>
         :root {
-            --bg: #FFFFFF;
-            --bg-soft: #F7F7F9;
-            --border: #E9E9EC;
-            --text: #101014;
-            --text-soft: #6B6B76;
-            --text-mute: #9797A1;
-            --danger: #E5484D;
-            --danger-bg: #FDECEC;
-            --radius: 12px;
-            --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            --bg-page: #FFFFFF;
+            --bg-secondary: #F7F7F9;
+            --bg-hover: #F0F0F2;
+            --border-color: #E9E9EC;
+            --border-light: #EFEFF1;
+
+            --text-primary: #101014;
+            --text-secondary: #6B6B76;
+            --text-tertiary: #9797A1;
+
+            --accent: #101014;
+            --accent-fg: #FFFFFF;
+
+            --red: #E5484D;
+            --red-bg: #FDECEC;
+            --red-border: rgba(229, 72, 77, 0.2);
+
+            --glow-1: rgba(139, 92, 246, 0.10);
+            --glow-2: rgba(59, 130, 246, 0.08);
+
+            --radius-sm: 6px;
+            --radius-md: 10px;
+            --radius-lg: 16px;
+            --radius-xl: 22px;
+
+            --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            --transition: 140ms ease-out;
+
+            --safe-top: env(safe-area-inset-top, 0px);
+            --safe-bottom: env(safe-area-inset-bottom, 0px);
+            --safe-left: env(safe-area-inset-left, 0px);
+            --safe-right: env(safe-area-inset-right, 0px);
         }
+
         [data-theme="dark"] {
-            --bg: #0A0A0A;
-            --bg-soft: #141414;
-            --border: #1F1F1F;
-            --text: #F5F5F5;
-            --text-soft: #A0A0A0;
-            --text-mute: #666666;
+            --bg-page: #0A0A0A;
+            --bg-secondary: #0F0F0F;
+            --bg-hover: #1A1A1A;
+            --border-color: #1F1F1F;
+            --border-light: #1F1F1F;
+
+            --text-primary: #F5F5F5;
+            --text-secondary: #A0A0A0;
+            --text-tertiary: #666666;
+
+            --accent: #F5F5F5;
+            --accent-fg: #0A0A0A;
+
+            --red: #F87171;
+            --red-bg: rgba(248, 113, 113, 0.08);
+            --red-border: rgba(248, 113, 113, 0.18);
+
+            --glow-1: rgba(139, 92, 246, 0.08);
+            --glow-2: rgba(59, 130, 246, 0.06);
         }
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+
+        *, *::before, *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
         html, body { height: 100%; }
+
         body {
-            font-family: var(--font);
-            background: var(--bg);
-            color: var(--text);
+            font-family: var(--font-family);
+            background: var(--bg-page);
+            color: var(--text-primary);
             -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
             min-height: 100vh;
+            min-height: 100dvh;
+            overflow-x: hidden;
+            font-size: 14px;
+            line-height: 1.5;
+            position: relative;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: -20%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, var(--glow-1) 0%, transparent 65%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        body::after {
+            content: '';
+            position: fixed;
+            bottom: -30%;
+            right: -10%;
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, var(--glow-2) 0%, transparent 70%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        a { color: inherit; text-decoration: none; }
+        button {
+            font-family: var(--font-family);
+            cursor: pointer;
+            background: none;
+            border: none;
+            color: inherit;
+        }
+
+        .portal {
+            position: relative;
+            z-index: 1;
             display: flex;
             flex-direction: column;
+            min-height: 100vh;
+            min-height: 100dvh;
+            padding-top: var(--safe-top);
+            padding-bottom: var(--safe-bottom);
+            padding-left: var(--safe-left);
+            padding-right: var(--safe-right);
         }
 
-        .p-header {
-            padding: 18px 22px;
-            border-bottom: 1px solid var(--border);
+        .portal-header {
+            padding: 16px 20px;
             display: flex;
             align-items: center;
-            gap: 10px;
+            justify-content: space-between;
+            animation: fadeIn 0.4s ease forwards;
         }
-        .p-logo {
-            width: 26px; height: 26px; border-radius: 6px;
-            background: var(--text); color: var(--bg);
-            display: flex; align-items: center; justify-content: center;
-            font-size: 12px; font-weight: 700;
-        }
-        .p-name { font-size: 13px; font-weight: 600; }
 
-        .p-main {
-            flex: 1;
+        .portal-logo {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+        }
+
+        .portal-logo-mark {
+            width: 26px;
+            height: 26px;
+            border-radius: var(--radius-sm);
+            background: var(--text-primary);
+            color: var(--bg-page);
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 24px;
+            font-size: 12px;
+            font-weight: 700;
         }
 
-        .p-card {
-            width: 100%;
-            max-width: 380px;
+        .portal-logo-text {
+            font-size: 14px;
+            font-weight: 600;
+            letter-spacing: -0.2px;
+            color: var(--text-primary);
+        }
+
+        .theme-btn {
+            width: 30px;
+            height: 30px;
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-tertiary);
+            transition: background-color var(--transition), color var(--transition);
+            flex-shrink: 0;
+        }
+
+        .theme-btn:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+
+        .theme-btn svg {
+            width: 16px;
+            height: 16px;
+            stroke-width: 1.6;
+        }
+
+        .portal-main {
+            flex: 1;
             display: flex;
             flex-direction: column;
-            gap: 20px;
+            justify-content: center;
+            padding: 16px 20px 40px;
         }
 
-        .p-title {
-            font-size: 22px;
+        .portal-card {
+            width: 100%;
+            max-width: 360px;
+            margin: 0 auto;
+            animation: fadeInUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            opacity: 0;
+        }
+
+        .portal-hero {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .portal-hero-icon {
+            width: 52px;
+            height: 52px;
+            margin: 0 auto 18px;
+            border-radius: 14px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-secondary);
+            position: relative;
+        }
+
+        .portal-hero-icon::after {
+            content: '';
+            position: absolute;
+            inset: -1px;
+            border-radius: 14px;
+            background: linear-gradient(135deg, var(--glow-1), transparent 60%);
+            pointer-events: none;
+        }
+
+        [data-theme="dark"] .portal-hero-icon {
+            background: #171717;
+            border-color: #262626;
+        }
+
+        .portal-hero-icon svg {
+            width: 22px;
+            height: 22px;
+            stroke-width: 1.6;
+            position: relative;
+            z-index: 1;
+        }
+
+        .portal-hero h1 {
+            font-size: 20px;
             font-weight: 700;
             letter-spacing: -0.4px;
-            text-align: center;
-        }
-        .p-sub {
-            font-size: 13.5px;
-            color: var(--text-soft);
-            text-align: center;
-            line-height: 1.55;
+            line-height: 1.25;
+            color: var(--text-primary);
+            margin-bottom: 6px;
         }
 
-        .p-field {
+        .portal-hero p {
+            font-size: 12.5px;
+            color: var(--text-tertiary);
+            line-height: 1.55;
+            max-width: 260px;
+            margin: 0 auto;
+        }
+
+        .portal-form {
             display: flex;
             flex-direction: column;
-            gap: 8px;
+            gap: 14px;
         }
-        .p-field label {
-            font-size: 12px;
+
+        .field {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .field label {
+            font-size: 11.5px;
             font-weight: 500;
-            color: var(--text-soft);
+            color: var(--text-secondary);
+            padding-left: 2px;
         }
-        .p-field input {
+
+        .field-input {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .field-input input {
             width: 100%;
-            height: 52px;
-            padding: 0 18px;
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            background: var(--bg-soft);
-            color: var(--text);
-            font-size: 17px;
-            font-family: var(--font);
+            height: 46px;
+            padding: 0 16px;
+            background: var(--bg-page);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            color: var(--text-primary);
+            font-size: 15px;
+            font-family: var(--font-family);
             font-weight: 600;
-            letter-spacing: 0.12em;
+            letter-spacing: 0.1em;
             text-align: center;
             text-transform: uppercase;
             outline: none;
-            transition: border-color 140ms ease, background-color 140ms ease;
+            transition: border-color var(--transition), background-color var(--transition), box-shadow var(--transition);
+            -webkit-appearance: none;
+            appearance: none;
         }
-        .p-field input:focus {
-            background: var(--bg);
-            border-color: var(--text);
-        }
-        .p-field input::placeholder {
-            color: var(--text-mute);
-            letter-spacing: 0.08em;
+
+        .field-input input::placeholder {
+            color: var(--text-tertiary);
+            letter-spacing: 0.06em;
             text-transform: none;
             font-weight: 400;
         }
 
-        .p-btn {
-            height: 48px;
-            border: none;
-            border-radius: var(--radius);
-            background: var(--text);
-            color: var(--bg);
-            font-size: 14px;
-            font-weight: 600;
-            font-family: var(--font);
-            cursor: pointer;
-            transition: opacity 140ms ease;
+        .field-input input:focus {
+            border-color: var(--text-primary);
+            box-shadow: 0 0 0 3px rgba(16, 16, 20, 0.06);
         }
-        .p-btn:hover:not(:disabled) { opacity: 0.88; }
-        .p-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-        .p-error {
-            padding: 10px 14px;
-            border-radius: 10px;
-            background: var(--danger-bg);
-            color: var(--danger);
-            font-size: 12.5px;
+        [data-theme="dark"] .field-input input:focus {
+            box-shadow: 0 0 0 3px rgba(245, 245, 245, 0.08);
+        }
+
+        .btn {
+            width: 100%;
+            height: 46px;
+            margin-top: 6px;
+            border: 1px solid var(--accent);
+            border-radius: var(--radius-sm);
+            background: var(--accent);
+            color: var(--accent-fg);
+            font-size: 13.5px;
+            font-weight: 600;
+            font-family: var(--font-family);
+            letter-spacing: -0.005em;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            position: relative;
+            overflow: hidden;
+            transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1),
+                        opacity 180ms ease,
+                        box-shadow 180ms ease;
+            -webkit-appearance: none;
+            appearance: none;
+            user-select: none;
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(120deg, transparent 30%, rgba(255, 255, 255, 0.18) 50%, transparent 70%);
+            transform: translateX(-100%);
+            transition: transform 600ms ease;
+            pointer-events: none;
+        }
+
+        .btn:hover:not(:disabled)::before {
+            transform: translateX(100%);
+        }
+
+        .btn:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 20px -8px rgba(16, 16, 20, 0.35);
+        }
+
+        [data-theme="dark"] .btn:hover:not(:disabled) {
+            box-shadow: 0 8px 20px -8px rgba(245, 245, 245, 0.20);
+        }
+
+        .btn:active:not(:disabled) {
+            transform: translateY(0) scale(0.99);
+        }
+
+        .btn:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+        }
+
+        .btn .btn-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .btn .spinner {
+            width: 14px;
+            height: 14px;
+            border: 2px solid currentColor;
+            border-right-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+            display: inline-block;
+            opacity: 0.85;
+        }
+
+        .error-box {
+            padding: 10px 12px;
+            border-radius: var(--radius-sm);
+            background: var(--red-bg);
+            border: 1px solid var(--red-border);
+            color: var(--red);
+            font-size: 12px;
             font-weight: 500;
-            line-height: 1.4;
+            line-height: 1.45;
             display: none;
         }
-        .p-error.is-visible { display: block; }
 
-        .p-footer {
-            padding: 18px 22px;
+        .error-box.is-visible {
+            display: block;
+            animation: shake 0.35s ease;
+        }
+
+        .portal-hint {
+            margin-top: 22px;
+            padding: 12px;
+            border-radius: var(--radius-md);
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-light);
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+        }
+
+        [data-theme="dark"] .portal-hint {
+            background: #0F0F0F;
+            border-color: #1F1F1F;
+        }
+
+        .portal-hint-icon {
+            flex-shrink: 0;
+            width: 14px;
+            height: 14px;
+            color: var(--text-tertiary);
+            margin-top: 2px;
+            stroke-width: 1.6;
+        }
+
+        .portal-hint-text {
+            font-size: 11.5px;
+            color: var(--text-tertiary);
+            line-height: 1.5;
+        }
+
+        .portal-hint-text strong {
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
+        .pwa-install {
+            display: none;
+            margin-top: 14px;
+            padding: 12px 14px;
+            border-radius: var(--radius-md);
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            align-items: center;
+            gap: 12px;
+            animation: fadeInUp 0.4s ease;
+        }
+
+        .pwa-install.is-visible { display: flex; }
+
+        .pwa-install-icon {
+            width: 34px;
+            height: 34px;
+            border-radius: 10px;
+            background: var(--bg-page);
+            border: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-primary);
+            flex-shrink: 0;
+        }
+
+        .pwa-install-icon svg {
+            width: 15px;
+            height: 15px;
+            stroke-width: 1.8;
+        }
+
+        .pwa-install-body {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .pwa-install-title {
+            font-size: 12.5px;
+            font-weight: 600;
+            color: var(--text-primary);
+            letter-spacing: -0.1px;
+            margin-bottom: 1px;
+        }
+
+        .pwa-install-desc {
+            font-size: 11px;
+            color: var(--text-tertiary);
+            line-height: 1.35;
+        }
+
+        .pwa-install-btn {
+            flex-shrink: 0;
+            height: 30px;
+            padding: 0 12px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            background: transparent;
+            color: var(--text-primary);
+            font-size: 11.5px;
+            font-weight: 600;
+            font-family: var(--font-family);
+            transition: background-color var(--transition), border-color var(--transition);
+        }
+
+        .pwa-install-btn:hover {
+            background: var(--bg-hover);
+            border-color: var(--text-tertiary);
+        }
+
+        .portal-footer {
+            padding: 20px;
             text-align: center;
             font-size: 11px;
-            color: var(--text-mute);
+            color: var(--text-tertiary);
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20% { transform: translateX(-5px); }
+            40% { transform: translateX(5px); }
+            60% { transform: translateX(-3px); }
+            80% { transform: translateX(3px); }
+        }
+
+        @media (min-width: 480px) {
+            .portal-header { padding: 18px 24px; }
+            .portal-main { padding: 20px 24px 48px; }
+            .portal-hero h1 { font-size: 22px; }
+            .portal-hero p { font-size: 13px; }
+            .portal-card { max-width: 380px; }
+        }
+
+        @media (min-width: 1024px) {
+            .portal-header { padding: 22px 32px; }
         }
     </style>
 </head>
 <body>
 
-<header class="p-header">
-    <div class="p-logo">C</div>
-    <div class="p-name">Clivo</div>
-</header>
+<div class="portal">
 
-<main class="p-main">
-    <div class="p-card">
-        <div>
-            <h1 class="p-title">Bem-vindo</h1>
-            <p class="p-sub">Digite o código que você recebeu para acessar seus briefings.</p>
+    <header class="portal-header">
+        <div class="portal-logo">
+            <div class="portal-logo-mark">C</div>
+            <span class="portal-logo-text">Clivo</span>
         </div>
 
-        <form id="pLoginForm">
-            <div class="p-field">
-                <label for="pCode">Código de acesso</label>
-                <input
-                    type="text"
-                    id="pCode"
-                    name="code"
-                    placeholder="CLI-XXXXXX"
-                    autocomplete="off"
-                    autocapitalize="characters"
-                    spellcheck="false"
-                    maxlength="20"
-                    required
-                >
+        <button class="theme-btn" id="themeToggle" type="button" title="Alternar tema" aria-label="Alternar tema">
+            <span id="themeIconWrapper"></span>
+        </button>
+    </header>
+
+    <main class="portal-main">
+        <div class="portal-card">
+
+            <div class="portal-hero">
+                <div class="portal-hero-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                    </svg>
+                </div>
+                <h1>Bem-vindo</h1>
+                <p>Digite o código que você recebeu para acessar seus briefings.</p>
             </div>
 
-            <div class="p-error" id="pError"></div>
+            <form id="portalLoginForm" class="portal-form" novalidate>
+                <div class="field">
+                    <label for="portalCode">Código de acesso</label>
+                    <div class="field-input">
+                        <input
+                            type="text"
+                            id="portalCode"
+                            name="code"
+                            placeholder="CLI-XXXXXX"
+                            autocomplete="off"
+                            autocapitalize="characters"
+                            autocorrect="off"
+                            spellcheck="false"
+                            inputmode="text"
+                            maxlength="10"
+                            required
+                        >
+                    </div>
+                </div>
 
-            <div style="margin-top: 16px;">
-                <button type="submit" class="p-btn" id="pSubmit">Entrar</button>
+                <div class="error-box" id="portalError" role="alert"></div>
+
+                <button type="submit" class="btn" id="portalSubmit">
+                    <span class="btn-label">Entrar</span>
+                </button>
+            </form>
+
+            <div class="portal-hint">
+                <svg class="portal-hint-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M12 16v-4"/>
+                    <path d="M12 8h.01"/>
+                </svg>
+                <div class="portal-hint-text">
+                    O código está no e-mail que você recebeu. Ele começa com <strong>CLI-</strong>.
+                </div>
             </div>
-        </form>
-    </div>
-</main>
 
-<footer class="p-footer">
-    Um espaço seguro para o seu projeto.
-</footer>
+            <div class="pwa-install" id="pwaInstallBanner">
+                <div class="pwa-install-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="7 10 12 15 17 10"/>
+                        <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                </div>
+                <div class="pwa-install-body">
+                    <div class="pwa-install-title">Instalar o app Clivo</div>
+                    <div class="pwa-install-desc">Acesse seus briefings direto da tela inicial.</div>
+                </div>
+                <button type="button" class="pwa-install-btn" id="pwaInstallBtn">Instalar</button>
+            </div>
+
+        </div>
+    </main>
+
+    <footer class="portal-footer">
+        Um espaço seguro para o seu projeto.
+    </footer>
+
+</div>
 
 <script>
 (function () {
     'use strict';
 
-    const form = document.getElementById('pLoginForm');
-    const input = document.getElementById('pCode');
-    const submit = document.getElementById('pSubmit');
-    const errorBox = document.getElementById('pError');
+    // =============================================================
+    // TEMA
+    // =============================================================
+    var THEME_KEY = 'clivo-theme';
+    var currentTheme = localStorage.getItem(THEME_KEY) || 'light';
+    document.documentElement.setAttribute('data-theme', currentTheme);
+
+    var SUN_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">' +
+        '<circle cx="12" cy="12" r="4"/>' +
+        '<path d="M12 2v2"/><path d="M12 20v2"/>' +
+        '<path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/>' +
+        '<path d="M2 12h2"/><path d="M20 12h2"/>' +
+        '<path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>' +
+        '</svg>';
+
+    var MOON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">' +
+        '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>' +
+        '</svg>';
+
+    function updateThemeIcon(theme) {
+        var wrapper = document.getElementById('themeIconWrapper');
+        if (!wrapper) return;
+        wrapper.innerHTML = theme === 'dark' ? SUN_SVG : MOON_SVG;
+    }
+    updateThemeIcon(currentTheme);
+
+    document.getElementById('themeToggle').addEventListener('click', function () {
+        currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', currentTheme);
+        localStorage.setItem(THEME_KEY, currentTheme);
+        updateThemeIcon(currentTheme);
+    });
+
+    // =============================================================
+    // HELPERS
+    // =============================================================
+    var form = document.getElementById('portalLoginForm');
+    var input = document.getElementById('portalCode');
+    var submit = document.getElementById('portalSubmit');
+    var errorBox = document.getElementById('portalError');
+    var label = submit.querySelector('.btn-label');
 
     function getCookie(name) {
-        const v = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
-        return v ? v.pop() : '';
+        var match = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+        return match ? match.pop() : '';
     }
 
     function showError(msg) {
         errorBox.textContent = msg;
         errorBox.classList.add('is-visible');
     }
+
     function clearError() {
         errorBox.textContent = '';
         errorBox.classList.remove('is-visible');
     }
 
-    // Formata o input: deixa maiúsculo e adiciona prefixo CLI-
-    input.addEventListener('input', () => {
-        let v = input.value.toUpperCase().replace(/[^A-Z0-9-]/g, '');
-        if (v && !v.startsWith('CLI-')) {
-            v = 'CLI-' + v.replace(/^CLI-?/, '');
+    function setLoading(loading) {
+        if (loading) {
+            submit.disabled = true;
+            label.innerHTML = '<span class="spinner"></span>Entrando…';
+        } else {
+            submit.disabled = false;
+            label.textContent = 'Entrar';
         }
-        input.value = v;
+    }
+
+    var hasStartedTyping = false;
+
+    input.addEventListener('input', function () {
+        var v = input.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+        if (v.startsWith('CLI')) v = v.slice(3);
+        v = v.slice(0, 6);
+
+        if (v.length > 0) {
+            hasStartedTyping = true;
+            input.value = 'CLI-' + v;
+        } else {
+            input.value = '';
+            hasStartedTyping = false;
+        }
+
         clearError();
     });
 
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const code = input.value.trim();
-        if (!code) return;
+    input.addEventListener('focus', function () {
+        if (!input.value && hasStartedTyping) {
+            input.value = 'CLI-';
+        }
+    });
 
-        submit.disabled = true;
-        submit.textContent = 'Entrando…';
+    input.addEventListener('blur', function () {
+        if (input.value === 'CLI-') {
+            input.value = '';
+        }
+    });
+
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+
+        var code = input.value.trim();
+        if (!code || code === 'CLI-' || code.length < 10) {
+            showError('Digite o código completo (ex: CLI-A3K9Z2).');
+            input.focus();
+            return;
+        }
+
+        setLoading(true);
         clearError();
 
-        try {
-            const res = await fetch('/api/portal/login/', {
-                method: 'POST',
-                credentials: 'include',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': getCookie('csrftoken'),
-                    'X-Requested-With': 'XMLHttpRequest',
-                },
-                body: JSON.stringify({ code }),
-            });
+        fetch('/api/portal/login/', {
+            method: 'POST',
+            credentials: 'include',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken'),
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({ code: code })
+        })
+        .then(function (res) {
+            return res.json()
+                .then(function (data) { return { ok: res.ok, status: res.status, data: data }; })
+                .catch(function () { return { ok: res.ok, status: res.status, data: null }; });
+        })
+        .then(function (result) {
+            if (result.ok) {
+                window.location.href = '/portal/home/';
+                return;
+            }
+            var msg = 'Não foi possível entrar.';
+            if (result.data && result.data.error) {
+                msg = result.data.error;
+            } else if (result.status === 404) {
+                msg = 'Código não encontrado. Verifique e tente novamente.';
+            } else if (result.status === 403) {
+                msg = 'Este acesso está inativo.';
+            }
+            showError(msg);
+            setLoading(false);
+            input.focus();
+            input.select();
+        })
+        .catch(function (err) {
+            console.error(err);
+            showError('Erro de conexão. Tente novamente.');
+            setLoading(false);
+        });
+    });
 
-            let data = null;
-            try { data = await res.json(); } catch (_) {}
+    if (window.matchMedia('(min-width: 1024px)').matches) {
+        setTimeout(function () { input.focus(); }, 300);
+    }
 
-            if (!res.ok) {
-                showError((data && data.error) || 'Não foi possível entrar.');
-                submit.disabled = false;
-                submit.textContent = 'Entrar';
+    // =============================================================
+    // SERVICE WORKER (PWA)
+    // =============================================================
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+            navigator.serviceWorker.register('/sw.js', { scope: '/' })
+                .then(function (reg) {
+                    console.log('[PWA] Service Worker registrado:', reg.scope);
+                })
+                .catch(function (err) {
+                    console.warn('[PWA] Falha ao registrar Service Worker:', err);
+                });
+        });
+    }
+
+    // =============================================================
+    // BEFOREINSTALLPROMPT (Android/Chrome)
+    // =============================================================
+    var deferredInstallPrompt = null;
+    var installBanner = document.getElementById('pwaInstallBanner');
+    var installBtn = document.getElementById('pwaInstallBtn');
+
+    window.addEventListener('beforeinstallprompt', function (e) {
+        e.preventDefault();
+        deferredInstallPrompt = e;
+        if (installBanner) {
+            installBanner.classList.add('is-visible');
+        }
+    });
+
+    if (installBtn) {
+        installBtn.addEventListener('click', function () {
+            if (!deferredInstallPrompt) {
+                var ua = window.navigator.userAgent || '';
+                var isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+                if (isIOS) {
+                    alert(
+                        'Para instalar o Clivo no seu iPhone:\n\n' +
+                        '1. Toque no ícone de compartilhar do Safari (quadrado com seta pra cima).\n' +
+                        '2. Role para baixo e toque em "Adicionar à Tela de Início".\n' +
+                        '3. Confirme tocando em "Adicionar".'
+                    );
+                } else {
+                    alert(
+                        'Para instalar o Clivo:\n\n' +
+                        'Abra o menu do seu navegador (três pontinhos) e ' +
+                        'procure por "Instalar app" ou "Adicionar à tela inicial".'
+                    );
+                }
                 return;
             }
 
-            window.location.href = '/portal/home/';
-        } catch (err) {
-            console.error(err);
-            showError('Erro de conexão. Tente novamente.');
-            submit.disabled = false;
-            submit.textContent = 'Entrar';
-        }
-    });
+            deferredInstallPrompt.prompt();
+            deferredInstallPrompt.userChoice.then(function (choice) {
+                console.log('[PWA] Escolha do usuário:', choice.outcome);
+                deferredInstallPrompt = null;
+                if (installBanner) installBanner.classList.remove('is-visible');
+            });
+        });
+    }
 
-    input.focus();
+    window.addEventListener('appinstalled', function () {
+        console.log('[PWA] App instalado.');
+        if (installBanner) installBanner.classList.remove('is-visible');
+    });
 })();
 </script>
 

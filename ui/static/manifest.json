@@ -1,0 +1,36 @@
+{
+    "name": "Clivo — Meu Portal",
+    "short_name": "Clivo",
+    "description": "Acesse seus briefings e converse com seu arquiteto.",
+    "start_url": "/portal/home/",
+    "scope": "/portal/",
+    "display": "standalone",
+    "orientation": "portrait-primary",
+    "background_color": "#FFFFFF",
+    "theme_color": "#101014",
+    "lang": "pt-BR",
+    "dir": "ltr",
+    "categories": ["productivity", "business"],
+    "icons": [
+        {
+            "src": "/static/icons/icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "/static/icons/icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any"
+        }
+    ],
+    "shortcuts": [
+        {
+            "name": "Meus briefings",
+            "short_name": "Briefings",
+            "url": "/portal/home/",
+            "description": "Ver todos os briefings"
+        }
+    ]
+}

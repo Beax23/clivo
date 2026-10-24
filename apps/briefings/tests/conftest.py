@@ -30,6 +30,7 @@ from apps.briefings.models import (
     BriefingTemplate,
     BriefingSection,
     BriefingQuestion,
+    BriefingTemplateVersion,
     Briefing,
 )
 
@@ -196,14 +197,16 @@ def portal_session_b(db, client_b):
 def published_template(db, workspace_a, user_owner):
     """
     Template publicado com 2 sessões e 3 perguntas (todas obrigatórias).
+    Já cria a versão v1 publicada e com estrutura congelada.
     """
+    from apps.briefings.services import BriefingTemplateVersionService
+
     template = BriefingTemplate.objects.create(
         workspace=workspace_a,
         name='Briefing Residencial',
         description='Briefing para projetos residenciais',
         category='residencial',
         status=BriefingTemplate.STATUS_PUBLISHED,
-        is_active=True,
         created_by=user_owner,
     )
     s1 = BriefingSection.objects.create(
@@ -233,18 +236,30 @@ def published_template(db, workspace_a, user_owner):
         is_required=True,
         allowed_response_formats=['text'],
     )
+
+    # Cria a versão v1 publicada
+    version = BriefingTemplateVersionService.create_draft_from_template(
+        template=template, actor=user_owner,
+    )
+    BriefingTemplateVersionService.publish(version=version, actor=user_owner)
+
     return template
 
 
 @pytest.fixture
 def draft_template(db, workspace_a, user_owner):
-    return BriefingTemplate.objects.create(
+    from apps.briefings.services import BriefingTemplateVersionService
+
+    template = BriefingTemplate.objects.create(
         workspace=workspace_a,
         name='Briefing em Rascunho',
         status=BriefingTemplate.STATUS_DRAFT,
-        is_active=True,
         created_by=user_owner,
     )
+    BriefingTemplateVersionService.create_draft_from_template(
+        template=template, actor=user_owner,
+    )
+    return template
 
 
 # =========================================================================

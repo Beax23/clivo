@@ -1,16 +1,10 @@
 /* =========================================================================
-   CLIENTES — página registrada no shell ClivoPages
-   Layout master/detail — alta performance
+   CLIENTE — master/detail.
+   Cache por aba — sem re-fetch ao alternar.
    ========================================================================= */
 
 (function() {
     'use strict';
-
-    const DEBUG = false;
-
-    function log() {
-        if (DEBUG) console.log.apply(console, ['[clientes]'].concat(Array.from(arguments)));
-    }
 
     function showToast(msg, type) {
         if (typeof window.clivoShowToast === 'function') {
@@ -18,31 +12,43 @@
         }
     }
 
-    async function api(url, method, body) {
+    function api(url, method, body) {
         return window.clivoApi(url, method, body);
     }
 
+    const _escCache = new Map();
     function escapeHtml(s) {
         if (s === null || s === undefined) return '';
-        return String(s)
+        s = String(s);
+        if (_escCache.has(s)) return _escCache.get(s);
+        const r = s
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#39;');
+        if (_escCache.size < 500) _escCache.set(s, r);
+        return r;
     }
 
     function setLoading(btn, loading, label) {
         if (!btn) return;
         if (loading) {
+            if (!btn.dataset.loading) {
+                btn.dataset.originalText = btn.innerHTML;
+                btn.dataset.loading = '1';
+            }
             btn.disabled = true;
-            btn.dataset.originalText = btn.innerHTML;
             btn.innerHTML =
-                '<span class="loading-spinner" style="width:12px;height:12px;border-width:2px;border-color:rgba(255,255,255,0.3);border-top-color:#fff;"></span> ' +
+                '<span class="loading-spinner" style="width:12px;height:12px;border-width:2px;border-color:rgba(255,255,255,0.3);border-top-color:#fff;display:inline-block;border-radius:50%;"></span> ' +
                 (label || 'Aguarde...');
         } else {
             btn.disabled = false;
-            btn.innerHTML = btn.dataset.originalText || btn.textContent;
+            if (btn.dataset.originalText !== undefined) {
+                btn.innerHTML = btn.dataset.originalText;
+            }
+            delete btn.dataset.loading;
+            delete btn.dataset.originalText;
         }
     }
 
@@ -64,9 +70,58 @@
         } catch (e) { return ''; }
     }
 
-    function capitalize(s) {
-        if (!s) return '';
-        return s.charAt(0).toUpperCase() + s.slice(1);
+    function formatDeadlineFull(iso) {
+        if (!iso) return '';
+        try {
+            const d = new Date(iso);
+            const now = new Date();
+            const sameYear = d.getFullYear() === now.getFullYear();
+            return d.toLocaleDateString('pt-BR', {
+                day: 'numeric',
+                month: 'short',
+                ...(sameYear ? {} : { year: 'numeric' }),
+            });
+        } catch (e) { return ''; }
+    }
+
+    function computeDeadlineInfo(expiresAt, status) {
+        if (!expiresAt) {
+            return { label: 'Sem prazo', cls: '' };
+        }
+        let date;
+        try {
+            date = new Date(expiresAt);
+            if (isNaN(date.getTime())) return { label: 'Sem prazo', cls: '' };
+        } catch (e) {
+            return { label: 'Sem prazo', cls: '' };
+        }
+
+        const now = Date.now();
+        const diffMs = date.getTime() - now;
+        const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+        if (status === 'completed' || status === 'closed') {
+            return { label: formatDeadlineFull(expiresAt), cls: '' };
+        }
+
+        if (diffMs < 0) {
+            const over = Math.abs(diffDays);
+            return {
+                label: over <= 1 ? 'Venceu ontem' : 'Venceu há ' + over + ' dias',
+                cls: 'is-danger',
+            };
+        }
+
+        if (diffDays === 0) {
+            return { label: 'Vence hoje', cls: 'is-danger' };
+        }
+        if (diffDays === 1) {
+            return { label: 'Vence amanhã', cls: 'is-warning' };
+        }
+        if (diffDays <= 3) {
+            return { label: 'Vence em ' + diffDays + ' dias', cls: 'is-warning' };
+        }
+        return { label: formatDeadlineFull(expiresAt), cls: '' };
     }
 
     function refreshIcons() {
@@ -85,6 +140,15 @@
         return STATUS_LABELS[status] || status || '—';
     }
 
+    const BRIEFING_STATUS_LABELS = {
+        in_progress: 'Em andamento',
+        paused: 'Pausado',
+        completed: 'Concluído',
+        closed: 'Encerrado',
+        expired: 'Expirado',
+        cancelled: 'Cancelado',
+    };
+
     const CTX = {
         PROFILE: 'profile',
         KNOWLEDGE: 'knowledge',
@@ -92,38 +156,19 @@
         DISLIKES: 'dislikes',
     };
 
-    function updateGreeting() {
-        const el = document.getElementById('clGreeting');
-        if (!el) return;
-
-        const hour = new Date().getHours();
-        let greeting = 'Olá';
-        if (hour < 12) greeting = 'Bom dia';
-        else if (hour < 18) greeting = 'Boa tarde';
-        else greeting = 'Boa noite';
-
-        const user = window.Clivo.user;
-        const firstName = user && user.full_name
-            ? user.full_name.split(' ')[0]
-            : (user && user.email ? user.email.split('@')[0] : '');
-
-        el.textContent = firstName ? (greeting + ', ' + firstName) : 'Clientes';
-    }
-
     // =====================================================================
     // ESTADO
     // =====================================================================
     let clientsCache = [];
     let clientsLoaded = false;
-    let clientsPromise = null;     // dedup de fetch da lista
+    let clientsPromise = null;
     let currentClient = null;
-    let contactsCache = [];
-    let notesCache = [];
-    let tasksCache = [];
-    let editingNoteId = null;
+    let briefingsCache = [];
+    let briefingsSearch = '';
     let isOpening = false;
-    let detailCache = {};          // { clientId: clientObject }
-    let detailPromises = {};       // { clientId: Promise }
+    let detailCache = new Map();
+    let detailPromises = new Map();
+    let briefingsCacheByClient = new Map();
 
     // =====================================================================
     // LISTA
@@ -135,35 +180,30 @@
         const CACHE_TTL = 30000;
         const now = Date.now();
 
-        // --- Cache em memória ---
         if (!force && clientsLoaded && clientsCache.length) {
-            log('loadClients: memória');
             renderClients();
             updateListSubtitle();
+            schedulePrefetch();
             return;
         }
 
-        // --- Cache do shell ---
         if (!force && window.Clivo.cache.clients &&
             (now - window.Clivo.cache.clients.timestamp) < CACHE_TTL) {
-            log('loadClients: shell');
             clientsCache = window.Clivo.cache.clients.data || [];
             clientsLoaded = true;
             renderClients();
             updateListSubtitle();
+            schedulePrefetch();
             return;
         }
 
-        // --- Dedup: se já tem um fetch em andamento, reaproveita ---
         if (clientsPromise) {
-            log('loadClients: reusando promise');
             await clientsPromise;
             renderClients();
             updateListSubtitle();
             return;
         }
 
-        // --- Fetch ---
         clientsPromise = (async function() {
             try {
                 const data = await api('/api/clients/');
@@ -186,53 +226,53 @@
         try {
             await clientsPromise;
         } catch (e) {
-            listEl.innerHTML =
-                '<div class="cl-empty">' +
-                '<i data-lucide="alert-circle"></i>' +
-                '<p>Erro ao carregar clientes</p>' +
-                '<span style="font-size:11.5px;color:var(--text-tertiary);">' +
-                escapeHtml(e.message || 'Erro desconhecido') +
-                '</span>' +
-                '</div>';
-            refreshIcons();
+            listEl.innerHTML = '<li class="cl-list-empty">Erro ao carregar clientes</li>';
             updateListSubtitle();
             return;
         }
 
         renderClients();
         updateListSubtitle();
+        schedulePrefetch();
+    }
+
+    function schedulePrefetch() {
+        const run = function() {
+            clientsCache.slice(0, 5).forEach(function(c) {
+                prefetchClientDetail(c.id);
+            });
+        };
+        if (typeof requestIdleCallback === 'function') {
+            requestIdleCallback(run, { timeout: 1500 });
+        } else {
+            setTimeout(run, 300);
+        }
     }
 
     function updateListSubtitle() {
-        const subtitle = document.getElementById('clListSubtitle');
-        if (!subtitle) return;
-        const total = clientsCache.length;
-        if (total === 0) subtitle.textContent = '';
-        else if (total === 1) subtitle.textContent = '1 cliente';
-        else subtitle.textContent = total + ' clientes';
+        const countEl = document.getElementById('clCount');
+        if (countEl) countEl.textContent = String(clientsCache.length);
     }
 
     function getFilteredClients() {
         const searchInput = document.getElementById('clSearchInput');
         const query = (searchInput && searchInput.value || '').trim().toLowerCase();
-
         const statusSelect = document.getElementById('clStatusFilter');
         const statusFilter = statusSelect ? statusSelect.value : '';
 
-        let items = clientsCache.slice();
+        if (!query && !statusFilter) return clientsCache.slice();
 
+        let items = clientsCache;
         if (statusFilter) {
             items = items.filter(function(c) { return c.status === statusFilter; });
         }
-
         if (query) {
             items = items.filter(function(c) {
                 return (c.name || '').toLowerCase().indexOf(query) !== -1
                     || (c.email || '').toLowerCase().indexOf(query) !== -1;
             });
         }
-
-        return items;
+        return items.slice();
     }
 
     function renderClients() {
@@ -247,49 +287,56 @@
             const hasQuery = (searchInput && searchInput.value.trim()) ||
                              (statusSelect && statusSelect.value);
             listEl.innerHTML =
-                '<div class="cl-empty">' +
-                '<i data-lucide="users"></i>' +
-                '<p>' + (hasQuery ? 'Nada encontrado' : 'Nenhum cliente ainda') + '</p>' +
-                '</div>';
-            refreshIcons();
+                '<li class="cl-list-empty">' +
+                (hasQuery ? 'Nada encontrado' : 'Nenhum cliente ainda') +
+                '</li>';
             return;
         }
 
-        let html = '';
-        items.forEach(function(c) {
+        const currentId = currentClient ? currentClient.id : null;
+        const parts = [];
+        for (let i = 0; i < items.length; i++) {
+            const c = items[i];
             const initial = (c.name || '?').charAt(0).toUpperCase();
             const email = c.email || '—';
-            const isSelected = currentClient && currentClient.id === c.id;
             const status = c.status || 'active';
             const statusText = statusLabel(status);
-            html +=
-                '<div class="cl-card-item' + (isSelected ? ' is-selected' : '') + '" data-client-id="' + c.id + '">' +
-                    '<div class="cl-card-avatar">' + escapeHtml(initial) + '</div>' +
-                    '<div class="cl-card-info">' +
-                        '<div class="cl-card-name">' +
+            const isSel = currentId && currentId === c.id;
+            parts.push(
+                '<li class="cl-list-item' + (isSel ? ' is-active' : '') + '" data-client-id="' + c.id + '">' +
+                    '<div class="cl-avatar">' + escapeHtml(initial) + '</div>' +
+                    '<div class="cl-list-item-body">' +
+                        '<div class="cl-list-item-title">' +
                             '<span class="cl-status-led ' + escapeHtml(status) + '" title="' + escapeHtml(statusText) + '"></span>' +
-                            '<span>' + escapeHtml(c.name) + '</span>' +
+                            '<span>' + escapeHtml(c.name || '—') + '</span>' +
                         '</div>' +
-                        '<div class="cl-card-meta">' + escapeHtml(email) + '</div>' +
+                        '<div class="cl-list-item-meta">' + escapeHtml(email) + '</div>' +
                     '</div>' +
-                '</div>';
+                '</li>'
+            );
+        }
+        listEl.innerHTML = parts.join('');
+    }
+
+    function bindListEvents() {
+        const listEl = document.getElementById('clList');
+        if (!listEl || listEl.__clBound) return;
+        listEl.__clBound = true;
+
+        listEl.addEventListener('mouseover', function(e) {
+            const card = e.target.closest('.cl-list-item');
+            if (!card) return;
+            const id = card.dataset.clientId;
+            if (id) prefetchClientDetail(id);
         });
 
-        listEl.innerHTML = html;
-        refreshIcons();
-
-        listEl.querySelectorAll('.cl-card-item').forEach(function(card) {
-            // Prefetch no hover (economiza clique)
-            card.addEventListener('mouseenter', function() {
-                const id = this.dataset.clientId;
-                if (id) prefetchClientDetail(id);
-            });
-
-            card.addEventListener('click', function() {
-                const id = this.dataset.clientId;
-                if (currentClient && currentClient.id === id) return;
-                openClient(id);
-            });
+        listEl.addEventListener('click', function(e) {
+            const card = e.target.closest('.cl-list-item');
+            if (!card) return;
+            const id = card.dataset.clientId;
+            if (!id) return;
+            if (currentClient && currentClient.id === id) return;
+            openClient(id);
         });
     }
 
@@ -297,71 +344,72 @@
         const listEl = document.getElementById('clList');
         if (!listEl) return;
         const currentId = currentClient ? currentClient.id : null;
-
-        listEl.querySelectorAll('.cl-card-item').forEach(function(card) {
-            const isSelected = card.dataset.clientId === currentId;
-            card.classList.toggle('is-selected', isSelected);
-        });
+        const items = listEl.querySelectorAll('.cl-list-item');
+        for (let i = 0; i < items.length; i++) {
+            items[i].classList.toggle('is-active', items[i].dataset.clientId === currentId);
+        }
     }
 
     // =====================================================================
-    // DETALHE — com cache e prefetch
+    // DETALHE
     // =====================================================================
+    function setDetailOpen(open) {
+        const body = document.getElementById('clBody');
+        if (body) body.classList.toggle('detail-open', !!open);
+    }
+
     function showDetailEmpty() {
         const empty = document.getElementById('clDetailEmpty');
         const content = document.getElementById('clDetailContent');
-        if (empty) empty.classList.remove('hidden');
-        if (content) content.classList.add('hidden');
+        if (empty) empty.classList.remove('is-hidden');
+        if (content) content.classList.add('is-hidden');
     }
 
     function showDetailContent() {
         const empty = document.getElementById('clDetailEmpty');
         const content = document.getElementById('clDetailContent');
-        if (empty) empty.classList.add('hidden');
-        if (content) content.classList.remove('hidden');
+        if (empty) empty.classList.add('is-hidden');
+        if (content) content.classList.remove('is-hidden');
     }
 
     function prefetchClientDetail(clientId) {
         if (!clientId) return;
-        if (detailCache[clientId]) return;
-        if (detailPromises[clientId]) return;
-
-        detailPromises[clientId] = api('/api/clients/' + clientId + '/')
+        if (detailCache.has(clientId) || detailPromises.has(clientId)) return;
+        const p = api('/api/clients/' + clientId + '/')
             .then(function(client) {
-                detailCache[clientId] = client;
+                detailCache.set(clientId, client);
                 return client;
             })
-            .catch(function() { /* silencioso */ })
+            .catch(function() {})
             .finally(function() {
-                delete detailPromises[clientId];
+                detailPromises.delete(clientId);
             });
+        detailPromises.set(clientId, p);
     }
 
     function fetchClientDetail(clientId) {
-        // Cache em memória
-        if (detailCache[clientId]) {
-            return Promise.resolve(detailCache[clientId]);
+        if (detailCache.has(clientId)) {
+            return Promise.resolve(detailCache.get(clientId));
         }
-        // Promise em andamento
-        if (detailPromises[clientId]) {
-            return detailPromises[clientId];
+        if (detailPromises.has(clientId)) {
+            return detailPromises.get(clientId);
         }
-        // Fetch novo
         const p = api('/api/clients/' + clientId + '/')
             .then(function(client) {
-                detailCache[clientId] = client;
+                detailCache.set(clientId, client);
                 return client;
             })
             .finally(function() {
-                delete detailPromises[clientId];
+                detailPromises.delete(clientId);
             });
-        detailPromises[clientId] = p;
+        detailPromises.set(clientId, p);
         return p;
     }
 
     async function openClient(clientId) {
         if (isOpening) return;
         if (currentClient && currentClient.id === clientId) {
+            setDetailOpen(true);
             updateSelection();
             return;
         }
@@ -370,6 +418,9 @@
         try {
             const client = await fetchClientDetail(clientId);
             currentClient = client;
+
+            briefingsCache = [];
+            briefingsSearch = '';
 
             if (window.location.hash !== '#' + clientId) {
                 history.replaceState(
@@ -381,8 +432,8 @@
 
             renderDetail();
             showDetailContent();
+            setDetailOpen(true);
             updateSelection();
-            switchTab('geral');
         } catch (e) {
             showToast('Erro ao carregar cliente', 'error');
             showDetailEmpty();
@@ -391,11 +442,8 @@
         }
     }
 
-    function closeClient() {
-        currentClient = null;
-        showDetailEmpty();
-        updateSelection();
-
+    function closeDetail() {
+        setDetailOpen(false);
         if (window.location.hash) {
             history.replaceState(
                 { soft: true, path: window.location.pathname },
@@ -403,18 +451,15 @@
                 window.location.pathname
             );
         }
-
-        const items = getFilteredClients();
-        if (items.length) {
-            openClient(items[0].id);
-        }
+        currentClient = null;
+        updateSelection();
+        showDetailEmpty();
     }
 
     function renderDetail() {
         if (!currentClient) return;
         const c = currentClient;
         const status = c.status || 'active';
-        const statusText = statusLabel(status);
         const initial = (c.name || '?').charAt(0).toUpperCase();
 
         const setText = function(id, val) {
@@ -425,36 +470,34 @@
         const av = document.getElementById('clDetailAvatar');
         if (av) av.textContent = initial;
 
-        const nameEl = document.getElementById('clDetailName');
-        if (nameEl) {
-            nameEl.innerHTML =
-                '<span>' + escapeHtml(c.name || '—') + '</span>' +
-                '<span class="cl-status-badge ' + escapeHtml(status) + '">' +
-                    escapeHtml(statusText) +
-                '</span>';
-        }
-
+        setText('clDetailName', c.name || '—');
         setText('clDetailCode', c.public_code || '—');
         setText('clDetailCreatedAt',
             c.created_at ? ('Criado em ' + formatDate(c.created_at)) : '—');
         setText('clDetailCreatedBy',
             c.created_by_name ? ('por ' + c.created_by_name) : '—');
 
+        updateStatusPill(status);
+
         const nameInput = document.getElementById('clFieldName');
         const emailInput = document.getElementById('clFieldEmail');
         const phoneInput = document.getElementById('clFieldPhone');
-        const statusSelect = document.getElementById('clFieldStatus');
         if (nameInput) nameInput.value = c.name || '';
         if (emailInput) emailInput.value = c.email || '';
         if (phoneInput) phoneInput.value = c.phone || '';
-        if (statusSelect) statusSelect.value = status;
 
         renderContextViews();
-
-        setText('clCodeDisplay', c.public_code || '—');
         setText('clDeleteWord', c.name || '');
 
-        document.title = 'Clientes · Clivo';
+        // Reset search input de briefings ao trocar de cliente
+        const bSearch = document.getElementById('clBriefingsSearchInput');
+        if (bSearch) bSearch.value = '';
+        briefingsSearch = '';
+
+        loadBriefings();
+        loadHistorico();
+
+        document.title = 'Cliente · Clivo';
     }
 
     function renderContextViews() {
@@ -468,428 +511,388 @@
             { el: 'clViewDislikes',  value: (ctx[CTX.DISLIKES] || '').trim() },
         ];
 
-        pairs.forEach(function(pair) {
+        for (let i = 0; i < pairs.length; i++) {
+            const pair = pairs[i];
             const el = document.getElementById(pair.el);
-            if (!el) return;
+            if (!el) continue;
             if (pair.value) {
                 el.innerHTML = '<p>' + escapeHtml(pair.value) + '</p>';
             } else {
-                el.innerHTML = '<p class="cl-panel-empty">Sem informações ainda.</p>';
+                el.innerHTML = '<p class="cl-prop-empty">Sem informações ainda.</p>';
+            }
+        }
+    }
+
+    // =====================================================================
+    // STATUS PILL
+    // =====================================================================
+    function updateStatusPill(status) {
+        const pill = document.getElementById('clStatusPill');
+        const label = document.getElementById('clStatusPillLabel');
+        const dot = document.getElementById('clStatusPillDot');
+        if (pill) pill.setAttribute('data-status', status);
+        if (label) label.textContent = statusLabel(status);
+        if (dot) dot.className = 'cl-status-pill-dot ' + status;
+        document.querySelectorAll('#clStatusMenu .cl-status-menu-item').forEach(function(item) {
+            item.classList.toggle('is-current', item.dataset.status === status);
+        });
+    }
+
+    function openStatusMenu() {
+        const menu = document.getElementById('clStatusMenu');
+        const pill = document.getElementById('clStatusPill');
+        if (!menu || !pill) return;
+        menu.classList.add('is-open');
+        pill.setAttribute('aria-expanded', 'true');
+    }
+
+    function closeStatusMenu() {
+        const menu = document.getElementById('clStatusMenu');
+        const pill = document.getElementById('clStatusPill');
+        if (!menu || !pill) return;
+        menu.classList.remove('is-open');
+        pill.setAttribute('aria-expanded', 'false');
+    }
+
+    function setupStatusMenu() {
+        const pill = document.getElementById('clStatusPill');
+        const menu = document.getElementById('clStatusMenu');
+        if (!pill || !menu) return;
+
+        pill.addEventListener('click', function(e) {
+            e.stopPropagation();
+            if (menu.classList.contains('is-open')) {
+                closeStatusMenu();
+            } else {
+                openStatusMenu();
             }
         });
-    }
 
-    function switchTab(tabName) {
-        document.querySelectorAll('#clDetailTabs button').forEach(function(b) {
-            b.classList.toggle('active', b.dataset.tab === tabName);
-        });
-        document.querySelectorAll('.cl-tab-content').forEach(function(c) {
-            c.classList.remove('active');
-        });
-        const target = document.getElementById('tab' + capitalize(tabName));
-        if (target) target.classList.add('active');
+        menu.querySelectorAll('.cl-status-menu-item').forEach(function(item) {
+            item.addEventListener('click', async function(e) {
+                e.stopPropagation();
+                if (!currentClient) return;
+                const newStatus = this.dataset.status;
+                const oldStatus = currentClient.status;
+                closeStatusMenu();
+                if (newStatus === oldStatus) return;
 
-        if (tabName === 'contatos') loadContacts();
-        else if (tabName === 'relacionamento') loadRelacionamento();
-        else if (tabName === 'timeline') loadTimeline();
-    }
-
-    // =====================================================================
-    // ABA DE DETALHAMENTO SEMPRE ATIVA
-    // =====================================================================
-    function ensureActive() {
-        // Se não há currentClient mas há clientes na lista, abre o primeiro
-        if (currentClient) return;
-        if (isOpening) return;
-
-        const items = getFilteredClients();
-        if (!items.length) return;
-
-        openClient(items[0].id);
-    }
-
-    // =====================================================================
-    // RELACIONAMENTO (Notas + Tarefas)
-    // =====================================================================
-    async function loadRelacionamento() {
-        if (!currentClient) return;
-        const results = await Promise.allSettled([
-            api('/api/clients/' + currentClient.id + '/notes/'),
-            api('/api/clients/' + currentClient.id + '/tasks/'),
-        ]);
-
-        notesCache = results[0].status === 'fulfilled'
-            ? (Array.isArray(results[0].value) ? results[0].value : (results[0].value.results || []))
-            : [];
-
-        tasksCache = results[1].status === 'fulfilled'
-            ? (Array.isArray(results[1].value) ? results[1].value : (results[1].value.results || []))
-            : [];
-
-        renderNotes();
-        renderTasks();
-    }
-
-    function renderNotes() {
-        const el = document.getElementById('clNotesList');
-        const countEl = document.getElementById('clNotesCount');
-        if (countEl) countEl.textContent = String(notesCache.length);
-        if (!el) return;
-
-        if (!notesCache.length) {
-            el.innerHTML = '<div class="cl-empty"><i data-lucide="sticky-note"></i><p>Nenhuma nota</p></div>';
-            refreshIcons();
-            return;
-        }
-        let html = '';
-        notesCache.forEach(function(n) {
-            const author = n.author_name || n.author_email || 'Sistema';
-            const pinned = n.is_pinned
-                ? '<span class="cl-item-badge pinned">Fixada</span>'
-                : '';
-            html +=
-                '<div class="cl-item">' +
-                    '<div class="cl-item-body">' +
-                        '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
-                            '<span class="cl-item-meta">' + escapeHtml(author) + ' · ' + formatDateTime(n.created_at) + '</span>' +
-                            pinned +
-                        '</div>' +
-                        '<p class="cl-item-content">' + escapeHtml(n.content) + '</p>' +
-                    '</div>' +
-                    '<div class="cl-item-actions">' +
-                        '<button class="btn-minimal" data-note-edit="' + n.id + '" title="Editar">' +
-                            '<i data-lucide="pencil"></i>' +
-                        '</button>' +
-                        '<button class="btn-minimal btn-minimal-danger" data-note-delete="' + n.id + '" title="Excluir">' +
-                            '<i data-lucide="trash-2"></i>' +
-                        '</button>' +
-                    '</div>' +
-                '</div>';
-        });
-        el.innerHTML = html;
-        refreshIcons();
-
-        el.querySelectorAll('[data-note-edit]').forEach(function(btn) {
-            btn.addEventListener('click', function() {
-                const id = this.dataset.noteEdit;
-                const note = notesCache.find(function(n) { return n.id === id; });
-                if (note) openNoteModal(note);
-            });
-        });
-        el.querySelectorAll('[data-note-delete]').forEach(function(btn) {
-            btn.addEventListener('click', async function() {
-                const id = this.dataset.noteDelete;
-                if (!confirm('Excluir esta nota?')) return;
                 try {
-                    await api('/api/clients/' + currentClient.id + '/notes/' + id + '/', 'DELETE');
-                    showToast('Nota removida', 'success');
-                    loadRelacionamento();
-                } catch (e) {
-                    showToast(e.message || 'Erro', 'error');
+                    const updated = await api(
+                        '/api/clients/' + currentClient.id + '/',
+                        'PATCH',
+                        { status: newStatus }
+                    );
+                    currentClient = updated;
+                    detailCache.set(currentClient.id, currentClient);
+                    updateStatusPill(newStatus);
+
+                    const idx = clientsCache.findIndex(function(c) {
+                        return c.id === currentClient.id;
+                    });
+                    if (idx !== -1) {
+                        clientsCache[idx] = Object.assign({}, clientsCache[idx], {
+                            status: currentClient.status,
+                        });
+                        window.Clivo.cache.clients = {
+                            data: clientsCache,
+                            timestamp: Date.now(),
+                        };
+                        renderClients();
+                        updateSelection();
+                    }
+                    loadHistorico();
+                    showToast('Status atualizado', 'success');
+                } catch (err) {
+                    showToast(err.message || 'Erro ao atualizar status', 'error');
                 }
             });
         });
+
+        document.addEventListener('click', function(e) {
+            if (!menu.classList.contains('is-open')) return;
+            if (menu.contains(e.target) || pill.contains(e.target)) return;
+            closeStatusMenu();
+        });
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeStatusMenu();
+        });
     }
 
-    function renderTasks() {
-        const el = document.getElementById('clTasksList');
-        const countEl = document.getElementById('clTasksCount');
-        if (countEl) countEl.textContent = String(tasksCache.length);
-        if (!el) return;
+    // =====================================================================
+    // BRIEFINGS — cards verticais clássicos
+    // =====================================================================
+    function getFilteredBriefings() {
+        const q = (briefingsSearch || '').trim().toLowerCase();
+        if (!q) return briefingsCache.slice();
+        return briefingsCache.filter(function(b) {
+            const title = (b.title || '').toLowerCase();
+            const tpl = (b.template_name || '').toLowerCase();
+            return title.indexOf(q) !== -1 || tpl.indexOf(q) !== -1;
+        });
+    }
 
-        if (!tasksCache.length) {
-            el.innerHTML = '<div class="cl-empty"><i data-lucide="check-square"></i><p>Nenhuma tarefa</p></div>';
-            refreshIcons();
+    async function loadBriefings(force) {
+        const el = document.getElementById('clBriefingsList');
+        if (!el || !currentClient) return;
+
+        if (!force && briefingsCacheByClient.has(currentClient.id)) {
+            briefingsCache = briefingsCacheByClient.get(currentClient.id);
+            renderBriefings();
             return;
         }
-        let html = '';
-        tasksCache.forEach(function(t) {
-            const statusLabel_ = t.status_display || t.status;
-            const statusClass = t.status;
-            const doneClass = t.status === 'done' ? ' done' : '';
-            const isOpen = t.status === 'open';
-            const createdBy = t.created_by_name || '—';
-            html +=
-                '<div class="cl-item cl-task-row' + doneClass + '" data-task-id="' + t.id + '">' +
-                    '<div class="cl-item-body">' +
-                        '<p class="cl-item-title">' + escapeHtml(t.title) + '</p>' +
-                        (t.description
-                            ? '<p class="cl-item-content">' + escapeHtml(t.description) + '</p>'
-                            : '') +
-                        '<div class="cl-item-meta">' + escapeHtml(createdBy) +
-                            (t.due_at ? ' · ' + formatDate(t.due_at) : '') + '</div>' +
-                    '</div>' +
-                    '<span class="cl-item-badge ' + statusClass + '">' + escapeHtml(statusLabel_) + '</span>' +
-                    '<div class="cl-item-actions">' +
-                        (isOpen
-                            ? '<button class="btn-minimal" data-task-complete="' + t.id + '" title="Concluir">' +
-                                  '<i data-lucide="check"></i>' +
-                              '</button>'
-                            : '<button class="btn-minimal" data-task-reopen="' + t.id + '" title="Reabrir">' +
-                                  '<i data-lucide="rotate-ccw"></i>' +
-                              '</button>') +
-                        '<button class="btn-minimal btn-minimal-danger" data-task-delete="' + t.id + '" title="Excluir">' +
-                            '<i data-lucide="trash-2"></i>' +
-                        '</button>' +
-                    '</div>' +
-                '</div>';
-        });
-        el.innerHTML = html;
-        refreshIcons();
 
-        el.querySelectorAll('[data-task-complete]').forEach(function(btn) {
-            btn.addEventListener('click', function() {
-                updateTaskStatus(this.dataset.taskComplete, 'complete');
-            });
-        });
-        el.querySelectorAll('[data-task-reopen]').forEach(function(btn) {
-            btn.addEventListener('click', function() {
-                updateTaskStatus(this.dataset.taskReopen, 'reopen');
-            });
-        });
-        el.querySelectorAll('[data-task-delete]').forEach(function(btn) {
-            btn.addEventListener('click', async function() {
-                if (!confirm('Excluir esta tarefa?')) return;
-                try {
-                    await api('/api/clients/' + currentClient.id + '/tasks/' + this.dataset.taskDelete + '/', 'DELETE');
-                    showToast('Tarefa removida', 'success');
-                    loadRelacionamento();
-                } catch (e) {
-                    showToast(e.message || 'Erro', 'error');
-                }
-            });
-        });
-    }
-
-    async function updateTaskStatus(taskId, action) {
+        el.innerHTML = '<div class="cl-empty">Carregando…</div>';
         try {
-            await api(
-                '/api/clients/' + currentClient.id + '/tasks/' + taskId + '/' + action + '/',
-                'POST'
-            );
-            showToast('Tarefa atualizada', 'success');
-            loadRelacionamento();
+            const data = await api('/api/briefings/?client=' + currentClient.id);
+            briefingsCache = Array.isArray(data) ? data : (data.results || []);
+            briefingsCacheByClient.set(currentClient.id, briefingsCache);
         } catch (e) {
-            showToast(e.message || 'Erro', 'error');
+            briefingsCache = [];
         }
+        renderBriefings();
     }
 
-    // =====================================================================
-    // CONTATOS
-    // =====================================================================
-    async function loadContacts() {
-        const el = document.getElementById('clContactsList');
+    function renderBriefings() {
+        const el = document.getElementById('clBriefingsList');
+        const countEl = document.getElementById('clBriefingsCount');
         if (!el) return;
-        el.innerHTML = '<div class="cl-empty"><p>Carregando…</p></div>';
-        try {
-            const data = await api('/api/clients/' + currentClient.id + '/contacts/');
-            contactsCache = Array.isArray(data) ? data : [];
-        } catch (e) {
-            contactsCache = [];
-        }
-        renderContacts();
-    }
 
-    function renderContacts() {
-        const el = document.getElementById('clContactsList');
-        if (!el) return;
-        if (!contactsCache.length) {
-            el.innerHTML = '<div class="cl-empty"><i data-lucide="user"></i><p>Nenhum contato</p></div>';
-            refreshIcons();
-            return;
-        }
-        let html = '';
-        contactsCache.forEach(function(c) {
-            const initial = (c.name || '?').charAt(0).toUpperCase();
-            html +=
-                '<div class="cl-item">' +
-                    '<div class="cl-item-avatar">' + escapeHtml(initial) + '</div>' +
-                    '<div class="cl-item-body">' +
-                        '<p class="cl-item-title">' + escapeHtml(c.name) + '</p>' +
-                        '<div class="cl-item-meta">' + escapeHtml(c.role_display || c.role || '') +
-                            (c.email ? ' · ' + escapeHtml(c.email) : '') + '</div>' +
-                    '</div>' +
-                    '<div class="cl-item-actions">' +
-                        '<button class="btn-minimal btn-minimal-danger" data-contact-delete="' + c.id + '" title="Remover">' +
-                            '<i data-lucide="trash-2"></i>' +
-                        '</button>' +
-                    '</div>' +
-                '</div>';
-        });
-        el.innerHTML = html;
-        refreshIcons();
+        const items = getFilteredBriefings();
+        const total = briefingsCache.length;
 
-        el.querySelectorAll('[data-contact-delete]').forEach(function(btn) {
-            btn.addEventListener('click', async function() {
-                const id = this.dataset.contactDelete;
-                if (!confirm('Remover este contato?')) return;
-                try {
-                    await api('/api/clients/' + currentClient.id + '/contacts/' + id + '/', 'DELETE');
-                    showToast('Contato removido', 'success');
-                    loadContacts();
-                } catch (e) {
-                    showToast(e.message || 'Erro', 'error');
-                }
-            });
-        });
-    }
-
-    // =====================================================================
-    // TIMELINE
-    // =====================================================================
-    async function loadTimeline() {
-        const el = document.getElementById('clTimeline');
-        if (!el) return;
-        el.innerHTML = '<div class="cl-empty"><p>Carregando…</p></div>';
-        let items = [];
-        try {
-            items = await api('/api/clients/' + currentClient.id + '/timeline/');
-        } catch (e) {
-            items = [];
-        }
+        if (countEl) countEl.textContent = String(total);
 
         if (!items.length) {
-            el.innerHTML = '<div class="cl-empty"><i data-lucide="activity"></i><p>Nenhuma atividade ainda</p></div>';
-            refreshIcons();
+            el.innerHTML = '<div class="cl-empty">' +
+                (total ? 'Nada encontrado' : 'Nenhum briefing ainda') +
+                '</div>';
             return;
         }
 
-        let html = '';
-        items.forEach(function(i) {
-            html +=
-                '<div class="cl-tl-item">' +
-                    '<div class="cl-tl-time">' + formatDateTime(i.occurred_at) +
-                        (i.actor_name ? ' · ' + escapeHtml(i.actor_name) : '') + '</div>' +
-                    '<p class="cl-tl-title">' + escapeHtml(i.title) + '</p>' +
-                    (i.subtitle ? '<p class="cl-tl-sub">' + escapeHtml(i.subtitle) + '</p>' : '') +
-                '</div>';
-        });
-        el.innerHTML = html;
-    }
+        const parts = [];
+        for (let i = 0; i < items.length; i++) {
+            const b = items[i];
+            const status = b.status || 'in_progress';
+            const statusText = BRIEFING_STATUS_LABELS[status] || status;
+            const progress = b.progress || {};
+            const pct = typeof progress.percent === 'number' ? Math.round(progress.percent) : 0;
+            const answered = progress.answered || 0;
+            const totalQ = progress.total_required || 0;
 
-    // =====================================================================
-    // MODAIS
-    // =====================================================================
-    function openNoteModal(note) {
-        editingNoteId = note ? note.id : null;
-        const titleEl = document.getElementById('clNoteModalTitle');
-        const contentEl = document.getElementById('clNoteContent');
-        const pinnedEl = document.getElementById('clNotePinned');
-        const modal = document.getElementById('clNewNoteModal');
-        if (titleEl) titleEl.textContent = note ? 'Editar nota' : 'Nova nota';
-        if (contentEl) contentEl.value = note ? note.content : '';
-        if (pinnedEl) pinnedEl.checked = note ? !!note.is_pinned : false;
-        if (modal) modal.classList.add('active');
-        setTimeout(function() { if (contentEl) contentEl.focus(); }, 100);
-    }
+            const deadline = computeDeadlineInfo(b.expires_at, status);
+            const deadlineClass = deadline.cls ? ' ' + deadline.cls : '';
+            const deadlineIcon = deadline.cls === 'is-danger'
+                ? 'alert-triangle'
+                : (deadline.cls === 'is-warning' ? 'clock-alert' : 'calendar');
 
-    function setupNoteModal() {
-        const modal = document.getElementById('clNewNoteModal');
-        const saveBtn = document.getElementById('clSaveNoteBtn');
-        if (!modal || !saveBtn) return;
+            const coverUrl = b.cover_url || '';
+            const title = b.title || 'Briefing';
 
-        saveBtn.addEventListener('click', async function() {
-            const contentEl = document.getElementById('clNoteContent');
-            const pinnedEl = document.getElementById('clNotePinned');
-            const content = contentEl ? contentEl.value.trim() : '';
-            const isPinned = pinnedEl ? pinnedEl.checked : false;
-            if (!content) { showToast('Escreva algo', 'error'); return; }
+            const progressText = totalQ
+                ? answered + ' de ' + totalQ + ' perguntas'
+                : '—';
 
-            setLoading(saveBtn, true, 'Salvando…');
-            try {
-                if (editingNoteId) {
-                    await api(
-                        '/api/clients/' + currentClient.id + '/notes/' + editingNoteId + '/',
-                        'PATCH',
-                        { content: content, is_pinned: isPinned }
-                    );
-                    showToast('Nota atualizada', 'success');
+            const coverInner = coverUrl
+                ? '<img src="' + escapeHtml(coverUrl) + '" alt="" loading="lazy" ' +
+                  'onerror="this.style.display=\'none\';this.parentNode.classList.add(\'is-empty\');' +
+                  'this.parentNode.innerHTML=\'<i data-lucide=\\\'image\\\'></i>\';' +
+                  'if(window.lucide)window.lucide.createIcons();">'
+                : '<i data-lucide="image"></i>';
+
+            const coverHtml = '<div class="cl-briefing-cover' +
+                (coverUrl ? '' : ' is-empty') + '">' +
+                coverInner +
+            '</div>';
+
+            parts.push(
+                '<button type="button" class="cl-briefing status-' + escapeHtml(status) + '" data-briefing-open="' + b.id + '">' +
+                    coverHtml +
+                    '<div class="cl-briefing-content">' +
+                        '<p class="cl-briefing-title">' + escapeHtml(title) + '</p>' +
+                        '<div class="cl-briefing-meta">' +
+                            '<span class="cl-briefing-status">' + escapeHtml(statusText) + '</span>' +
+                            '<span class="cl-briefing-deadline' + deadlineClass + '">' +
+                                '<i data-lucide="' + deadlineIcon + '"></i>' +
+                                '<span>' + escapeHtml(deadline.label) + '</span>' +
+                            '</span>' +
+                        '</div>' +
+                        '<div class="cl-briefing-progress">' +
+                            '<div class="cl-briefing-bar">' +
+                                '<div class="cl-briefing-bar-fill" style="width:' + pct + '%"></div>' +
+                            '</div>' +
+                            '<span class="cl-briefing-pct">' + escapeHtml(progressText) + '</span>' +
+                        '</div>' +
+                    '</div>' +
+                '</button>'
+            );
+        }
+        el.innerHTML = parts.join('');
+        refreshIcons();
+
+        el.querySelectorAll('[data-briefing-open]').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                const id = this.dataset.briefingOpen;
+                if (typeof window.clivoSoftNavigate === 'function') {
+                    window.clivoSoftNavigate('/fluxo/', {
+                        afterMount: function() {
+                            window.location.hash = id;
+                        }
+                    });
                 } else {
-                    await api(
-                        '/api/clients/' + currentClient.id + '/notes/',
-                        'POST',
-                        { content: content, is_pinned: isPinned }
-                    );
-                    showToast('Nota criada', 'success');
+                    window.location.href = '/fluxo/#' + id;
                 }
-                modal.classList.remove('active');
-                editingNoteId = null;
-                loadRelacionamento();
-            } catch (e) {
-                showToast(e.message || 'Erro', 'error');
-            } finally {
-                setLoading(saveBtn, false);
-            }
-        });
-
-        modal.querySelectorAll('[data-close="clNewNoteModal"]').forEach(function(el) {
-            el.addEventListener('click', function() { modal.classList.remove('active'); });
+            });
         });
     }
 
-    function openTaskModal() {
-        const titleEl = document.getElementById('clTaskTitle');
-        const descEl = document.getElementById('clTaskDescription');
-        const prioEl = document.getElementById('clTaskPriority');
-        const dueEl = document.getElementById('clTaskDueAt');
-        const modal = document.getElementById('clNewTaskModal');
-        if (titleEl) titleEl.value = '';
-        if (descEl) descEl.value = '';
-        if (prioEl) prioEl.value = 'normal';
-        if (dueEl) dueEl.value = '';
-        if (modal) modal.classList.add('active');
-        setTimeout(function() { if (titleEl) titleEl.focus(); }, 100);
-    }
-
-    function setupTaskModal() {
-        const modal = document.getElementById('clNewTaskModal');
-        const saveBtn = document.getElementById('clSaveTaskBtn');
-        if (!modal || !saveBtn) return;
-
-        saveBtn.addEventListener('click', async function() {
-            const titleEl = document.getElementById('clTaskTitle');
-            const descEl = document.getElementById('clTaskDescription');
-            const prioEl = document.getElementById('clTaskPriority');
-            const dueEl = document.getElementById('clTaskDueAt');
-
-            const title = titleEl ? titleEl.value.trim() : '';
-            const description = descEl ? descEl.value.trim() : '';
-            const priority = prioEl ? prioEl.value : 'normal';
-            const dueAtRaw = dueEl ? dueEl.value : '';
-
-            if (!title) { showToast('Informe o título', 'error'); return; }
-
-            const payload = {
-                title: title,
-                description: description,
-                priority: priority,
-            };
-            if (dueAtRaw) {
-                payload.due_at = new Date(dueAtRaw + 'T12:00:00').toISOString();
-            }
-
-            setLoading(saveBtn, true, 'Salvando…');
-            try {
-                await api(
-                    '/api/clients/' + currentClient.id + '/tasks/',
-                    'POST',
-                    payload
-                );
-                showToast('Tarefa criada', 'success');
-                modal.classList.remove('active');
-                loadRelacionamento();
-            } catch (e) {
-                showToast(e.message || 'Erro', 'error');
-            } finally {
-                setLoading(saveBtn, false);
-            }
-        });
-
-        modal.querySelectorAll('[data-close="clNewTaskModal"]').forEach(function(el) {
-            el.addEventListener('click', function() { modal.classList.remove('active'); });
+    function setupBriefingsSearch() {
+        const input = document.getElementById('clBriefingsSearchInput');
+        if (!input || input.__clBound) return;
+        input.__clBound = true;
+        input.addEventListener('input', function() {
+            briefingsSearch = this.value || '';
+            renderBriefings();
         });
     }
 
+    // =====================================================================
+    // HISTÓRICO
+    // =====================================================================
+    async function loadHistorico() {
+        const el = document.getElementById('clHistoryList');
+        if (!el || !currentClient) return;
+
+        el.innerHTML = '<div class="cl-empty">Carregando…</div>';
+
+        const [notes, briefings] = await Promise.all([
+            loadNotasForHistory(),
+            loadBriefingsForHistory(),
+        ]);
+
+        const events = [];
+
+        notes.forEach(function(n) {
+            const wasEdited = n.updated_at && n.created_at &&
+                              n.updated_at !== n.created_at;
+            events.push({
+                kind: 'note',
+                icon: wasEdited ? 'pencil' : 'sticky-note',
+                label: wasEdited ? 'Nota editada' : 'Nota criada',
+                detail: n.content ? n.content.slice(0, 140) : '',
+                at: wasEdited ? n.updated_at : n.created_at,
+                author: n.author_name || n.author_email || '',
+            });
+        });
+
+        briefings.forEach(function(b) {
+            events.push({
+                kind: 'briefing',
+                icon: 'workflow',
+                label: 'Briefing: ' + (b.title || '—'),
+                detail: 'Status: ' + (BRIEFING_STATUS_LABELS[b.status] || b.status || '—'),
+                at: b.created_at,
+                author: b.created_by_name || '',
+            });
+        });
+
+        if (currentClient.created_at) {
+            events.push({
+                kind: 'status',
+                icon: 'user-plus',
+                label: 'Cliente criado',
+                detail: currentClient.public_code || '',
+                at: currentClient.created_at,
+                author: currentClient.created_by_name || '',
+            });
+        }
+
+        if (currentClient.updated_at && currentClient.created_at &&
+            currentClient.updated_at !== currentClient.created_at) {
+            events.push({
+                kind: 'status',
+                icon: 'activity',
+                label: 'Cliente atualizado',
+                detail: 'Status: ' + statusLabel(currentClient.status),
+                at: currentClient.updated_at,
+                author: '',
+            });
+        }
+
+        events.sort(function(a, b) {
+            const da = a.at ? new Date(a.at).getTime() : 0;
+            const db = b.at ? new Date(b.at).getTime() : 0;
+            return db - da;
+        });
+
+        renderHistory(events);
+    }
+
+    function loadNotasForHistory() {
+        if (!currentClient) return Promise.resolve([]);
+        return api('/api/clients/' + currentClient.id + '/notes/')
+            .then(function(data) {
+                return Array.isArray(data) ? data : (data.results || []);
+            })
+            .catch(function() { return []; });
+    }
+
+    function loadBriefingsForHistory() {
+        if (!currentClient) return Promise.resolve([]);
+        if (briefingsCacheByClient.has(currentClient.id)) {
+            return Promise.resolve(briefingsCacheByClient.get(currentClient.id));
+        }
+        return api('/api/briefings/?client=' + currentClient.id)
+            .then(function(data) {
+                const list = Array.isArray(data) ? data : (data.results || []);
+                briefingsCacheByClient.set(currentClient.id, list);
+                return list;
+            })
+            .catch(function() { return []; });
+    }
+
+    function renderHistory(events) {
+        const el = document.getElementById('clHistoryList');
+        if (!el) return;
+
+        if (!events.length) {
+            el.innerHTML = '<div class="cl-empty">Nada por aqui ainda</div>';
+            return;
+        }
+
+        const parts = [];
+        for (let i = 0; i < events.length; i++) {
+            const e = events[i];
+            const detail = e.detail ? e.detail.replace(/\n+/g, ' ').trim() : '';
+
+            parts.push(
+                '<div class="cl-feed-item">' +
+                    '<div class="cl-feed-icon is-' + escapeHtml(e.kind) + '">' +
+                        '<i data-lucide="' + escapeHtml(e.icon) + '"></i>' +
+                    '</div>' +
+                    '<div class="cl-feed-stack">' +
+                        '<p class="cl-feed-label">' + escapeHtml(e.label) + '</p>' +
+                        (detail
+                            ? '<p class="cl-feed-detail">' + escapeHtml(detail) + '</p>'
+                            : '') +
+                    '</div>' +
+                    '<div class="cl-feed-meta">' +
+                        '<span class="cl-feed-meta-date">' + formatDateTime(e.at) + '</span>' +
+                        (e.author
+                            ? '<span class="cl-feed-meta-author">' + escapeHtml(e.author) + '</span>'
+                            : '') +
+                    '</div>' +
+                '</div>'
+            );
+        }
+        el.innerHTML = parts.join('');
+        refreshIcons();
+    }
+
+    // =====================================================================
+    // MODAL EXCLUIR CLIENTE
+    // =====================================================================
     function setupDeleteModal() {
         const modal = document.getElementById('clDeleteModal');
         const input = document.getElementById('clDeleteInput');
@@ -903,7 +906,11 @@
 
         btn.addEventListener('click', async function() {
             if (!currentClient) return;
-            setLoading(btn, true, 'Excluindo…');
+
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Excluindo…';
+
             try {
                 const deletedId = currentClient.id;
                 await api('/api/clients/' + deletedId + '/', 'DELETE');
@@ -911,7 +918,8 @@
                 modal.classList.remove('active');
                 window.Clivo.cache.clients = null;
 
-                delete detailCache[deletedId];
+                detailCache.delete(deletedId);
+                briefingsCacheByClient.delete(deletedId);
                 clientsCache = clientsCache.filter(function(c) {
                     return c.id !== deletedId;
                 });
@@ -921,20 +929,14 @@
                 };
 
                 currentClient = null;
-                showDetailEmpty();
-                if (window.location.hash) {
-                    history.replaceState(
-                        { soft: true, path: window.location.pathname },
-                        '',
-                        window.location.pathname
-                    );
-                }
+                closeDetail();
                 renderClients();
                 updateListSubtitle();
                 ensureActive();
             } catch (e) {
                 showToast(e.message || 'Erro', 'error');
-                setLoading(btn, false);
+                btn.disabled = false;
+                btn.textContent = originalText;
             }
         });
 
@@ -948,9 +950,12 @@
     }
 
     // =====================================================================
-    // AÇÕES
+    // AÇÕES DO DETALHE
     // =====================================================================
     function setupDetailActions() {
+        const backBtn = document.getElementById('clBackBtn');
+        if (backBtn) backBtn.addEventListener('click', closeDetail);
+
         const saveBtn = document.getElementById('clSaveIdentityBtn');
         if (saveBtn) {
             saveBtn.addEventListener('click', async function() {
@@ -959,19 +964,17 @@
                 const nameEl = document.getElementById('clFieldName');
                 const emailEl = document.getElementById('clFieldEmail');
                 const phoneEl = document.getElementById('clFieldPhone');
-                const statusEl = document.getElementById('clFieldStatus');
                 const payload = {
                     name: nameEl ? nameEl.value.trim() : '',
                     email: emailEl ? emailEl.value.trim() : '',
                     phone: phoneEl ? phoneEl.value.trim() : '',
-                    status: statusEl ? statusEl.value : 'active',
                 };
                 if (!payload.name) { showToast('Informe o nome', 'error'); return; }
 
                 setLoading(btn, true, 'Salvando…');
                 try {
                     currentClient = await api('/api/clients/' + currentClient.id + '/', 'PATCH', payload);
-                    detailCache[currentClient.id] = currentClient;
+                    detailCache.set(currentClient.id, currentClient);
                     renderDetail();
 
                     const idx = clientsCache.findIndex(function(c) { return c.id === currentClient.id; });
@@ -980,14 +983,15 @@
                             name: currentClient.name,
                             email: currentClient.email,
                             phone: currentClient.phone,
-                            status: currentClient.status,
                         });
                         window.Clivo.cache.clients = {
                             data: clientsCache,
                             timestamp: Date.now(),
                         };
                         renderClients();
+                        updateSelection();
                     }
+                    loadHistorico();
                     showToast('Cliente atualizado', 'success');
                 } catch (e) {
                     showToast(e.message || 'Erro', 'error');
@@ -1001,29 +1005,17 @@
         if (copyBtn) {
             copyBtn.addEventListener('click', function() {
                 if (!currentClient) return;
-                if (navigator.clipboard) navigator.clipboard.writeText(currentClient.public_code);
+                if (navigator.clipboard) {
+                    navigator.clipboard.writeText(currentClient.public_code || '');
+                }
                 showToast('Código copiado', 'success');
             });
         }
 
         const sendBtn = document.getElementById('clSendCodeBtn');
         if (sendBtn) {
-            sendBtn.addEventListener('click', async function() {
-                if (!currentClient) return;
-                const btn = this;
-                if (!currentClient.email) {
-                    showToast('Cliente não possui email cadastrado', 'error');
-                    return;
-                }
-                setLoading(btn, true, 'Enviando…');
-                try {
-                    await api('/api/clients/' + currentClient.id + '/send-code/', 'POST');
-                    showToast('Código enviado por email', 'success');
-                } catch (e) {
-                    showToast(e.message || 'Erro ao enviar', 'error');
-                } finally {
-                    setLoading(btn, false);
-                }
+            sendBtn.addEventListener('click', function() {
+                sendClientCode(sendBtn);
             });
         }
 
@@ -1040,45 +1032,27 @@
                 setTimeout(function() { if (input) input.focus(); }, 100);
             });
         }
+    }
 
-        const addContactBtn = document.getElementById('clAddContactBtn');
-        if (addContactBtn) {
-            addContactBtn.addEventListener('click', function() {
-                const name = prompt('Nome do contato:');
-                if (!name) return;
-                const email = prompt('Email (opcional):') || '';
-                const phone = prompt('Telefone (opcional):') || '';
-                api('/api/clients/' + currentClient.id + '/contacts/', 'POST', {
-                    name: name.trim(),
-                    role: 'other',
-                    email: email.trim(),
-                    phone: phone.trim(),
-                }).then(function() {
-                    showToast('Contato adicionado', 'success');
-                    loadContacts();
-                }).catch(function(e) {
-                    showToast(e.message || 'Erro', 'error');
-                });
-            });
+    async function sendClientCode(btn) {
+        if (!currentClient) return;
+        if (!currentClient.email) {
+            showToast('Cliente não possui email cadastrado', 'error');
+            return;
         }
-
-        const addNoteBtn = document.getElementById('clAddNoteBtn');
-        if (addNoteBtn) {
-            addNoteBtn.addEventListener('click', function() {
-                openNoteModal(null);
-            });
-        }
-
-        const addTaskBtn = document.getElementById('clAddTaskBtn');
-        if (addTaskBtn) {
-            addTaskBtn.addEventListener('click', function() {
-                openTaskModal();
-            });
+        setLoading(btn, true, 'Enviando…');
+        try {
+            await api('/api/clients/' + currentClient.id + '/send-code/', 'POST');
+            showToast('Código enviado por email', 'success');
+        } catch (e) {
+            showToast(e.message || 'Erro ao enviar', 'error');
+        } finally {
+            setLoading(btn, false);
         }
     }
 
     // =====================================================================
-    // ROUTE
+    // ROUTE / MOUNT / UNMOUNT
     // =====================================================================
     function route() {
         const hash = (window.location.hash || '').replace('#', '');
@@ -1088,7 +1062,6 @@
             return;
         }
 
-        // Sem hash — garante que a aba de detalhamento fique ativa
         if (clientsLoaded && clientsCache.length) {
             renderClients();
             updateListSubtitle();
@@ -1098,33 +1071,47 @@
         }
     }
 
-    window.clivoOnClientCreated = function() {
+    function ensureActive() {
+        if (currentClient) return;
+        if (window.innerWidth < 800) return;
+        if (!clientsCache.length) return;
+        openClient(clientsCache[0].id);
+    }
+
+    window.clivoOnClientCreated = function(created) {
         window.Clivo.cache.clients = null;
         clientsLoaded = false;
-        if (window.Clivo.currentPage === 'clientes') {
-            loadClients(true).then(ensureActive);
+        if (window.Clivo.currentPage === 'cliente') {
+            loadClients(true).then(function() {
+                if (created && created.id) openClient(created.id);
+            });
         }
     };
 
-    // =====================================================================
-    // MOUNT / UNMOUNT
-    // =====================================================================
+    window.clivoOnBriefingCreated = function(briefing, clientId) {
+        if (!briefing || !clientId) return;
+        if (window.Clivo.currentPage !== 'cliente') return;
+        if (!currentClient || currentClient.id !== clientId) return;
+
+        briefingsCacheByClient.delete(clientId);
+        loadBriefings(true);
+        loadHistorico();
+    };
+
+    window.clivoRefreshClientes = function() {
+        if (window.Clivo.currentPage !== 'cliente') return;
+        if (!currentClient) return;
+        briefingsCacheByClient.delete(currentClient.id);
+        loadBriefings(true);
+        loadHistorico();
+    };
+
     function mount() {
         if (!clientsLoaded) clientsCache = [];
         currentClient = null;
-        contactsCache = [];
-        notesCache = [];
-        tasksCache = [];
-        editingNoteId = null;
+        briefingsCache = [];
+        briefingsSearch = '';
         isOpening = false;
-
-        updateGreeting();
-
-        document.querySelectorAll('#clDetailTabs button').forEach(function(btn) {
-            btn.addEventListener('click', function() {
-                switchTab(this.dataset.tab);
-            });
-        });
 
         const searchInput = document.getElementById('clSearchInput');
         if (searchInput) searchInput.addEventListener('input', function() {
@@ -1137,36 +1124,22 @@
         });
 
         setupDetailActions();
-        setupNoteModal();
-        setupTaskModal();
         setupDeleteModal();
+        setupStatusMenu();
+        setupBriefingsSearch();
+        bindListEvents();
 
         loadClients().then(ensureActive);
     }
 
     function unmount() {
-        // Nada a limpar.
+        closeStatusMenu();
     }
 
     window.ClivoPages = window.ClivoPages || {};
-    window.ClivoPages.clientes = {
+    window.ClivoPages.cliente = {
         mount: mount,
         unmount: unmount,
         route: route,
     };
-
-    if (typeof window.requestIdleCallback !== 'function') {
-        window.requestIdleCallback = function(cb, opts) {
-            const start = Date.now();
-            return setTimeout(function() {
-                cb({
-                    didTimeout: false,
-                    timeRemaining: function() {
-                        return Math.max(0, 50 - (Date.now() - start));
-                    }
-                });
-            }, 1);
-        };
-    }
-
 })();

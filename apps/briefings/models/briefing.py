@@ -8,21 +8,30 @@ Briefing é uma EXECUÇÃO. Não é o template.
 O snapshot da estrutura é copiado no momento da criação. Alterar o
 template posteriormente NÃO altera esta execução.
 
-Estados do briefing (`status`):
+Referências:
+    template_id          → BriefingTemplate (SET_NULL)
+    template_version_id  → BriefingTemplateVersion (SET_NULL)
 
-    in_progress  → briefing em andamento, aceita respostas
-    paused       → interrupção temporária, NÃO aceita respostas
-    completed    → cliente respondeu todas as perguntas obrigatórias
-    closed       → encerrado explicitamente pelo arquiteto
-    expired      → passou do prazo e não foi concluído
+CUSTOM QUESTIONS
+----------------
+`custom_questions` (via BriefingQuestionInstance) só podem ser
+adicionadas/removidas enquanto o briefing NÃO tem nenhuma resposta.
 
-`expires_at` é opcional. Se definido, o briefing expira quando o
-prazo passa e o status é `in_progress`.
+INTRO
+-----
+`intro_message` é o texto de apresentação mostrado ao cliente antes
+da primeira pergunta. É copiado do template na criação, mas pode ser
+sobrescrito individualmente.
 
-NOTA SOBRE ANÁLISE
-------------------
-Análise de IA NÃO vive aqui. Pertence ao app `intelligence`. Este
-modelo só expõe os dados brutos que `intelligence` pode consumir.
+`intro_seen_at` marca quando o cliente clicou em "Iniciar jornada".
+Depois disso, a apresentação NÃO reaparece.
+
+ESTADOS
+-------
+    in_progress   Em andamento (aceita resposta)
+    paused        Arquiteto pausou (não aceita resposta)
+    completed     Cliente respondeu tudo
+    cancelled     Encerrado manualmente ou prazo expirou
 """
 
 import uuid
@@ -38,16 +47,21 @@ class Briefing(models.Model):
     STATUS_IN_PROGRESS = 'in_progress'
     STATUS_PAUSED = 'paused'
     STATUS_COMPLETED = 'completed'
-    STATUS_CLOSED = 'closed'
-    STATUS_EXPIRED = 'expired'
+    STATUS_CANCELLED = 'cancelled'
 
     STATUS_CHOICES = [
         (STATUS_IN_PROGRESS, 'Em andamento'),
         (STATUS_PAUSED, 'Pausado'),
         (STATUS_COMPLETED, 'Concluído'),
-        (STATUS_CLOSED, 'Encerrado'),
-        (STATUS_EXPIRED, 'Expirado'),
+        (STATUS_CANCELLED, 'Cancelado'),
     ]
+
+    PORTAL_NOT_STARTED = 'not_started'
+    PORTAL_IN_PROGRESS = 'in_progress'
+    PORTAL_PAUSED = 'paused'
+    PORTAL_COMPLETED = 'completed'
+    PORTAL_CANCELLED = 'cancelled'
+    PORTAL_REOPENED = 'reopened'
 
     id = models.UUIDField(
         primary_key=True,
@@ -73,7 +87,19 @@ class Briefing(models.Model):
         null=True,
         blank=True,
         related_name='executions',
-        help_text=_('Template de origem (referência histórica)'),
+        help_text=_('Template lógico de origem (referência histórica)'),
+    )
+
+    template_version = models.ForeignKey(
+        'briefings.BriefingTemplateVersion',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='executions',
+        help_text=_(
+            'Versão concreta do modelo usada nesta execução. '
+            'NULL se o modelo ou a versão foram excluídos.'
+        ),
     )
 
     title = models.CharField(
@@ -85,10 +111,31 @@ class Briefing(models.Model):
         default=dict,
         help_text=_(
             'Snapshot imutável da estrutura (sessões e perguntas) '
-            'copiado do template no momento da criação.'
+            'copiado do template no momento da criação, incluindo '
+            'perguntas exclusivas adicionadas antes do congelamento.'
         ),
     )
 
+    # ---------- INTRO ----------
+    intro_message = models.TextField(
+        blank=True,
+        help_text=_(
+            'Texto de apresentação mostrado ao cliente antes da '
+            'primeira pergunta. Copiado do template na criação; '
+            'pode ser sobrescrito individualmente. Vazio = sem intro.'
+        ),
+    )
+
+    intro_seen_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=_(
+            'Quando o cliente clicou em "Iniciar jornada". '
+            'NULL = cliente ainda não viu a apresentação.'
+        ),
+    )
+
+    # ---------- ESTADO ----------
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
@@ -108,16 +155,37 @@ class Briefing(models.Model):
         help_text=_('Quando o briefing foi criado'),
     )
 
+    first_opened_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=_(
+            'Primeira vez que o cliente abriu o briefing no portal. '
+            'NULL = cliente nunca abriu (não iniciado).'
+        ),
+    )
+
     completed_at = models.DateTimeField(
         null=True,
         blank=True,
         help_text=_('Quando o cliente concluiu todas as obrigatórias'),
     )
 
-    closed_at = models.DateTimeField(
+    cancelled_at = models.DateTimeField(
         null=True,
         blank=True,
-        help_text=_('Quando o arquiteto encerrou o briefing'),
+        help_text=_(
+            'Quando o briefing foi cancelado (manualmente ou por '
+            'expiração do prazo).'
+        ),
+    )
+
+    has_custom_questions = models.BooleanField(
+        default=False,
+        help_text=_(
+            'Indica que o arquiteto adicionou perguntas exclusivas '
+            'a esta execução, fora do template original.'
+        ),
     )
 
     created_by = models.ForeignKey(
@@ -141,17 +209,37 @@ class Briefing(models.Model):
             models.Index(fields=['client', 'status']),
             models.Index(fields=['workspace', '-created_at']),
             models.Index(fields=['expires_at']),
+            models.Index(fields=['template_version']),
+            models.Index(fields=['first_opened_at']),
         ]
 
     def __str__(self):
         return f"{self.title} — {self.client.name}"
 
     # ------------------------------------------------------------------
+    # INTRO
+    # ------------------------------------------------------------------
+
+    def has_intro(self) -> bool:
+        return bool((self.intro_message or '').strip())
+
+    def show_intro_to_portal(self) -> bool:
+        if not self.has_intro():
+            return False
+        if self.intro_seen_at is not None:
+            return False
+        return self.status == self.STATUS_IN_PROGRESS
+
+    def mark_intro_seen(self):
+        if self.intro_seen_at is None:
+            self.intro_seen_at = timezone.now()
+            self.save(update_fields=['intro_seen_at', 'updated_at'])
+
+    # ------------------------------------------------------------------
     # ESTADO
     # ------------------------------------------------------------------
 
     def is_answerable(self) -> bool:
-        """Se o cliente pode enviar respostas agora."""
         if self.status != self.STATUS_IN_PROGRESS:
             return False
         if self.expires_at and timezone.now() >= self.expires_at:
@@ -164,22 +252,100 @@ class Briefing(models.Model):
         return timezone.now() >= self.expires_at
 
     def mark_expired_if_needed(self) -> bool:
-        """Marca como expirado se o prazo passou e status ainda permite."""
         if (
-            self.status == self.STATUS_IN_PROGRESS
+            self.status in (
+                self.STATUS_IN_PROGRESS,
+                self.STATUS_PAUSED,
+            )
             and self.has_expired()
         ):
-            self.status = self.STATUS_EXPIRED
-            self.save(update_fields=['status', 'updated_at'])
+            self.status = self.STATUS_CANCELLED
+            self.cancelled_at = timezone.now()
+            self.save(update_fields=[
+                'status', 'cancelled_at', 'updated_at',
+            ])
             return True
         return False
 
+    def is_snapshot_locked(self) -> bool:
+        return self.answers.exists()
+
+    def has_available_origin(self) -> bool:
+        if self.template_version_id is None:
+            return False
+        if self.template_version is None:
+            return False
+        return True
+
     # ------------------------------------------------------------------
-    # SNAPSHOT — helpers
+    # STATUS DERIVADO PARA O PORTAL
+    # ------------------------------------------------------------------
+
+    def portal_status(self) -> str:
+        if self.status == self.STATUS_PAUSED:
+            return self.PORTAL_PAUSED
+
+        if self.status == self.STATUS_COMPLETED:
+            if self.completed_at and self._was_reopened_since(
+                self.completed_at,
+            ):
+                return self.PORTAL_REOPENED
+            return self.PORTAL_COMPLETED
+
+        if self.status == self.STATUS_CANCELLED:
+            if self.cancelled_at and self._was_reopened_since(
+                self.cancelled_at,
+            ):
+                return self.PORTAL_REOPENED
+            return self.PORTAL_CANCELLED
+
+        if self.status == self.STATUS_IN_PROGRESS:
+            if not self.first_opened_at:
+                return self.PORTAL_NOT_STARTED
+            if self._was_reopened_since_last_terminal():
+                return self.PORTAL_REOPENED
+            return self.PORTAL_IN_PROGRESS
+
+        return self.PORTAL_IN_PROGRESS
+
+    def portal_can_answer(self) -> bool:
+        return self.portal_status() in (
+            self.PORTAL_NOT_STARTED,
+            self.PORTAL_IN_PROGRESS,
+            self.PORTAL_REOPENED,
+        )
+
+    # ------------------------------------------------------------------
+    # HELPERS "REOPENED"
+    # ------------------------------------------------------------------
+
+    def _was_reopened_since(self, timestamp) -> bool:
+        from apps.briefings.models.briefing_event import BriefingEvent
+        if timestamp is None:
+            return False
+        return self.events.filter(
+            kind=BriefingEvent.KIND_REOPENED,
+            created_at__gt=timestamp,
+        ).exists()
+
+    def _was_reopened_since_last_terminal(self) -> bool:
+        terminal = None
+        if self.completed_at and self.cancelled_at:
+            terminal = max(self.completed_at, self.cancelled_at)
+        elif self.completed_at:
+            terminal = self.completed_at
+        elif self.cancelled_at:
+            terminal = self.cancelled_at
+
+        if terminal is None:
+            return False
+        return self._was_reopened_since(terminal)
+
+    # ------------------------------------------------------------------
+    # SNAPSHOT
     # ------------------------------------------------------------------
 
     def snapshot_questions(self) -> list:
-        """Lista plana de perguntas na ordem (sessão, posição)."""
         result = []
         sections = sorted(
             self.structure_snapshot.get('sections', []),

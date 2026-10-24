@@ -2,21 +2,33 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from django.views.generic import TemplateView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('accounts/', include('allauth.urls')),
 
     # ============================================================
+    # Service Worker na RAIZ (necessário para o PWA funcionar
+    # com escopo global /). Servido como template para poder usar
+    # {% static %} no conteúdo e respeitar o STATIC_URL.
+    # ============================================================
+    path(
+        'sw.js',
+        TemplateView.as_view(
+            template_name='sw.js',
+            content_type='application/javascript',
+        ),
+        name='service-worker',
+    ),
+
+    # ============================================================
     # Padrão novo: /w/<public_id>/...
-    # Páginas autenticadas dentro de um workspace.
-    # O <public_id> é validado em cada view.
     # ============================================================
     path('w/<str:public_id>/', include('apps.workspaces.urls_workspace')),
 
     # ============================================================
     # Rotas antigas — mantidas durante a migração.
-    # Serão removidas após a migração total.
     # ============================================================
     path('', include('apps.accounts.urls')),
     path('', include('apps.workspaces.urls')),
@@ -28,6 +40,7 @@ urlpatterns = [
     path('', include('apps.projects.urls')),
     path('', include('apps.timeline.urls')),
     path('', include('apps.intelligence.urls')),
+    path('', include('apps.integrations.urls')),
 ]
 
 if settings.DEBUG:

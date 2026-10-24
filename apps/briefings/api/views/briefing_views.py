@@ -18,12 +18,18 @@ from apps.briefings.api.serializers import (
     BriefingEventSerializer,
     BriefingNoteSerializer,
     BriefingNoteCreateSerializer,
+    BriefingQuestionInstanceSerializer,
+    BriefingQuestionInstanceCreateSerializer,
+    BriefingQuestionInstanceUpdateSerializer,
+    BriefingTemplateVersionSerializer,
 )
 from apps.briefings.services import (
     BriefingService,
     BriefingTemplateService,
     BriefingNoteService,
     BriefingSendService,
+    BriefingQuestionInstanceService,
+    BriefingTemplateVersionService,
 )
 from apps.briefings.services.export_service import BriefingExportService
 from apps.briefings.exceptions import (
@@ -47,10 +53,6 @@ class BriefingViewSet(viewsets.GenericViewSet):
 
     permission_classes = [IsAuthenticated]
     lookup_field = 'id'
-
-    # ------------------------------------------------------------------
-    # CONTEXTO
-    # ------------------------------------------------------------------
 
     def _current_workspace(self):
         workspace_id = self.request.session.get('current_workspace_id')
@@ -101,10 +103,6 @@ class BriefingViewSet(viewsets.GenericViewSet):
             return Response({'error': str(exc)}, status=400)
         return None
 
-    # ------------------------------------------------------------------
-    # CRUD
-    # ------------------------------------------------------------------
-
     def list(self, request):
         workspace = self._current_workspace()
         if workspace is None:
@@ -117,7 +115,7 @@ class BriefingViewSet(viewsets.GenericViewSet):
         client_id = request.query_params.get('client')
 
         qs = workspace.briefings.select_related(
-            'client', 'template',
+            'client', 'template', 'template_version',
         ).order_by('-created_at')
         if status_filter:
             qs = qs.filter(status=status_filter)
@@ -212,10 +210,6 @@ class BriefingViewSet(viewsets.GenericViewSet):
         briefing.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
-    # ------------------------------------------------------------------
-    # AÇÕES DE ESTADO
-    # ------------------------------------------------------------------
-
     @action(detail=True, methods=['post'], url_path='pause')
     def pause(self, request, id=None):
         return self._simple_action(id, request, 'pause')
@@ -285,10 +279,6 @@ class BriefingViewSet(viewsets.GenericViewSet):
 
         return Response(BriefingDetailSerializer(briefing).data)
 
-    # ------------------------------------------------------------------
-    # EVENTOS
-    # ------------------------------------------------------------------
-
     @action(detail=True, methods=['get'], url_path='events')
     def events(self, request, id=None):
         workspace = self._current_workspace()
@@ -310,10 +300,6 @@ class BriefingViewSet(viewsets.GenericViewSet):
             'user', 'portal_session',
         ).order_by('-created_at')[:500]
         return Response(BriefingEventSerializer(qs, many=True).data)
-
-    # ------------------------------------------------------------------
-    # NOTAS (Journal)
-    # ------------------------------------------------------------------
 
     @action(detail=True, methods=['get', 'post'], url_path='notes')
     def notes(self, request, id=None):
@@ -414,9 +400,189 @@ class BriefingViewSet(viewsets.GenericViewSet):
 
         return Response(BriefingNoteSerializer(note).data)
 
-    # ------------------------------------------------------------------
-    # PDF — arquiteto
-    # ------------------------------------------------------------------
+    @action(
+        detail=True,
+        methods=['get', 'post'],
+        url_path='custom-questions',
+    )
+    def custom_questions(self, request, id=None):
+        workspace = self._current_workspace()
+        if workspace is None:
+            return Response({'error': 'Nenhum workspace ativo'}, status=400)
+
+        if request.method == 'GET':
+            err = self._require_capability(workspace, 'briefings.briefing.view')
+            if err is not None:
+                return err
+        else:
+            err = self._require_capability(workspace, 'briefings.briefing.review')
+            if err is not None:
+                return err
+
+        try:
+            briefing = BriefingService.get_or_raise(id, workspace)
+        except Exception as exc:
+            handled = self._handle_domain_error(exc)
+            if handled is not None:
+                return handled
+            return Response({'error': 'Erro'}, status=500)
+
+        if request.method == 'GET':
+            qs = BriefingQuestionInstanceService.list_for_briefing(briefing)
+            return Response(
+                BriefingQuestionInstanceSerializer(qs, many=True).data
+            )
+
+        serializer = BriefingQuestionInstanceCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            instance = BriefingQuestionInstanceService.add_custom_question(
+                briefing=briefing,
+                section_ref=serializer.validated_data['section_ref'],
+                text=serializer.validated_data['text'],
+                instructions=serializer.validated_data.get('instructions', ''),
+                question_type=serializer.validated_data.get(
+                    'question_type', 'text',
+                ),
+                allowed_response_formats=serializer.validated_data.get(
+                    'allowed_response_formats',
+                ),
+                options=serializer.validated_data.get('options'),
+                is_required=serializer.validated_data.get('is_required', True),
+                actor=request.user,
+            )
+        except Exception as exc:
+            handled = self._handle_domain_error(exc)
+            if handled is not None:
+                return handled
+            logger.exception('Erro ao criar pergunta exclusiva')
+            return Response({'error': 'Erro inesperado.'}, status=500)
+
+        return Response(
+            BriefingQuestionInstanceSerializer(instance).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(
+        detail=True,
+        methods=['patch', 'delete'],
+        url_path=r'custom-questions/(?P<instance_id>[^/.]+)',
+    )
+    def custom_question_detail(self, request, id=None, instance_id=None):
+        workspace = self._current_workspace()
+        if workspace is None:
+            return Response({'error': 'Nenhum workspace ativo'}, status=400)
+        err = self._require_capability(workspace, 'briefings.briefing.review')
+        if err is not None:
+            return err
+
+        try:
+            briefing = BriefingService.get_or_raise(id, workspace)
+        except Exception as exc:
+            handled = self._handle_domain_error(exc)
+            if handled is not None:
+                return handled
+            return Response({'error': 'Erro'}, status=500)
+
+        try:
+            instance = BriefingQuestionInstanceService.get_or_raise(
+                instance_id, briefing,
+            )
+        except Exception as exc:
+            handled = self._handle_domain_error(exc)
+            if handled is not None:
+                return handled
+            return Response({'error': 'Erro'}, status=500)
+
+        if request.method == 'DELETE':
+            try:
+                BriefingQuestionInstanceService.remove_custom_question(
+                    instance=instance, actor=request.user,
+                )
+            except Exception as exc:
+                handled = self._handle_domain_error(exc)
+                if handled is not None:
+                    return handled
+                logger.exception('Erro ao remover pergunta exclusiva')
+                return Response({'error': 'Erro inesperado.'}, status=500)
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+        serializer = BriefingQuestionInstanceUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            instance = BriefingQuestionInstanceService.update_custom_question(
+                instance=instance,
+                text=serializer.validated_data.get('text'),
+                instructions=serializer.validated_data.get('instructions'),
+                question_type=serializer.validated_data.get('question_type'),
+                allowed_response_formats=serializer.validated_data.get(
+                    'allowed_response_formats',
+                ),
+                options=serializer.validated_data.get('options'),
+                is_required=serializer.validated_data.get('is_required'),
+                actor=request.user,
+            )
+        except Exception as exc:
+            handled = self._handle_domain_error(exc)
+            if handled is not None:
+                return handled
+            logger.exception('Erro ao editar pergunta exclusiva')
+            return Response({'error': 'Erro inesperado.'}, status=500)
+
+        return Response(BriefingQuestionInstanceSerializer(instance).data)
+
+    @action(
+        detail=True,
+        methods=['post'],
+        url_path='promote-to-template-version',
+    )
+    def promote_to_template_version(self, request, id=None):
+        workspace = self._current_workspace()
+        if workspace is None:
+            return Response({'error': 'Nenhum workspace ativo'}, status=400)
+        err = self._require_capability(workspace, 'briefings.template.manage')
+        if err is not None:
+            return err
+
+        try:
+            briefing = BriefingService.get_or_raise(id, workspace)
+        except Exception as exc:
+            handled = self._handle_domain_error(exc)
+            if handled is not None:
+                return handled
+            return Response({'error': 'Erro'}, status=500)
+
+        if briefing.template_id is None:
+            return Response(
+                {'error': 'Este briefing não tem modelo de origem. '
+                          'Não é possível criar uma nova versão.'},
+                status=400,
+            )
+
+        include_custom = request.data.get('include_custom_questions', True)
+
+        try:
+            version = (
+                BriefingTemplateVersionService.create_draft_from_briefing(
+                    briefing=briefing,
+                    actor=request.user,
+                    include_custom_questions=bool(include_custom),
+                    template=briefing.template,
+                )
+            )
+        except Exception as exc:
+            handled = self._handle_domain_error(exc)
+            if handled is not None:
+                return handled
+            logger.exception('Erro ao promover briefing a versão')
+            return Response({'error': 'Erro inesperado.'}, status=500)
+
+        return Response(
+            BriefingTemplateVersionSerializer(version).data,
+            status=status.HTTP_201_CREATED,
+        )
 
     @action(detail=True, methods=['get'], url_path='export-pdf')
     def export_pdf(self, request, id=None):
@@ -439,10 +605,16 @@ class BriefingViewSet(viewsets.GenericViewSet):
             pdf_bytes, filename = BriefingExportService.render_pdf(
                 briefing, request=request, mode='architect',
             )
-        except Exception:
-            logger.exception('Falha ao gerar PDF')
+        except RuntimeError as exc:
+            logger.warning(
+                'Falha ao gerar PDF do arquiteto (briefing=%s): %s',
+                briefing.id, exc,
+            )
+            return Response({'error': str(exc)}, status=500)
+        except Exception as exc:
+            logger.exception('Falha inesperada ao gerar PDF do arquiteto')
             return Response(
-                {'error': 'Falha ao gerar o PDF do briefing.'},
+                {'error': f'Erro inesperado: {exc}'},
                 status=500,
             )
 
@@ -454,20 +626,8 @@ class BriefingViewSet(viewsets.GenericViewSet):
             content_type='application/pdf',
         )
 
-    # ------------------------------------------------------------------
-    # ENVIO MANUAL PARA O CLIENTE
-    # ------------------------------------------------------------------
-
     @action(detail=True, methods=['post'], url_path='send-to-client')
     def send_to_client(self, request, id=None):
-        """
-        Envia (ou reenvia) o briefing para o cliente por e-mail.
-
-        Body opcional:
-            { "to_email": "outro@endereco.com", "message": "texto livre" }
-
-        Sem body, usa o e-mail do cliente cadastrado.
-        """
         workspace = self._current_workspace()
         if workspace is None:
             return Response({'error': 'Nenhum workspace ativo'}, status=400)

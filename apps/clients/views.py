@@ -39,7 +39,6 @@ class PortalLoginView(View):
     """
 
     def get(self, request):
-        # Se já tem cookie de sessão válida, redireciona direto
         session = getattr(request, 'portal_session', None)
         if session and session.is_valid():
             return redirect('/portal/home/')
