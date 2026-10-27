@@ -6,6 +6,14 @@ REGRA ARQUITETURAL
 O serializer serve DADO BRUTO. Não resume, não cura, não analisa.
 A análise pertence ao `intelligence` (futuro).
 
+DOIS BLOCOS
+-----------
+`sections`              → bloco original (structure_snapshot)
+`supplementary_sections`→ bloco complementar (supplementary_snapshot)
+
+O cliente vê os dois blocos no portal. O bloco complementar aparece
+no final da conversa, identificado como "Perguntas complementares".
+
 LINKS:
     portal_url                  → URL do chat do briefing (cliente).
     briefing_page_url           → URL da página do cliente (respostas + moodboard).
@@ -211,6 +219,73 @@ def _architect_pdf_url(briefing, request=None):
     return f'{base}/api/briefings/{briefing.id}/export-pdf/'
 
 
+def _serialize_question(
+    q: dict,
+    answer,
+    request,
+) -> dict:
+    """
+    Serializa uma pergunta (original ou complementar) com o mesmo
+    formato. Usado pelos dois blocos.
+    """
+    latest_audio_url = ''
+    if answer and answer.latest_audio and answer.latest_audio.file:
+        try:
+            latest_audio_url = answer.latest_audio.file.url
+        except Exception:
+            latest_audio_url = ''
+
+    ref_docs = []
+    ref_ids = list(q.get('reference_document_ids') or [])
+    if ref_ids:
+        docs = _load_docs_map(ref_ids)
+        for rid in ref_ids:
+            d = docs.get(str(rid))
+            if d is None:
+                continue
+            payload = _doc_public(d, request)
+            if payload:
+                ref_docs.append(payload)
+
+    attachments = []
+    if answer is not None:
+        for doc in answer.attachments.all():
+            payload = _doc_public(doc, request)
+            if payload:
+                attachments.append(payload)
+
+    expanded_options = _expand_options(q.get('options'), request)
+
+    return {
+        'id': str(q['id']),
+        'text': q.get('text', ''),
+        'instructions': q.get('instructions', ''),
+        'question_type': q.get('question_type', 'text'),
+        'allowed_response_formats': list(
+            q.get('allowed_response_formats', [])
+        ),
+        'is_required': bool(q.get('is_required', True)),
+        'position': q.get('position', 0),
+        'is_custom': bool(q.get('is_custom', False)),
+        'reference_documents': ref_docs,
+        'options': expanded_options,
+        'state': (
+            answer.state if answer
+            else BriefingAnswer.STATE_PENDING
+        ),
+        'latest_content': answer.latest_content if answer else '',
+        'latest_audio_url': latest_audio_url,
+        'latest_transcription': (
+            answer.latest_transcription if answer else ''
+        ),
+        'transcription_status': (
+            answer.transcription_status if answer
+            else BriefingAnswer.TRANSCRIPTION_NOT_APPLICABLE
+        ),
+        'attachments': attachments,
+    }
+
+
 class PortalBriefingSerializer(serializers.Serializer):
     """Envelope do briefing para o portal. Dado bruto, sem análise."""
 
@@ -226,6 +301,7 @@ class PortalBriefingSerializer(serializers.Serializer):
             ).prefetch_related('attachments')
         }
 
+        # ----- Bloco original -----
         sections = []
         ordered_sections = sorted(
             briefing.structure_snapshot.get('sections', []),
@@ -240,65 +316,9 @@ class PortalBriefingSerializer(serializers.Serializer):
             for q in ordered_questions:
                 qid = str(q['id'])
                 answer = answers.get(qid)
-
-                latest_audio_url = ''
-                if answer and answer.latest_audio and answer.latest_audio.file:
-                    try:
-                        latest_audio_url = answer.latest_audio.file.url
-                    except Exception:
-                        latest_audio_url = ''
-
-                ref_docs = []
-                ref_ids = list(q.get('reference_document_ids') or [])
-                if ref_ids:
-                    docs = _load_docs_map(ref_ids)
-                    for rid in ref_ids:
-                        d = docs.get(str(rid))
-                        if d is None:
-                            continue
-                        payload = _doc_public(d, request)
-                        if payload:
-                            ref_docs.append(payload)
-
-                attachments = []
-                if answer is not None:
-                    for doc in answer.attachments.all():
-                        payload = _doc_public(doc, request)
-                        if payload:
-                            attachments.append(payload)
-
-                expanded_options = _expand_options(
-                    q.get('options'), request,
+                questions_payload.append(
+                    _serialize_question(q, answer, request)
                 )
-
-                questions_payload.append({
-                    'id': qid,
-                    'text': q.get('text', ''),
-                    'instructions': q.get('instructions', ''),
-                    'question_type': q.get('question_type', 'text'),
-                    'allowed_response_formats': list(
-                        q.get('allowed_response_formats', [])
-                    ),
-                    'is_required': bool(q.get('is_required', True)),
-                    'position': q.get('position', 0),
-                    'is_custom': bool(q.get('is_custom', False)),
-                    'reference_documents': ref_docs,
-                    'options': expanded_options,
-                    'state': (
-                        answer.state if answer
-                        else BriefingAnswer.STATE_PENDING
-                    ),
-                    'latest_content': answer.latest_content if answer else '',
-                    'latest_audio_url': latest_audio_url,
-                    'latest_transcription': (
-                        answer.latest_transcription if answer else ''
-                    ),
-                    'transcription_status': (
-                        answer.transcription_status if answer
-                        else BriefingAnswer.TRANSCRIPTION_NOT_APPLICABLE
-                    ),
-                    'attachments': attachments,
-                })
             sections.append({
                 'id': section.get('id'),
                 'title': section.get('title', ''),
@@ -307,7 +327,41 @@ class PortalBriefingSerializer(serializers.Serializer):
                 'questions': questions_payload,
             })
 
+        # ----- Bloco complementar -----
+        supplementary_sections = []
+        ordered_supp_sections = sorted(
+            (briefing.supplementary_snapshot or {}).get('sections', []),
+            key=lambda s: s.get('position', 0),
+        )
+        for section in ordered_supp_sections:
+            questions_payload = []
+            ordered_questions = sorted(
+                section.get('questions', []),
+                key=lambda q: q.get('position', 0),
+            )
+            for q in ordered_questions:
+                qid = str(q['id'])
+                answer = answers.get(qid)
+                questions_payload.append(
+                    _serialize_question(q, answer, request)
+                )
+            supplementary_sections.append({
+                'id': section.get('id'),
+                'title': section.get('title', ''),
+                'description': section.get('description', ''),
+                'position': section.get('position', 0),
+                'questions': questions_payload,
+            })
+
+        # ----- Próxima pergunta e estado -----
         next_q = BriefingService.get_next_eligible_question(briefing)
+
+        progress = BriefingService.compute_progress(briefing)
+        supplementary_state = briefing.supplementary_state()
+
+        has_new_custom_questions = self._has_new_custom_questions(
+            briefing,
+        )
 
         workspace_name = ''
         if briefing.workspace is not None:
@@ -348,11 +402,37 @@ class PortalBriefingSerializer(serializers.Serializer):
                 briefing.first_opened_at.isoformat()
                 if briefing.first_opened_at else None
             ),
-            'progress': BriefingService.compute_progress(briefing),
+            'progress': progress,
             'next_question_id': str(next_q['id']) if next_q else None,
             'has_custom_questions': bool(briefing.has_custom_questions),
             'sections': sections,
+            'supplementary_sections': supplementary_sections,
+            'supplementary_state': supplementary_state,
+            'has_new_custom_questions': has_new_custom_questions,
         }
+
+    def _has_new_custom_questions(self, briefing: Briefing) -> bool:
+        """
+        True se existe evento `custom_question_added` mais recente que
+        `last_viewed_at` do briefing.
+
+        Um cliente que nunca abriu (`last_viewed_at is None`) conta
+        como "tem novas" se houver qualquer evento de adição.
+        """
+        from apps.briefings.models import BriefingEvent
+
+        last_event = BriefingEvent.objects.filter(
+            briefing=briefing,
+            kind=BriefingEvent.KIND_CUSTOM_QUESTION_ADDED,
+        ).order_by('-created_at').first()
+
+        if last_event is None:
+            return False
+
+        if briefing.last_viewed_at is None:
+            return True
+
+        return last_event.created_at > briefing.last_viewed_at
 
 
 class PortalBriefingListSerializer(serializers.Serializer):
@@ -370,6 +450,10 @@ class PortalBriefingListSerializer(serializers.Serializer):
                 if briefing.expires_at else None
             ),
             'progress': BriefingService.compute_progress(briefing),
+            'has_supplementary_questions': (
+                briefing.has_supplementary_questions()
+            ),
+            'supplementary_state': briefing.supplementary_state(),
         }
 
 

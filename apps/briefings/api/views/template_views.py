@@ -75,6 +75,7 @@ from apps.briefings.exceptions import (
     BriefingError,
     BriefingTemplateNotFoundError,
     BriefingTemplateNotDraftError,
+    BriefingTemplateVersionNotFoundError,
     BriefingSectionNotFoundError,
     BriefingQuestionNotFoundError,
 )
@@ -132,6 +133,8 @@ class BriefingTemplateViewSet(viewsets.GenericViewSet):
     @staticmethod
     def _handle_domain_error(exc):
         if isinstance(exc, BriefingTemplateNotFoundError):
+            return Response({'error': str(exc)}, status=404)
+        if isinstance(exc, BriefingTemplateVersionNotFoundError):
             return Response({'error': str(exc)}, status=404)
         if isinstance(exc, BriefingSectionNotFoundError):
             return Response({'error': str(exc)}, status=404)

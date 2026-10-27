@@ -17,10 +17,26 @@ Um evento pode ser criado por:
     - uma sessão autenticada do portal do cliente (ClientPortalSession)
     - o próprio sistema (envio de e-mail, notificações internas)
 
-Exatamente UM dos dois deve estar preenchido. Uma constraint
-CheckConstraint garante isso no banco. Eventos de sistema também
-gravam a FK `user=None, portal_session=None` — mas eles são
-criados somente pelo próprio serviço interno.
+Exatamente UM dos dois primeiros deve estar preenchido quando o
+evento tem origem humana. Eventos de sistema gravam ambos None —
+o CheckConstraint permite essa combinação.
+
+NOTAS
+-----
+Notas (`BriefingNote`) são do escritório, então todo evento
+`note.*` carrega `user=<autor>`. Nunca `portal_session`.
+
+PERGUNTAS COMPLEMENTARES
+------------------------
+Eventos `custom_question_added`, `custom_question_removed`,
+`supplementary_completed` e `supplementary_notification_sent` são
+emitidos pelo BriefingQuestionInstanceService e pelo
+NotificationService.
+
+Para `custom_question_removed`, o `content` carrega o snapshot
+COMPLETO da pergunta removida (via
+`BriefingQuestionInstance.to_removal_event_payload()`), porque a
+remoção é DELETE real e o evento é a única fonte histórica.
 
 NOTA SOBRE ANÁLISE
 ------------------
@@ -54,6 +70,17 @@ class BriefingEvent(models.Model):
     KIND_COMPLETION_EMAIL_SENT = 'completion_email_sent'
     KIND_MANUAL_SEND = 'manual_send'
 
+    # --- Notas ---
+    KIND_NOTE_CREATED = 'note.created'
+    KIND_NOTE_UPDATED = 'note.updated'
+    KIND_NOTE_DELETED = 'note.deleted'
+
+    # --- Perguntas complementares ---
+    KIND_CUSTOM_QUESTION_ADDED = 'custom_question_added'
+    KIND_CUSTOM_QUESTION_REMOVED = 'custom_question_removed'
+    KIND_SUPPLEMENTARY_COMPLETED = 'supplementary_completed'
+    KIND_SUPPLEMENTARY_NOTIFICATION_SENT = 'supplementary_notification_sent'
+
     KIND_CHOICES = [
         (KIND_ANSWERED, 'Resposta registrada'),
         (KIND_CLARIFICATION_REQUESTED, 'Dúvida solicitada pelo cliente'),
@@ -68,6 +95,25 @@ class BriefingEvent(models.Model):
         (KIND_EXPIRED, 'Briefing expirado'),
         (KIND_COMPLETION_EMAIL_SENT, 'E-mail de conclusão enviado'),
         (KIND_MANUAL_SEND, 'Briefing enviado manualmente'),
+        (KIND_NOTE_CREATED, 'Nota criada'),
+        (KIND_NOTE_UPDATED, 'Nota editada'),
+        (KIND_NOTE_DELETED, 'Nota excluída'),
+        (
+            KIND_CUSTOM_QUESTION_ADDED,
+            'Pergunta complementar adicionada',
+        ),
+        (
+            KIND_CUSTOM_QUESTION_REMOVED,
+            'Pergunta complementar removida',
+        ),
+        (
+            KIND_SUPPLEMENTARY_COMPLETED,
+            'Perguntas complementares concluídas',
+        ),
+        (
+            KIND_SUPPLEMENTARY_NOTIFICATION_SENT,
+            'Notificação de complementares enviada',
+        ),
     ]
 
     id = models.UUIDField(

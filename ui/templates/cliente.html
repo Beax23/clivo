@@ -5,12 +5,15 @@
 {% block page_name %}cliente{% endblock %}
 
 {% block page_css %}
-<link rel="stylesheet" href="{% static 'css/cliente.css' %}">
+<link rel="stylesheet" href="{% static 'css/cliente.css' %}?v=11">
 {% endblock %}
 
 {% block content %}
 <div class="rf-page" id="clPage">
 
+    <div hidden>{% csrf_token %}</div>
+
+    <!-- HEADER GERAL -->
     <header class="fx-header" id="clTopbar">
         <div class="fx-header-left">
             <div class="fx-header-title-row">
@@ -19,20 +22,18 @@
                 <p class="fx-header-sub">Pessoas, briefings e contexto do seu escritório.</p>
             </div>
         </div>
-
         <div class="fx-header-right">
-            <button class="fx-ai-btn" id="clInsightBtn" type="button">
-                <i data-lucide="sparkles"></i>
-                <span>Clivo Insight</span>
+            <button type="button" class="cl-reanalyze-btn" id="clReanalyzeBtn" title="Gerar nova análise do cliente selecionado">
+                <span class="cl-reanalyze-icon"><i data-lucide="sparkles"></i></span>
+                <span class="cl-reanalyze-label">Nova análise</span>
+                <span class="cl-reanalyze-spinner"></span>
             </button>
         </div>
     </header>
 
     <div class="cl-body" id="clBody">
 
-        <!-- ============================================================
-             COLUNA 1 — Lista de clientes
-             ============================================================ -->
+        <!-- COLUNA 1 — Lista de clientes -->
         <aside class="cl-col cl-col--list" id="clColList">
 
             <header class="cl-col-head">
@@ -47,233 +48,211 @@
                         <i data-lucide="search" class="cl-search-icon"></i>
                         <input type="search" id="clSearchInput" placeholder="Buscar clientes…" autocomplete="off">
                     </div>
-                    <select id="clStatusFilter" class="cl-select-sm" aria-label="Filtrar por status">
-                        <option value="">Todos</option>
-                        <option value="active">Ativos</option>
-                        <option value="inactive">Inativos</option>
-                        <option value="suspended">Suspensos</option>
-                    </select>
                 </div>
+
+                <nav class="cl-filters" id="clKpis" role="tablist" aria-label="Filtrar clientes">
+                    <!-- preenchido dinamicamente pelo JS -->
+                </nav>
             </header>
 
             <div class="cl-col-scroll">
-                <ul class="cl-list" id="clList">
-                    <li class="cl-list-empty">Carregando…</li>
+                <ul class="cl-list cl-client-list" id="clList">
+                    <li class="cl-empty">Carregando…</li>
                 </ul>
             </div>
 
+            <template id="clClientItemTpl">
+                <li class="cl-client" data-id="">
+                    <span class="cl-client-avatar">?</span>
+                    <div class="cl-client-body">
+                        <div class="cl-client-top">
+                            <span class="cl-client-name">—</span>
+                            <span class="cl-client-status" data-status="active">
+                                <span class="cl-client-status-dot"></span>
+                                <span class="cl-client-status-label">—</span>
+                            </span>
+                        </div>
+                        <span class="cl-client-email">—</span>
+                        <span class="cl-client-code">—</span>
+                    </div>
+                </li>
+            </template>
         </aside>
 
-        <!-- ============================================================
-             COLUNA 2 + 3 — Detalhe (centro) e painel lateral
-             ============================================================ -->
-        <section class="cl-col cl-col--detail" id="clDetailPane">
+        <!-- COLUNA 2 — Detalhe -->
+        <section class="cl-col cl-col--detail" id="clDetailCol">
 
-            <button class="cl-back-bar" id="clBackBtn" type="button">
-                <i data-lucide="chevron-left"></i>
-                <span>Clientes</span>
+            <button class="cl-crumbs-back" id="clBackBtn" type="button" aria-label="Voltar">
+                <i data-lucide="arrow-left"></i>
             </button>
 
-            <div class="cl-detail-empty is-hidden" id="clDetailEmpty">
-                <i data-lucide="user"></i>
-                <p>Selecione um cliente</p>
-                <span>Os detalhes aparecerão aqui</span>
+            <div class="cl-detail-empty" id="clDetailEmpty">
+                <i data-lucide="users"></i>
+                <p>Nenhum cliente selecionado</p>
+                <span>Escolha um cliente na lista para ver os detalhes.</span>
             </div>
 
-            <div class="cl-detail" id="clDetailContent">
+            <div class="cl-detail-view" id="clDetailView" hidden>
 
-                <!-- ================= CENTRO ================= -->
-                <div class="cl-center">
-
-                    <header class="cl-head">
-                        <div class="cl-head-main">
-                            <div class="cl-head-avatar" id="clDetailAvatar">?</div>
-
-                            <div class="cl-head-info">
-                                <div class="cl-head-title-row">
+                <!-- HEADER DO DETALHE -->
+                <header class="cl-detail-head">
+                    <div class="cl-detail-top">
+                        <div class="cl-head-identity">
+                            <span class="cl-head-avatar" id="clDetailAvatar">?</span>
+                            <div class="cl-head-identity-text">
+                                <div class="cl-head-name-row">
                                     <h1 class="cl-head-name" id="clDetailName">—</h1>
-
-                                    <div class="cl-status-pill-wrap" id="clStatusPillWrap">
-                                        <button class="cl-status-pill" id="clStatusPill" type="button" aria-haspopup="listbox" aria-expanded="false">
-                                            <span class="cl-status-pill-dot active" id="clStatusPillDot"></span>
-                                            <span class="cl-status-pill-label" id="clStatusPillLabel">Ativo</span>
+                                    <div class="cl-status-wrap" id="clStatusWrap">
+                                        <button class="cl-status-pill" id="clStatusPill" type="button"
+                                                aria-haspopup="listbox" aria-expanded="false" data-status="active">
+                                            <span class="cl-status-pill-dot"></span>
+                                            <span class="cl-status-pill-label" id="clStatusLabel">—</span>
                                             <i data-lucide="chevron-down" class="cl-status-pill-chevron"></i>
                                         </button>
-                                        <div class="cl-status-menu" id="clStatusMenu" role="listbox">
-                                            <button class="cl-status-menu-item" data-status="active" type="button">
-                                                <span class="cl-status-pill-dot active"></span>
-                                                <span>Ativo</span>
-                                                <i data-lucide="check" class="cl-status-menu-check"></i>
-                                            </button>
-                                            <button class="cl-status-menu-item" data-status="inactive" type="button">
-                                                <span class="cl-status-pill-dot inactive"></span>
-                                                <span>Inativo</span>
-                                                <i data-lucide="check" class="cl-status-menu-check"></i>
-                                            </button>
-                                            <button class="cl-status-menu-item" data-status="suspended" type="button">
-                                                <span class="cl-status-pill-dot suspended"></span>
-                                                <span>Suspenso</span>
-                                                <i data-lucide="check" class="cl-status-menu-check"></i>
-                                            </button>
-                                        </div>
+                                        <div class="cl-status-menu" id="clStatusMenu" role="listbox" hidden></div>
                                     </div>
                                 </div>
-
                                 <div class="cl-head-meta">
-                                    <span>Cliente desde <span id="clDetailCreatedAt">—</span></span>
-                                    <span class="cl-dot">·</span>
-                                    <button class="cl-code-chip" id="clCopyCodeBtn" type="button" title="Copiar código">
-                                        <code id="clDetailCode">—</code>
-                                        <i data-lucide="copy"></i>
-                                    </button>
-                                    <span class="cl-visually-hidden" id="clDetailCreatedBy"></span>
+                                    <span>
+                                        <button type="button" class="cl-code-copy" id="clCodeCopy"
+                                                title="Copiar código">
+                                            <code id="clDetailCode">—</code>
+                                            <i data-lucide="copy"></i>
+                                        </button>
+                                    </span>
+                                    <span class="cl-head-sep">·</span>
+                                    <span><i data-lucide="calendar"></i>Criado em <span id="clDetailCreated">—</span></span>
+                                    <span class="cl-head-sep">·</span>
+                                    <span><i data-lucide="clock"></i>Atualizado <span id="clDetailUpdated">—</span></span>
                                 </div>
                             </div>
                         </div>
 
                         <div class="cl-head-actions">
-                            <div class="cl-more-wrap" id="clMoreWrap">
-                                <button class="cl-icon-btn cl-icon-btn--outline" id="clMoreBtn" type="button" aria-haspopup="menu" aria-expanded="false" title="Mais ações">
-                                    <i data-lucide="more-horizontal"></i>
+                            <div class="cl-kebab-wrap">
+                                <button type="button" class="cl-icon-btn cl-kebab-btn" id="clKebabBtn"
+                                        aria-haspopup="true" aria-expanded="false" aria-label="Mais ações">
+                                    <i data-lucide="more-vertical"></i>
                                 </button>
-                                <div class="cl-more-menu" id="clMoreMenu" role="menu">
-                                    <button class="cl-more-item" id="clOpenConfigBtn" type="button" role="menuitem">
-                                        <i data-lucide="settings-2"></i><span>Editar dados</span>
+                                <div class="cl-kebab-menu" id="clKebabMenu" hidden>
+                                    <button type="button" class="cl-kebab-item" id="clEditBtn">
+                                        <i data-lucide="pencil"></i>
+                                        <span>Editar dados</span>
                                     </button>
-                                    <button class="cl-more-item" id="clSendCodeBtn" type="button" role="menuitem">
-                                        <i data-lucide="mail"></i><span>Reenviar código</span>
+                                    <button type="button" class="cl-kebab-item" id="clSendCodeBtn">
+                                        <i data-lucide="mail"></i>
+                                        <span>Reenviar código</span>
                                     </button>
-                                    <button class="cl-more-item cl-more-item--danger" id="clDeleteBtn" type="button" role="menuitem">
-                                        <i data-lucide="trash-2"></i><span>Excluir cliente</span>
+                                    <button type="button" class="cl-kebab-item cl-kebab-item--danger" id="clDeleteBtn">
+                                        <i data-lucide="trash-2"></i>
+                                        <span>Excluir cliente</span>
                                     </button>
                                 </div>
                             </div>
                         </div>
-                    </header>
+                    </div>
+                </header>
 
-                    <!-- Indicadores — 3 KPIs compactos -->
-                    <section class="cl-stats" aria-label="Indicadores">
-                        <div class="cl-stat">
-                            <span class="cl-stat-value" id="clStatBriefingsValue">0</span>
-                            <span class="cl-stat-label">Briefings concluídos</span>
-                        </div>
-                        <div class="cl-stat">
-                            <span class="cl-stat-value" id="clStatInfoValue">0</span>
-                            <span class="cl-stat-label">Informações extraídas</span>
-                        </div>
-                        <div class="cl-stat">
-                            <span class="cl-stat-value" id="clStatPendingValue">0</span>
-                            <span class="cl-stat-label">Pontos de atenção</span>
+                <!-- CORPO CENTRAL -->
+                <div class="cl-detail-body" id="clDetailBody">
+
+                    <!-- Conhecimento + Perfil -->
+                    <div class="cl-top-pair">
+                        <section class="cl-knowledge">
+                            <header class="cl-knowledge-head">
+                                <h2 class="cl-knowledge-title">Conhecimento</h2>
+                                <span class="cl-knowledge-count" id="clCountKnowledge">0</span>
+                            </header>
+                            <div class="cl-knowledge-card">
+                                <div class="cl-knowledge-body" id="clViewKnowledge">
+                                    <p class="cl-knowledge-empty">Sem informações ainda.</p>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="cl-profile">
+                            <header class="cl-profile-head">
+                                <h2 class="cl-profile-title">Perfil</h2>
+                            </header>
+                            <div class="cl-profile-card">
+                                <div class="cl-profile-body" id="clViewProfile">
+                                    <p class="cl-profile-empty">Sem informações ainda.</p>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+
+                    <!-- Briefings -->
+                    <section class="cl-briefings-section" id="clBriefingsSection">
+                        <header class="cl-briefings-head">
+                            <h3 class="cl-briefings-title">Briefings <span class="cl-briefings-count" id="clBriefingsCount">0</span></h3>
+                            <div class="cl-search cl-search--compact">
+                                <i data-lucide="search" class="cl-search-icon"></i>
+                                <input type="search" id="clBriefingsSearchInput" placeholder="Buscar briefing…" autocomplete="off">
+                            </div>
+                        </header>
+                        <div class="cl-briefings" id="clBriefingsList">
+                            <div class="cl-empty">Carregando…</div>
                         </div>
                     </section>
 
-                    <!-- Briefings + Histórico (stack 50/50 no desktop largo) -->
-                    <div class="cl-center-stack">
-
-                        <!-- Briefings -->
-                        <section class="cl-card cl-section--briefings">
-                            <header class="cl-card-head cl-card-head--briefings">
-                                <h3 class="cl-card-title">Briefings <span class="cl-card-count" id="clBriefingsCount">0</span></h3>
-                                <div class="cl-search cl-search--briefings">
-                                    <i data-lucide="search" class="cl-search-icon"></i>
-                                    <input type="search" id="clBriefingsSearchInput" placeholder="Buscar briefing…" autocomplete="off">
-                                </div>
-                            </header>
-
-                            <div class="cl-briefings-scroll" id="clBriefingsScroll">
-                                <div class="cl-briefings" id="clBriefingsList">
-                                    <div class="cl-empty">Carregando…</div>
-                                </div>
-                            </div>
-                        </section>
-
-                        <!-- Histórico -->
-                        <section class="cl-card cl-section--history">
-                            <header class="cl-card-head">
-                                <h3 class="cl-card-title">Histórico</h3>
-                            </header>
-                            <div class="cl-feed cl-feed--main" id="clHistoryList">
-                                <div class="cl-empty">Carregando…</div>
-                            </div>
-                        </section>
-
-                    </div>
-
                 </div>
-
-                <!-- ================= PAINEL LATERAL ================= -->
-                <aside class="cl-side" id="clSide">
-
-                    <nav class="cl-side-tabs" id="clSideTabs" role="tablist">
-                        <button class="cl-side-tab is-active" data-side-tab="insights" type="button" role="tab">Insights</button>
-                    </nav>
-
-                    <div class="cl-side-body">
-
-                        <!-- ===== Insights: apenas os 4 quadrantes de Contexto ===== -->
-                        <div class="cl-side-pane is-active" id="sideInsights">
-
-                            <section class="cl-card cl-section--context">
-                                <header class="cl-card-head">
-                                    <h3 class="cl-card-title">Contexto</h3>
-                                </header>
-
-                                <div class="cl-props">
-
-                                    <article class="cl-prop">
-                                        <header class="cl-prop-head">
-                                            <span class="cl-prop-icon cl-prop-icon--green"><i data-lucide="user-round"></i></span>
-                                            <span class="cl-prop-title">Perfil</span>
-                                            <span class="cl-prop-count" id="clCountProfile">0</span>
-                                        </header>
-                                        <div class="cl-prop-body" id="clViewProfile">
-                                            <p class="cl-prop-empty">Sem informações ainda.</p>
-                                        </div>
-                                    </article>
-
-                                    <article class="cl-prop">
-                                        <header class="cl-prop-head">
-                                            <span class="cl-prop-icon cl-prop-icon--blue"><i data-lucide="book-open"></i></span>
-                                            <span class="cl-prop-title">Conhecimento</span>
-                                            <span class="cl-prop-count" id="clCountKnowledge">0</span>
-                                        </header>
-                                        <div class="cl-prop-body" id="clViewKnowledge">
-                                            <p class="cl-prop-empty">Sem informações ainda.</p>
-                                        </div>
-                                    </article>
-
-                                    <article class="cl-prop">
-                                        <header class="cl-prop-head">
-                                            <span class="cl-prop-icon cl-prop-icon--purple"><i data-lucide="heart"></i></span>
-                                            <span class="cl-prop-title">Desejos</span>
-                                            <span class="cl-prop-count" id="clCountWishes">0</span>
-                                        </header>
-                                        <div class="cl-prop-body" id="clViewWishes">
-                                            <p class="cl-prop-empty">Sem informações ainda.</p>
-                                        </div>
-                                    </article>
-
-                                    <article class="cl-prop">
-                                        <header class="cl-prop-head">
-                                            <span class="cl-prop-icon cl-prop-icon--red"><i data-lucide="x"></i></span>
-                                            <span class="cl-prop-title">Não gosta</span>
-                                            <span class="cl-prop-count" id="clCountDislikes">0</span>
-                                        </header>
-                                        <div class="cl-prop-body" id="clViewDislikes">
-                                            <p class="cl-prop-empty">Sem informações ainda.</p>
-                                        </div>
-                                    </article>
-
-                                </div>
-                            </section>
-
-                        </div>
-
-                    </div>
-                </aside>
 
             </div>
         </section>
+
+        <!-- COLUNA 3 — Insight -->
+        <aside class="cl-side" id="clAside">
+            <div class="cl-side-body" id="clSideBody">
+
+                <section class="cl-side-block cl-side-block--wishes" id="clWishesCard">
+                    <header class="cl-side-block-head">
+                        <span class="cl-side-block-icon"><i data-lucide="heart"></i></span>
+                        <h3 class="cl-side-block-title">Principais desejos</h3>
+                    </header>
+                    <ul class="cl-checks cl-checks--wishes" id="clWishesList">
+                        <li class="cl-check-slot is-empty"><span class="cl-check-bullet"><i class="cl-dot"></i></span><span class="cl-check-text"><strong>—</strong><small></small></span></li>
+                        <li class="cl-check-slot is-empty"><span class="cl-check-bullet"><i class="cl-dot"></i></span><span class="cl-check-text"><strong>—</strong><small></small></span></li>
+                        <li class="cl-check-slot is-empty"><span class="cl-check-bullet"><i class="cl-dot"></i></span><span class="cl-check-text"><strong>—</strong><small></small></span></li>
+                    </ul>
+                </section>
+
+                <section class="cl-side-block cl-side-block--dislikes" id="clDislikesCard">
+                    <header class="cl-side-block-head">
+                        <span class="cl-side-block-icon"><i data-lucide="x"></i></span>
+                        <h3 class="cl-side-block-title">Não gosta</h3>
+                    </header>
+                    <ul class="cl-checks cl-checks--dislikes" id="clDislikesList">
+                        <li class="cl-check-slot is-empty"><span class="cl-check-bullet"></span><span class="cl-check-text"><strong>—</strong><small></small></span></li>
+                        <li class="cl-check-slot is-empty"><span class="cl-check-bullet"></span><span class="cl-check-text"><strong>—</strong><small></small></span></li>
+                        <li class="cl-check-slot is-empty"><span class="cl-check-bullet"></span><span class="cl-check-text"><strong>—</strong><small></small></span></li>
+                    </ul>
+                </section>
+
+                <section class="cl-side-block cl-side-block--attention" id="clAttentionCard">
+                    <header class="cl-side-block-head">
+                        <span class="cl-side-block-icon"><i data-lucide="triangle-alert"></i></span>
+                        <h3 class="cl-side-block-title">Pontos de atenção</h3>
+                    </header>
+                    <ul class="cl-checks cl-checks--attention" id="clAttentionList">
+                        <li class="cl-check-slot is-empty"><span class="cl-check-bullet"></span><span class="cl-check-text"><strong>—</strong><small></small></span></li>
+                        <li class="cl-check-slot is-empty"><span class="cl-check-bullet"></span><span class="cl-check-text"><strong>—</strong><small></small></span></li>
+                        <li class="cl-check-slot is-empty"><span class="cl-check-bullet"></span><span class="cl-check-text"><strong>—</strong><small></small></span></li>
+                    </ul>
+                </section>
+
+                <section class="cl-side-block cl-side-block--tags" id="clTagsCard">
+                    <header class="cl-side-block-head">
+                        <span class="cl-side-block-icon"><i data-lucide="tag"></i></span>
+                        <h3 class="cl-side-block-title">Tags</h3>
+                    </header>
+                    <div class="cl-tags" id="clTagsList">
+                        <span class="cl-tag cl-tag--empty">—</span>
+                    </div>
+                </section>
+
+            </div>
+        </aside>
 
     </div>
 </div>
@@ -342,57 +321,5 @@
 {% endblock %}
 
 {% block page_js %}
-<script src="{% static 'js/cliente.js' %}"></script>
-<script>
-/* Comportamentos locais (abas laterais, menu "...", modal Editar dados). */
-(function () {
-    var $ = function (s, r) { return (r || document).querySelector(s); };
-    var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
-
-    // Abas do painel lateral
-    $$('#clSideTabs [data-side-tab]').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            var key = btn.getAttribute('data-side-tab');
-            $$('#clSideTabs [data-side-tab]').forEach(function (b) {
-                b.classList.toggle('is-active', b === btn);
-            });
-            $$('.cl-side-pane').forEach(function (p) {
-                p.classList.toggle('is-active', p.id === 'side' + key.charAt(0).toUpperCase() + key.slice(1));
-            });
-            var body = $('.cl-side-body');
-            if (body) body.scrollTop = 0;
-        });
-    });
-
-    // Menu "..."
-    var moreBtn = $('#clMoreBtn'), moreMenu = $('#clMoreMenu');
-    function closeMore() {
-        if (!moreMenu) return;
-        moreMenu.classList.remove('is-open');
-        moreBtn.setAttribute('aria-expanded', 'false');
-    }
-    if (moreBtn && moreMenu) {
-        moreBtn.addEventListener('click', function (e) {
-            e.stopPropagation();
-            var open = moreMenu.classList.toggle('is-open');
-            moreBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
-        });
-        moreMenu.addEventListener('click', closeMore);
-        document.addEventListener('click', closeMore);
-        document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeMore(); });
-    }
-
-    // Modal Editar dados
-    var cfgBtn = $('#clOpenConfigBtn'), cfgModal = $('#clConfigModal');
-    if (cfgBtn && cfgModal) {
-        cfgBtn.addEventListener('click', function () { cfgModal.classList.add('active'); });
-    }
-    $$('[data-close]').forEach(function (b) {
-        b.addEventListener('click', function () {
-            var m = document.getElementById(b.getAttribute('data-close'));
-            if (m) m.classList.remove('active');
-        });
-    });
-})();
-</script>
+<script src="{% static 'js/cliente.js' %}?v=11"></script>
 {% endblock %}

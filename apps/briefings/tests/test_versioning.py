@@ -11,7 +11,7 @@ Cobrem:
 
 RESTAURAÇÃO (restore_into_template):
     - Substitui a estrutura do modelo pela da versão escolhida
-    - Bloqueia se template está published
+    - Despublica automaticamente um template `published`
     - Bloqueia se versão é de outro template
     - Aborta se estrutura é inválida (sem alterar nada)
     - Ignora documentos inexistentes/de outro workspace
@@ -329,10 +329,16 @@ class TestRestoreInto:
         assert sections[0].questions.count() == 2
         assert sections[1].questions.count() == 1
 
-    def test_restore_blocked_when_published(
+    def test_restore_auto_unpublishes_when_published(
         self, published_template, user_owner,
     ):
-        # A published_template já tem 2 sessões e uma versão publicada.
+        """
+        Contrato atual: `restore_into_template` DESPUBLICA
+        automaticamente um template `published` antes de substituir
+        a estrutura. Este é o comportamento aprovado no modal do
+        frontend. O teste valida que o template termina em `draft`
+        e a estrutura é substituída.
+        """
         current = (
             BriefingTemplateVersionService.get_current_published(
                 published_template,
@@ -340,23 +346,21 @@ class TestRestoreInto:
         )
         assert current is not None
 
-        sections_before = published_template.sections.count()
-
-        with pytest.raises(BriefingError) as exc_info:
+        new_version = (
             BriefingTemplateVersionService.restore_into_template(
                 template=published_template,
                 source_version=current,
                 actor=user_owner,
             )
-        assert 'despublique' in str(exc_info.value).lower()
-
-        # Nada mudou
-        published_template.refresh_from_db()
-        assert published_template.sections.count() == sections_before
-        assert (
-            BriefingTemplateVersionService
-            .get_current_published(published_template).id == current.id
         )
+
+        # Template foi despublicado automaticamente.
+        published_template.refresh_from_db()
+        assert published_template.status == 'draft'
+
+        # Nova versão em rascunho foi criada.
+        assert new_version.status == 'draft'
+        assert new_version.template_id == published_template.id
 
     def test_restore_wrong_template(
         self, draft_template, workspace_b, user_owner, user_other,

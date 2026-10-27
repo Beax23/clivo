@@ -29,6 +29,16 @@ class BriefingTemplateInactiveError(BriefingTemplateError):
     pass
 
 
+class BriefingTemplateVersionNotFoundError(BriefingTemplateError):
+    """
+    Versão de template não encontrada.
+
+    Subclasse específica para permitir que `_handle_domain_error`
+    mapeie para 404 em vez do 400 genérico de `BriefingError`.
+    """
+    pass
+
+
 # =====================================================================
 # SECTION
 # =====================================================================

@@ -17,6 +17,10 @@ from apps.console.services.usage_record_service import (
 from apps.console.services.provider_log_service import ProviderLogService
 from apps.console.services.b2_usage_service import BackblazeB2UsageService
 from apps.console.services.storage_budget_service import StorageBudgetService
+from apps.console.services.ai_call_service import (
+    AICallService,
+    AICallError,
+)
 
 __all__ = [
     'ConsoleMembershipService',
@@ -34,4 +38,6 @@ __all__ = [
     'ProviderLogService',
     'BackblazeB2UsageService',
     'StorageBudgetService',
+    'AICallService',
+    'AICallError',
 ]

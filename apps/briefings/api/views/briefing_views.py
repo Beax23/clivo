@@ -18,6 +18,7 @@ from apps.briefings.api.serializers import (
     BriefingEventSerializer,
     BriefingNoteSerializer,
     BriefingNoteCreateSerializer,
+    BriefingNoteUpdateSerializer,
     BriefingQuestionInstanceSerializer,
     BriefingQuestionInstanceCreateSerializer,
     BriefingQuestionInstanceUpdateSerializer,
@@ -30,6 +31,7 @@ from apps.briefings.services import (
     BriefingSendService,
     BriefingQuestionInstanceService,
     BriefingTemplateVersionService,
+    NotificationService,
 )
 from apps.briefings.services.export_service import BriefingExportService
 from apps.briefings.exceptions import (
@@ -344,6 +346,7 @@ class BriefingViewSet(viewsets.GenericViewSet):
                 author=request.user,
                 content=serializer.validated_data['content'],
                 question_id=serializer.validated_data.get('question_id'),
+                is_pinned=serializer.validated_data.get('is_pinned', False),
             )
         except Exception as exc:
             handled = self._handle_domain_error(exc)
@@ -382,14 +385,22 @@ class BriefingViewSet(viewsets.GenericViewSet):
             BriefingNoteService.delete_note(note=note)
             return Response(status=status.HTTP_204_NO_CONTENT)
 
-        serializer = BriefingNoteCreateSerializer(data=request.data)
+        serializer = BriefingNoteUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+
+        data = serializer.validated_data
+        if 'content' not in data and 'is_pinned' not in data:
+            return Response(
+                {'error': 'Envie "content" e/ou "is_pinned".'},
+                status=400,
+            )
 
         try:
             note = BriefingNoteService.update_note(
                 note=note,
                 author=request.user,
-                content=serializer.validated_data['content'],
+                content=data.get('content'),
+                is_pinned=data.get('is_pinned'),
             )
         except Exception as exc:
             handled = self._handle_domain_error(exc)
@@ -456,7 +467,7 @@ class BriefingViewSet(viewsets.GenericViewSet):
             handled = self._handle_domain_error(exc)
             if handled is not None:
                 return handled
-            logger.exception('Erro ao criar pergunta exclusiva')
+            logger.exception('Erro ao criar pergunta complementar')
             return Response({'error': 'Erro inesperado.'}, status=500)
 
         return Response(
@@ -504,7 +515,7 @@ class BriefingViewSet(viewsets.GenericViewSet):
                 handled = self._handle_domain_error(exc)
                 if handled is not None:
                     return handled
-                logger.exception('Erro ao remover pergunta exclusiva')
+                logger.exception('Erro ao remover pergunta complementar')
                 return Response({'error': 'Erro inesperado.'}, status=500)
             return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -528,10 +539,56 @@ class BriefingViewSet(viewsets.GenericViewSet):
             handled = self._handle_domain_error(exc)
             if handled is not None:
                 return handled
-            logger.exception('Erro ao editar pergunta exclusiva')
+            logger.exception('Erro ao editar pergunta complementar')
             return Response({'error': 'Erro inesperado.'}, status=500)
 
         return Response(BriefingQuestionInstanceSerializer(instance).data)
+
+    @action(
+        detail=True,
+        methods=['post'],
+        url_path='notify-supplementary',
+    )
+    def notify_supplementary(self, request, id=None):
+        """
+        Notifica o cliente sobre as perguntas complementares.
+
+        Chamado EXPLICITAMENTE pelo arquiteto, após adicionar as
+        perguntas que quiser. Nunca é automático por pergunta.
+        """
+        workspace = self._current_workspace()
+        if workspace is None:
+            return Response({'error': 'Nenhum workspace ativo'}, status=400)
+        err = self._require_capability(
+            workspace, 'briefings.briefing.send_to_client',
+        )
+        if err is not None:
+            return err
+
+        try:
+            briefing = BriefingService.get_or_raise(id, workspace)
+        except Exception as exc:
+            handled = self._handle_domain_error(exc)
+            if handled is not None:
+                return handled
+            return Response({'error': 'Erro'}, status=500)
+
+        try:
+            result = NotificationService.on_supplementary_questions_added(
+                briefing.id, actor=request.user,
+            )
+        except Exception:
+            logger.exception(
+                'Erro ao notificar complementares (briefing=%s)',
+                briefing.id,
+            )
+            return Response(
+                {'error': 'Erro inesperado.'}, status=500,
+            )
+
+        # Resultado inclui status honesto (requested/accepted/failed),
+        # NUNCA 'delivered' (não temos confirmação de entrega).
+        return Response(result, status=status.HTTP_200_OK)
 
     @action(
         detail=True,

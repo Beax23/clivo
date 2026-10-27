@@ -5,6 +5,19 @@ REGRA ARQUITETURAL
 ------------------
 Toda mutação passa por este service.
 
+DOIS BLOCOS DE PERGUNTAS
+------------------------
+O briefing tem dois blocos independentes de perguntas:
+
+    1. structure_snapshot      → bloco original, congelado no primeiro
+                                 congelamento após primeira resposta.
+    2. supplementary_snapshot  → bloco complementar, reconstruído a
+                                 cada adição/remoção de
+                                 BriefingQuestionInstance.
+
+O `status` do Briefing refere-se ao BLOCO ORIGINAL. O estado do
+bloco complementar é controlado por `supplementary_completed_at`.
+
 INTRO
 -----
 `intro_message` é copiada do template na criação. O cliente pode
@@ -59,12 +72,6 @@ class BriefingService:
         title: Optional[str] = None,
         intro_message: Optional[str] = None,
     ) -> Briefing:
-        """
-        Cria uma execução a partir de um template publicado.
-
-        `intro_message`: se passado (mesmo que ''), sobrescreve a
-        intro herdada do template. Se `None`, herda do template.
-        """
         if template.workspace_id != workspace.id:
             raise BriefingError('Template não pertence a este workspace.')
         if client.workspace_id != workspace.id:
@@ -91,7 +98,6 @@ class BriefingService:
             template, version=current_version,
         )
 
-        # Resolve a intro: sobrescrita explícita > herdada do template.
         if intro_message is not None:
             resolved_intro = (intro_message or '').strip()
         else:
@@ -104,6 +110,7 @@ class BriefingService:
             template_version=current_version,
             title=(title or template.name).strip(),
             structure_snapshot=snapshot,
+            supplementary_snapshot={},
             intro_message=resolved_intro,
             status=Briefing.STATUS_IN_PROGRESS,
             expires_at=expires_at,
@@ -191,22 +198,31 @@ class BriefingService:
     @staticmethod
     @transaction.atomic
     def mark_intro_seen(briefing: Briefing) -> Briefing:
-        """
-        Marca que o cliente viu a apresentação. Idempotente.
-        Não faz nada se o briefing não tem intro.
-        """
         if not briefing.has_intro():
             return briefing
         briefing.mark_intro_seen()
         return briefing
 
+    @staticmethod
+    @transaction.atomic
+    def mark_viewed(briefing: Briefing) -> Briefing:
+        briefing.mark_viewed()
+        return briefing
+
     # ==================================================================
-    # CUSTOM QUESTIONS + REFERÊNCIAS
+    # SNAPSHOTS — CUSTOM QUESTIONS
     # ==================================================================
 
     @staticmethod
     @transaction.atomic
     def freeze_custom_questions_into_snapshot(briefing: Briefing) -> bool:
+        """
+        Congela custom questions no bloco ORIGINAL.
+
+        Só roda enquanto o briefing não tem respostas. Depois disso,
+        o bloco original está fechado e custom questions vão para o
+        bloco complementar.
+        """
         if briefing.answers.exists():
             return False
 
@@ -242,6 +258,61 @@ class BriefingService:
             'structure_snapshot', 'has_custom_questions', 'updated_at',
         ])
         return True
+
+    @staticmethod
+    @transaction.atomic
+    def freeze_supplementary_questions_into_snapshot(briefing: Briefing) -> bool:
+        """
+        Reconstrói o bloco COMPLEMENTAR a partir das
+        BriefingQuestionInstance.
+
+        Roda em qualquer momento. NÃO toca em structure_snapshot.
+
+        Marca `frozen_in_supplementary_snapshot_at` em cada instância
+        que entrou no snapshot complementar.
+        """
+        custom_qs = list(
+            BriefingQuestionInstance.objects
+            .filter(briefing=briefing)
+            .order_by('section_ref', 'position', 'created_at')
+        )
+
+        sections_by_ref = {}
+        for inst in custom_qs:
+            sections_by_ref.setdefault(str(inst.section_ref), []).append(inst)
+
+        snapshot_sections = []
+        for section_ref, instances in sections_by_ref.items():
+            question_payloads = [inst.to_snapshot_dict() for inst in instances]
+            snapshot_sections.append({
+                'id': str(section_ref),
+                'title': 'Perguntas complementares',
+                'description': '',
+                'position': 0,
+                'questions': question_payloads,
+            })
+
+        new_snapshot = {
+            'snapshot_version': 1,
+            'sections': snapshot_sections,
+        }
+
+        changed = briefing.supplementary_snapshot != new_snapshot
+        if changed:
+            briefing.supplementary_snapshot = new_snapshot
+            briefing.save(update_fields=[
+                'supplementary_snapshot', 'updated_at',
+            ])
+
+        now = timezone.now()
+        for inst in custom_qs:
+            if inst.frozen_in_supplementary_snapshot_at is None:
+                inst.frozen_in_supplementary_snapshot_at = now
+                inst.save(update_fields=[
+                    'frozen_in_supplementary_snapshot_at', 'updated_at',
+                ])
+
+        return changed
 
     @staticmethod
     @transaction.atomic
@@ -316,7 +387,55 @@ class BriefingService:
 
     @staticmethod
     def compute_progress(briefing: Briefing) -> dict:
-        questions = briefing.snapshot_questions()
+        """
+        Progresso em três blocos + campos planos por compatibilidade.
+
+        Os campos planos no topo (`total_required`, `answered`, etc.)
+        refletem o BLOCO ORIGINAL e são mantidos para não quebrar
+        consumidores existentes (export_service, BriefingListSerializer,
+        BriefingDetailSerializer, PortalBriefingSerializer).
+
+        Os blocos `original`, `supplementary` e `overall` são novos e
+        coexistem com os planos.
+        """
+        original = BriefingService._compute_progress_block(
+            briefing=briefing,
+            questions=briefing.snapshot_questions(),
+        )
+        supplementary = BriefingService._compute_progress_block(
+            briefing=briefing,
+            questions=briefing.supplementary_questions(),
+        )
+
+        overall_complete = (
+            original['percent'] >= 100.0
+            and supplementary.get('never_answered', 0) == 0
+            and supplementary.get('pending_review', 0) == 0
+        )
+
+        return {
+            'total_required': original['total_required'],
+            'answered': original['answered'],
+            'pending_review': original['pending_review'],
+            'never_answered': original['never_answered'],
+            'percent': original['percent'],
+            'needs_attention': (
+                original['needs_attention']
+                or supplementary['needs_attention']
+            ),
+            'original': original,
+            'supplementary': supplementary,
+            'overall': {
+                'is_fully_complete': overall_complete,
+                'has_supplementary_pending': (
+                    supplementary['never_answered'] > 0
+                    or supplementary['pending_review'] > 0
+                ),
+            },
+        }
+
+    @staticmethod
+    def _compute_progress_block(*, briefing, questions) -> dict:
         required_ids = [
             str(q['id']) for q in questions if q.get('is_required')
         ]
@@ -403,13 +522,24 @@ class BriefingService:
         if briefing.status == Briefing.STATUS_CANCELLED:
             raise BriefingClosedError('O briefing foi cancelado.')
 
-        if briefing.status == Briefing.STATUS_COMPLETED:
+        # Se está `completed` no bloco original, só aceita resposta
+        # se a pergunta alvo estiver no bloco COMPLEMENTAR.
+        target_in_supplementary = briefing.supplementary_question_by_id(
+            question_id,
+        ) is not None
+
+        if briefing.status == Briefing.STATUS_COMPLETED and not target_in_supplementary:
             raise BriefingError('O briefing já foi concluído.')
 
         BriefingService.freeze_custom_questions_into_snapshot(briefing)
+        BriefingService.freeze_supplementary_questions_into_snapshot(briefing)
         BriefingService.sync_snapshot_references(briefing)
         briefing.refresh_from_db(
-            fields=['structure_snapshot', 'has_custom_questions'],
+            fields=[
+                'structure_snapshot',
+                'supplementary_snapshot',
+                'has_custom_questions',
+            ],
         )
 
         next_question = BriefingService.get_next_eligible_question(briefing)
@@ -459,6 +589,7 @@ class BriefingService:
                 str(d.id) for d in (attachment_documents or [])
             ],
             'is_custom': bool(next_question.get('is_custom')),
+            'is_supplementary': bool(target_in_supplementary),
         }
 
         event = BriefingEventService.log(
@@ -493,35 +624,46 @@ class BriefingService:
 
         logger.info(
             'Answer saved | briefing=%s | q=%s | state=%s | '
-            'has_text=%s | has_audio=%s | attachments=%d',
+            'has_text=%s | has_audio=%s | attachments=%d | supplementary=%s',
             briefing.id, next_question['id'], answer.state,
             bool(content_text_clean), bool(audio_document),
             len(attachment_documents or []),
+            target_in_supplementary,
         )
 
         if attachment_documents:
             answer.attachments.set(attachment_documents)
 
-        if BriefingService._all_required_answered(briefing):
-            briefing.status = Briefing.STATUS_COMPLETED
-            briefing.completed_at = timezone.now()
-            briefing.save(update_fields=[
-                'status', 'completed_at', 'updated_at',
-            ])
-            BriefingEventService.log(
-                briefing=briefing,
-                kind=BriefingEvent.KIND_COMPLETED,
-                portal_session=portal_session,
-                content={'auto': True},
-            )
-
-            from django.db import transaction as _tx
-            _briefing_id = briefing.id
-            _tx.on_commit(
-                lambda: BriefingService._schedule_completion_notification(
-                    _briefing_id,
+        if target_in_supplementary:
+            if BriefingService._all_supplementary_required_answered(briefing):
+                briefing.mark_supplementary_completed()
+                BriefingEventService.log(
+                    briefing=briefing,
+                    kind=BriefingEvent.KIND_SUPPLEMENTARY_COMPLETED,
+                    portal_session=portal_session,
+                    content={'auto': True},
                 )
-            )
+        else:
+            if BriefingService._all_required_answered(briefing):
+                briefing.status = Briefing.STATUS_COMPLETED
+                briefing.completed_at = timezone.now()
+                briefing.save(update_fields=[
+                    'status', 'completed_at', 'updated_at',
+                ])
+                BriefingEventService.log(
+                    briefing=briefing,
+                    kind=BriefingEvent.KIND_COMPLETED,
+                    portal_session=portal_session,
+                    content={'auto': True},
+                )
+
+                from django.db import transaction as _tx
+                _briefing_id = briefing.id
+                _tx.on_commit(
+                    lambda: BriefingService._schedule_completion_notification(
+                        _briefing_id,
+                    )
+                )
 
         if audio_document is not None:
             try:
@@ -542,13 +684,13 @@ class BriefingService:
 
     @staticmethod
     def get_next_eligible_question(briefing: Briefing) -> Optional[dict]:
-        questions = briefing.snapshot_questions()
         answers = {
             str(a.question_id): a
             for a in BriefingAnswer.objects.filter(briefing=briefing)
         }
 
-        for q in questions:
+        # 1. Bloco original
+        for q in briefing.snapshot_questions():
             if not q.get('is_required'):
                 continue
             answer = answers.get(str(q['id']))
@@ -560,11 +702,43 @@ class BriefingService:
                 BriefingAnswer.STATE_PENDING_CLARIFICATION,
             ):
                 return q
+
+        # 2. Bloco complementar
+        for q in briefing.supplementary_questions():
+            if not q.get('is_required'):
+                continue
+            answer = answers.get(str(q['id']))
+            if answer is None:
+                return q
+            if answer.state in (
+                BriefingAnswer.STATE_PENDING,
+                BriefingAnswer.STATE_REVIEW_REQUESTED,
+                BriefingAnswer.STATE_PENDING_CLARIFICATION,
+            ):
+                return q
+
         return None
 
     @staticmethod
     def _all_required_answered(briefing: Briefing) -> bool:
         questions = briefing.snapshot_questions()
+        required_ids = {
+            str(q['id']) for q in questions if q.get('is_required')
+        }
+        if not required_ids:
+            return True
+        answered_ids = set(
+            str(a.question_id)
+            for a in BriefingAnswer.objects.filter(
+                briefing=briefing,
+                state=BriefingAnswer.STATE_ANSWERED,
+            )
+        )
+        return required_ids.issubset(answered_ids)
+
+    @staticmethod
+    def _all_supplementary_required_answered(briefing: Briefing) -> bool:
+        questions = briefing.supplementary_questions()
         required_ids = {
             str(q['id']) for q in questions if q.get('is_required')
         }

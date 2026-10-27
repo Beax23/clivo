@@ -169,11 +169,9 @@ class PortalBriefingView(APIView):
                 '(briefing=%s)', briefing.id,
             )
 
-        if briefing.first_opened_at is None:
-            briefing.first_opened_at = timezone.now()
-            briefing.save(update_fields=[
-                'first_opened_at', 'updated_at',
-            ])
+        # Marca visualização: first_opened_at (na primeira vez) e
+        # last_viewed_at (sempre).
+        briefing.mark_viewed()
 
         return Response(_serialize(briefing, request))
 

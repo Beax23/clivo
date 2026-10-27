@@ -1,10 +1,10 @@
 ================================================================================
 LISTAGEM COMPLETA DO MÓDULO clients
-Gerado em: 13/10/2026 19:28:40
-Total de arquivos: 42
+Gerado em: 27/10/2026 12:03:15
+Total de arquivos: 45
 ================================================================================
 ================================================================================
-ARQUIVO 1 DE 42
+ARQUIVO 1 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\clients
 ARQUIVO: __init__.py
@@ -80,7 +80,7 @@ REGRA DE STATUS
 default_app_config = 'apps.clients.apps.ClientsConfig'
 
 ================================================================================
-ARQUIVO 2 DE 42
+ARQUIVO 2 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\clients
 ARQUIVO: admin.py
@@ -161,7 +161,7 @@ class ClientPortalFeedbackAdmin(admin.ModelAdmin):
     autocomplete_fields = ['client']
 
 ================================================================================
-ARQUIVO 3 DE 42
+ARQUIVO 3 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\clients\api\serializers
 ARQUIVO: __init__.py
@@ -217,7 +217,7 @@ __all__ = [
 ]
 
 ================================================================================
-ARQUIVO 4 DE 42
+ARQUIVO 4 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\clients\api\serializers
 ARQUIVO: client_serializers.py
@@ -325,7 +325,7 @@ class ClientContextUpdateSerializer(serializers.Serializer):
     context = serializers.DictField()
 
 ================================================================================
-ARQUIVO 5 DE 42
+ARQUIVO 5 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\clients\api\serializers
 ARQUIVO: contact_serializers.py
@@ -374,7 +374,7 @@ class ClientContactUpdateSerializer(serializers.Serializer):
     notes = serializers.CharField(required=False, allow_blank=True)
 
 ================================================================================
-ARQUIVO 6 DE 42
+ARQUIVO 6 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\clients\api\serializers
 ARQUIVO: note_serializers.py
@@ -427,7 +427,7 @@ class ClientNoteUpdateSerializer(serializers.Serializer):
     is_pinned = serializers.BooleanField(required=False)
 
 ================================================================================
-ARQUIVO 7 DE 42
+ARQUIVO 7 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\clients\api\serializers
 ARQUIVO: portal_serializers.py
@@ -518,7 +518,7 @@ class PortalContextSerializer(serializers.Serializer):
     context = serializers.DictField()
 
 ================================================================================
-ARQUIVO 8 DE 42
+ARQUIVO 8 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\clients\api\views
 ARQUIVO: __init__.py
@@ -540,7 +540,7 @@ __all__ = [
 ]
 
 ================================================================================
-ARQUIVO 9 DE 42
+ARQUIVO 9 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\clients\api\views
 ARQUIVO: client_views.py
@@ -1201,13 +1201,13 @@ class ClientViewSet(viewsets.ModelViewSet):
         return Response({'detail': 'Código enviado com sucesso'})
 
 ================================================================================
-ARQUIVO 10 DE 42
+ARQUIVO 10 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\clients\api\views
 ARQUIVO: portal_views.py
-TAMANHO: 6,88 KB
+TAMANHO: 7,98 KB
 EXTENSAO: .py
-LINHAS: 207
+LINHAS: 226
 ================================================================================
 
 """
@@ -1230,10 +1230,8 @@ Endpoints:
 """
 
 import logging
-from datetime import timedelta
 
 from django.conf import settings
-from django.utils import timezone
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -1248,10 +1246,6 @@ from apps.clients.api.serializers.portal_serializers import (
 )
 from apps.clients.services import PortalService
 from apps.clients.models import Client, ClientPortalSession
-from apps.clients.exceptions import (
-    PortalSessionError,
-    PortalSessionExpiredError,
-)
 
 logger = logging.getLogger('clients')
 
@@ -1323,16 +1317,41 @@ class ClientPortalLoginView(APIView):
             'context': client.context or {},
         })
 
-        secure = not settings.DEBUG
+        # ─────────────────────────────────────────────────────────
+        # Cookie de sessão do Portal.
+        #
+        # IMPORTANTE: `secure` deve refletir a conexão REAL da
+        # requisição, não uma flag de ambiente. Isso evita o cookie
+        # ser silenciosamente descartado pelo browser quando estamos
+        # em HTTP (dev) mesmo com DEBUG=False (ex: rodando local
+        # dentro de um container ou em Render staging).
+        #
+        # `request.is_secure()` retorna True automaticamente quando
+        # SECURE_PROXY_SSL_HEADER está configurado e o proxy envia
+        # X-Forwarded-Proto: https.
+        # ─────────────────────────────────────────────────────────
+        secure_cookie = request.is_secure()
+
         response.set_cookie(
             key=PORTAL_COOKIE_NAME,
             value=raw_token,
             max_age=PORTAL_SESSION_TTL_HOURS * 60 * 60,
             httponly=True,
-            secure=secure,
+            secure=secure_cookie,
             samesite='Lax',
             path='/',
         )
+
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                "Portal login OK — client=%s, cookie secure=%s, "
+                "is_secure=%s, scheme=%s",
+                client.id,
+                secure_cookie,
+                request.is_secure(),
+                request.scheme,
+            )
+
         return response
 
 
@@ -1419,7 +1438,7 @@ class ClientPortalViewSet(viewsets.ViewSet):
         return Response({'detail': 'Correção registrada'})
 
 ================================================================================
-ARQUIVO 11 DE 42
+ARQUIVO 11 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\clients
 ARQUIVO: apps.py
@@ -1441,7 +1460,7 @@ class ClientsConfig(AppConfig):
         import apps.clients.signals  # noqa: F401
 
 ================================================================================
-ARQUIVO 12 DE 42
+ARQUIVO 12 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\clients
 ARQUIVO: capabilities.py
@@ -1543,21 +1562,27 @@ CAPABILITIES = [
 ]
 
 ================================================================================
-ARQUIVO 13 DE 42
+ARQUIVO 13 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\clients\events
 ARQUIVO: __init__.py
-TAMANHO: 0,10 KB
+TAMANHO: 0,16 KB
 EXTENSAO: .py
-LINHAS: 3
+LINHAS: 9
 ================================================================================
 
-from apps.clients.events.client_events import ClientEventEmitter
+from apps.clients.events.client_events import (
+    ClientEventEmitter,
+    client_event,
+)
 
-__all__ = ['ClientEventEmitter']
+__all__ = [
+    'ClientEventEmitter',
+    'client_event',
+]
 
 ================================================================================
-ARQUIVO 14 DE 42
+ARQUIVO 14 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\clients\events
 ARQUIVO: client_events.py
@@ -1756,7 +1781,7 @@ class ClientEventEmitter:
         )
 
 ================================================================================
-ARQUIVO 15 DE 42
+ARQUIVO 15 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\clients\exceptions
 ARQUIVO: __init__.py
@@ -1792,7 +1817,7 @@ __all__ = [
 ]
 
 ================================================================================
-ARQUIVO 16 DE 42
+ARQUIVO 16 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\clients\exceptions
 ARQUIVO: client_exceptions.py
@@ -1856,20 +1881,20 @@ class PortalSessionExpiredError(PortalAccessError):
     pass
 
 ================================================================================
-ARQUIVO 17 DE 42
+ARQUIVO 17 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\clients
 ARQUIVO: middleware.py
-TAMANHO: 1,30 KB
+TAMANHO: 2,47 KB
 EXTENSAO: .py
-LINHAS: 44
+LINHAS: 75
 ================================================================================
 
 """
 ClientPortalMiddleware — resolve a sessão do Portal do Cliente.
 
-O cliente autentica no Portal via link com token. Após o primeiro
-acesso, guardamos um cookie `clivo_portal` com o token cru.
+O cliente autentica no Portal via código público (public_code).
+Após o login, guardamos um cookie `clivo_portal` com o token cru.
 
 Este middleware:
     1. Lê o cookie `clivo_portal`
@@ -1899,19 +1924,50 @@ class ClientPortalMiddleware:
         request.portal_client = None
 
         raw = request.COOKIES.get(PORTAL_COOKIE_NAME)
+
+        # Log apenas em DEBUG — silencioso em produção
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                "Portal middleware: cookie '%s' %s — path=%s",
+                PORTAL_COOKIE_NAME,
+                'PRESENTE' if raw else 'AUSENTE',
+                request.path,
+            )
+
         if raw:
             try:
                 session = ClientPortalSession.find_by_raw_token(raw)
-                if session and session.is_valid():
+
+                if session is None:
+                    logger.debug(
+                        "Portal middleware: token não encontrado no banco "
+                        "(path=%s)", request.path,
+                    )
+                elif not session.is_valid():
+                    logger.debug(
+                        "Portal middleware: sessão inválida (revoked=%s, "
+                        "expires=%s) — path=%s",
+                        session.revoked_at,
+                        session.expires_at,
+                        request.path,
+                    )
+                else:
                     request.portal_session = session
                     request.portal_client = session.client
+                    logger.debug(
+                        "Portal middleware: sessão resolvida para client=%s "
+                        "(path=%s)", session.client_id, request.path,
+                    )
             except Exception:
-                logger.exception("Falha ao resolver sessão do Portal")
+                logger.exception(
+                    "Falha ao resolver sessão do Portal (path=%s)",
+                    request.path,
+                )
 
         return self.get_response(request)
 
 ================================================================================
-ARQUIVO 18 DE 42
+ARQUIVO 18 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\clients\migrations
 ARQUIVO: __init__.py
@@ -1922,7 +1978,7 @@ LINHAS: 0
 
 
 ================================================================================
-ARQUIVO 19 DE 42
+ARQUIVO 19 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\clients\migrations
 ARQUIVO: 0001_initial.py
@@ -2210,7 +2266,7 @@ class Migration(migrations.Migration):
 
 
 ================================================================================
-ARQUIVO 20 DE 42
+ARQUIVO 20 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\clients\migrations
 ARQUIVO: 0002_alter_client_public_code_alter_client_status.py
@@ -2245,7 +2301,7 @@ class Migration(migrations.Migration):
 
 
 ================================================================================
-ARQUIVO 21 DE 42
+ARQUIVO 21 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\clients\migrations
 ARQUIVO: 0003_remove_clienttask_client_task_client__4d55e6_idx_and_more.py
@@ -2304,7 +2360,7 @@ class Migration(migrations.Migration):
 
 
 ================================================================================
-ARQUIVO 22 DE 42
+ARQUIVO 22 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\clients\models
 ARQUIVO: __init__.py
@@ -2332,7 +2388,7 @@ __all__ = [
 ]
 
 ================================================================================
-ARQUIVO 23 DE 42
+ARQUIVO 23 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\clients\models
 ARQUIVO: client.py
@@ -2467,7 +2523,7 @@ class Client(models.Model):
         super().save(*args, **kwargs)
 
 ================================================================================
-ARQUIVO 24 DE 42
+ARQUIVO 24 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\clients\models
 ARQUIVO: contact.py
@@ -2551,7 +2607,7 @@ class ClientContact(models.Model):
         return f"{self.name} ({self.get_role_display()})"
 
 ================================================================================
-ARQUIVO 25 DE 42
+ARQUIVO 25 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\clients\models
 ARQUIVO: note.py
@@ -2620,7 +2676,7 @@ class ClientNote(models.Model):
         return f"Nota de {author} sobre {self.client.name}"
 
 ================================================================================
-ARQUIVO 26 DE 42
+ARQUIVO 26 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\clients\models
 ARQUIVO: portal_access.py
@@ -2682,7 +2738,7 @@ class ClientPortalAccess(models.Model):
         return f"{self.client.name} @ {self.accessed_at}"
 
 ================================================================================
-ARQUIVO 27 DE 42
+ARQUIVO 27 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\clients\models
 ARQUIVO: portal_feedback.py
@@ -2788,7 +2844,7 @@ class ClientPortalFeedback(models.Model):
         return f"Feedback {self.kind} — {self.client.name}"
 
 ================================================================================
-ARQUIVO 28 DE 42
+ARQUIVO 28 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\clients\models
 ARQUIVO: portal_invitation.py
@@ -2886,7 +2942,7 @@ class ClientPortalInvitation(models.Model):
         return f"Convite {self.client.name} → {self.email} ({self.status})"
 
 ================================================================================
-ARQUIVO 29 DE 42
+ARQUIVO 29 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\clients\models
 ARQUIVO: portal_session.py
@@ -3020,7 +3076,7 @@ class ClientPortalSession(models.Model):
             return None
 
 ================================================================================
-ARQUIVO 30 DE 42
+ARQUIVO 30 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\clients
 ARQUIVO: permissions.py
@@ -3131,7 +3187,182 @@ class IsPortalSessionAuthenticated(BasePermission):
         return session.is_valid()
 
 ================================================================================
-ARQUIVO 31 DE 42
+ARQUIVO 31 DE 45
+================================================================================
+PASTA: C:\clivo-v1\apps\clients
+ARQUIVO: public.py
+TAMANHO: 4,89 KB
+EXTENSAO: .py
+LINHAS: 164
+================================================================================
+
+"""
+Contrato público do módulo `clients` para consumidores externos.
+
+REGRA
+-----
+Consumidores externos (ex.: `intelligence`) NÃO importam models de
+`clients` diretamente. Toda leitura passa por funções deste módulo,
+que devolvem estruturas serializáveis.
+
+ESCOPO E PERMISSÃO
+------------------
+Funções que retornam dados de notas recebem `workspace` explicitamente.
+Notas de outro workspace são descartadas.
+"""
+
+import hashlib
+import json
+from typing import Optional, Dict, List, Any
+
+from django.core.exceptions import ValidationError
+
+from apps.clients.models import Client
+
+
+# =========================================================================
+# SNAPSHOT DO CLIENTE
+# =========================================================================
+
+def get_client_snapshot(client_id) -> Optional[Dict[str, Any]]:
+    """
+    Devolve um snapshot serializável do cliente. Apenas dados brutos.
+
+    Retorna None para UUID inválido (ValidationError do Django, que
+    acontece na construção da query), para ID que não existe, ou
+    para qualquer valor que não converta em UUID.
+    """
+    try:
+        client = Client.objects.filter(id=client_id).first()
+    except (ValueError, TypeError, ValidationError):
+        return None
+    if client is None:
+        return None
+
+    return {
+        'id': str(client.id),
+        'workspace_id': str(client.workspace_id),
+        'name': client.name,
+        'email': client.email or '',
+        'phone': client.phone or '',
+        'status': client.status,
+        'context': client.context or {},
+        'updated_at': client.updated_at.isoformat(),
+    }
+
+
+def get_client_event_occurrence_id(client) -> str:
+    """
+    Gera uma occurrence_id estável a partir do updated_at do cliente.
+    Usado pelo IngestService para distinguir atualizações legítimas.
+
+    Mantido por compatibilidade. Para o contexto especificamente,
+    `get_client_context_hash` é semanticamente mais preciso (só muda
+    quando o CONTEÚDO muda, não a cada save).
+    """
+    return client.updated_at.isoformat()
+
+
+# =========================================================================
+# NOTAS
+# =========================================================================
+
+def get_client_notes_snapshot(
+    client_id,
+    workspace,
+) -> List[Dict[str, Any]]:
+    """
+    Lista notas do cliente no workspace, em formato serializável.
+
+    Retorna lista de:
+        {
+            'id': str,
+            'author_email': str | None,
+            'content': str,
+            'is_pinned': bool,
+            'created_at': str (ISO),
+            'updated_at': str (ISO),
+        }
+
+    Regras:
+        - Se o cliente não pertence ao workspace, retorna [].
+        - Nunca levanta para cliente inexistente ou UUID inválido.
+        - Não inclui notas de outros workspaces.
+    """
+    if workspace is None or not client_id:
+        return []
+
+    try:
+        client_ok = Client.objects.filter(
+            id=client_id, workspace=workspace,
+        ).exists()
+    except (ValueError, TypeError, ValidationError):
+        return []
+    if not client_ok:
+        return []
+
+    from apps.clients.models import ClientNote
+
+    try:
+        notes = (
+            ClientNote.objects
+            .filter(client_id=client_id)
+            .select_related('author')
+            .order_by('created_at')
+        )
+    except (ValueError, TypeError, ValidationError):
+        return []
+
+    return [
+        {
+            'id': str(n.id),
+            'author_email': n.author.email if n.author else None,
+            'content': n.content,
+            'is_pinned': bool(n.is_pinned),
+            'created_at': n.created_at.isoformat(),
+            'updated_at': n.updated_at.isoformat(),
+        }
+        for n in notes
+    ]
+
+
+# =========================================================================
+# HASH DE CONTEXTO
+# =========================================================================
+
+def get_client_context_hash(client_id) -> str:
+    """
+    Gera um hash SHA-256 estável do `Client.context`.
+
+    Retorna '' se o cliente não existe, se o UUID é inválido, ou se
+    `context` é vazio. Nesse caso o chamador usa o `updated_at` como
+    fallback.
+
+    Usado como parte do `occurrence_id` para `portal.context_edited`:
+    só muda quando o CONTEÚDO do contexto muda, não em qualquer save.
+    """
+    try:
+        client = Client.objects.filter(id=client_id).only('context').first()
+    except (ValueError, TypeError, ValidationError):
+        return ''
+    if client is None:
+        return ''
+
+    context = client.context or {}
+    if not context:
+        return ''
+
+    try:
+        serialized = json.dumps(
+            context, sort_keys=True, default=str,
+        ).encode('utf-8')
+    except (TypeError, ValueError):
+        return ''
+
+    return hashlib.sha256(serialized).hexdigest()
+
+================================================================================
+ARQUIVO 32 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\clients\queries
 ARQUIVO: __init__.py
@@ -3147,7 +3378,7 @@ __all__ = [
 ]
 
 ================================================================================
-ARQUIVO 32 DE 42
+ARQUIVO 33 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\clients\queries
 ARQUIVO: client_queries.py
@@ -3208,7 +3439,7 @@ class ClientQueries:
         ).count()
 
 ================================================================================
-ARQUIVO 33 DE 42
+ARQUIVO 34 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\clients\services
 ARQUIVO: __init__.py
@@ -3240,7 +3471,7 @@ __all__ = [
 ]
 
 ================================================================================
-ARQUIVO 34 DE 42
+ARQUIVO 35 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\clients\services
 ARQUIVO: client_service.py
@@ -3442,7 +3673,7 @@ class ClientService:
         )
 
 ================================================================================
-ARQUIVO 35 DE 42
+ARQUIVO 36 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\clients\services
 ARQUIVO: contact_service.py
@@ -3542,7 +3773,7 @@ class ContactService:
         contact.delete()
 
 ================================================================================
-ARQUIVO 36 DE 42
+ARQUIVO 37 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\clients\services
 ARQUIVO: note_service.py
@@ -3642,7 +3873,7 @@ class NoteService:
         )
 
 ================================================================================
-ARQUIVO 37 DE 42
+ARQUIVO 38 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\clients\services
 ARQUIVO: portal_invitation_service.py
@@ -3825,7 +4056,7 @@ class PortalInvitationService:
         )
 
 ================================================================================
-ARQUIVO 38 DE 42
+ARQUIVO 39 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\clients\services
 ARQUIVO: portal_service.py
@@ -3956,7 +4187,7 @@ class PortalService:
         )
 
 ================================================================================
-ARQUIVO 39 DE 42
+ARQUIVO 40 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\clients\services
 ARQUIVO: public_code.py
@@ -4009,35 +4240,542 @@ def normalize_public_code(raw: str) -> str:
     return raw
 
 ================================================================================
-ARQUIVO 40 DE 42
+ARQUIVO 41 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\clients
 ARQUIVO: signals.py
-TAMANHO: 0,50 KB
+TAMANHO: 6,65 KB
 EXTENSAO: .py
-LINHAS: 17
+LINHAS: 186
 ================================================================================
 
 """
 Signals do módulo clients.
 
-V1: nenhum signal ativo por padrão.
-O módulo emite eventos via `ClientEventEmitter` (django.dispatch.Signal).
-Consumidores futuros (Intelligence, Notifications, JARVIS) podem se
-conectar a `apps.clients.events.client_event`.
+PUBLICAÇÃO PARA INTELLIGENCE
+----------------------------
+O `ClientEventEmitter` publica `client_event` (django.dispatch.Signal).
+Este módulo escuta e encaminha os eventos relevantes para
+`IngestService`, via `transaction.on_commit`.
+
+Eventos operacionais (`portal.invitation_sent`, `portal.opened`,
+`portal.feedback_received`) NÃO são encaminhados — não mudam o
+conhecimento do cliente.
+
+`occurrence_id` para `client.updated` = `updated_at` do cliente.
+Para eventos de nota de CLIENTE = `note_id:updated_at`. Isso
+distingue edições legítimas da mesma nota.
+
+NOTAS DE CLIENTE vs NOTAS DE BRIEFING
+-------------------------------------
+`ClientNote` (este módulo) NÃO é `BriefingNote` (do app `briefings`).
+Notas de cliente usam `SOURCE_KIND_CLIENT_NOTE_*` no `InsightEvent`.
+Antes deste ajuste, `note.deleted` era mapeado erroneamente para
+`SOURCE_KIND_BRIEFING_NOTE_DELETED` — o `insight` do cliente
+acabava interpretado como origem de briefing, o que corrompia a
+reconciliação.
+
+EXCLUSÃO DE CLIENTE
+-------------------
+`Client` cascateia em `Briefing`, `ClientNote`, `ClientPortalSession`,
+etc. O `InsightItem` do cliente tem `on_delete=CASCADE` no FK
+`client` — excluir o cliente DESTRÓI os insights. Este signal
+publica um evento de invalidação `pre_delete`, mas a preservação
+histórica real exigiria mudar o FK em `intelligence`. Documentado
+como pendência — não corrigido aqui porque o FK vive em
+`intelligence`.
 """
 
-# Exemplo de conexão futura (comentado):
-#
-# from apps.clients.events import client_event
-# from django.dispatch import receiver
-#
-# @receiver(client_event)
-# def on_client_event(sender, signal_name, client_id, **kwargs):
-#     ...
+import logging
+
+from django.db import transaction
+from django.db.models.signals import pre_delete
+from django.dispatch import receiver
+
+from apps.clients.events import client_event
+from apps.clients.models import Client
+
+logger = logging.getLogger('clients')
+
+
+# Eventos que alimentam o conhecimento do cliente.
+_INGESTED_SIGNALS = frozenset({
+    'client.updated',
+    'note.created',
+    'note.updated',
+    'note.deleted',
+    'portal.context_edited',
+})
+
+
+def _map_to_insight_source(signal_name: str) -> str:
+    """
+    Traduz o sinal de `clients` para `InsightEvent.SOURCE_KIND_*`.
+    """
+    from apps.intelligence.models import InsightEvent
+
+    mapping = {
+        'client.updated': InsightEvent.SOURCE_KIND_CLIENT_UPDATED,
+        'note.created': InsightEvent.SOURCE_KIND_CLIENT_NOTE_CREATED,
+        'note.updated': InsightEvent.SOURCE_KIND_CLIENT_NOTE_UPDATED,
+        'note.deleted': InsightEvent.SOURCE_KIND_CLIENT_NOTE_DELETED,
+        'portal.context_edited': InsightEvent.SOURCE_KIND_CLIENT_CONTEXT_UPDATED,
+    }
+    return mapping.get(signal_name, '')
+
+
+@receiver(client_event)
+def forward_client_event_to_intelligence(
+    sender, signal_name, client_id, client_name, actor_email,
+    occurred_at, **kwargs,
+):
+    """
+    Encaminha o evento de domínio para `IngestService`.
+
+    Best-effort: falha de ingestão não derruba a operação de origem.
+    """
+    if signal_name not in _INGESTED_SIGNALS:
+        return
+
+    source_kind = _map_to_insight_source(signal_name)
+    if not source_kind:
+        return
+
+    # occurrence_id: distinguir edições legítimas sucessivas.
+    #   - note.*: usa note_id + updated_at (enviados no payload pelo
+    #     ClientEventEmitter).
+    #   - demais: usa occurred_at (timestamp do signal).
+    note_id = kwargs.get('note_id') or ''
+    if signal_name.startswith('note.') and note_id:
+        occurrence_id = f'{note_id}:{occurred_at.isoformat() if occurred_at else ""}'
+        source_ref = str(note_id)
+    elif signal_name == 'portal.context_edited':
+        # Hash do contexto é semanticamente mais preciso que o
+        # updated_at do cliente: só muda quando o CONTEÚDO muda.
+        from apps.clients.public import get_client_context_hash
+        context_hash = get_client_context_hash(client_id) or ''
+        occurrence_id = (
+            f'{occurred_at.isoformat() if occurred_at else ""}:'
+            f'{context_hash}'
+        )
+        source_ref = ''
+    else:
+        occurrence_id = (
+            f'{signal_name}:{occurred_at.isoformat() if occurred_at else ""}'
+        )
+        source_ref = ''
+
+    def _ingest():
+        try:
+            from apps.clients.models import Client
+            from apps.intelligence.services import IngestService
+
+            client = Client.objects.filter(id=client_id).first()
+            if client is None:
+                return
+
+            IngestService.ingest_change_event(
+                workspace_id=client.workspace_id,
+                client_id=client.id,
+                briefing_id=None,  # cliente é transversal a briefings
+                source_kind=source_kind,
+                source_ref=source_ref,
+                occurrence_id=occurrence_id,
+                data_version=client.updated_at.isoformat(),
+            )
+        except Exception:
+            logger.exception(
+                'Falha ao publicar client_event=%s (client=%s) '
+                'para intelligence',
+                signal_name, client_id,
+            )
+
+    transaction.on_commit(_ingest)
+
+
+@receiver(pre_delete, sender=Client)
+def publish_client_deletion_invalidation(sender, instance, **kwargs):
+    """
+    Publica um evento de invalidação quando um cliente é excluído.
+
+    Executado ANTES do CASCADE. Como `IngestService` usa
+    `on_commit`, a ingestão só roda DEPOIS do DELETE.
+
+    AVISO: o `InsightItem.client` FK é `on_delete=CASCADE`. Neste
+    momento, excluir o `Client` DESTRÓI os insights do cliente.
+    Este evento serve para o `intelligence` reagir (se um dia o FK
+    virar PROTECT ou SET_NULL), mas não previne a perda. A
+    preservação real exigiria mudar o FK em `intelligence`.
+    """
+    client_id = instance.id
+    workspace_id = instance.workspace_id
+    updated_at = instance.updated_at.isoformat() if instance.updated_at else ''
+
+    def _ingest():
+        try:
+            from apps.intelligence.services import IngestService
+            from apps.intelligence.models import InsightEvent
+
+            IngestService.ingest_change_event(
+                workspace_id=workspace_id,
+                client_id=client_id,
+                briefing_id=None,
+                source_kind=InsightEvent.SOURCE_KIND_CLIENT_UPDATED,
+                source_ref=f'client.deleted:{client_id}',
+                occurrence_id=(
+                    f'client.deleted:{client_id}:'
+                    f'{updated_at or "unknown"}'
+                ),
+                data_version=updated_at,
+            )
+        except Exception:
+            logger.exception(
+                'Falha ao publicar invalidação de client=%s',
+                client_id,
+            )
+
+    transaction.on_commit(_ingest)
 
 ================================================================================
-ARQUIVO 41 DE 42
+ARQUIVO 42 DE 45
+================================================================================
+PASTA: C:\clivo-v1\apps\clients\tests
+ARQUIVO: test_clients_public_contract.py
+TAMANHO: 4,23 KB
+EXTENSAO: .py
+LINHAS: 141
+================================================================================
+
+"""
+Testes do contrato público de `clients`.
+
+Cobrem:
+    - `get_client_snapshot`: continua estável.
+    - `get_client_notes_snapshot`:
+        * retorna notas do cliente no workspace;
+        * descarta cross-workspace;
+        * devolve [] para cliente inexistente.
+    - `get_client_context_hash`:
+        * muda quando o contexto muda;
+        * não muda em save sem alterar `context`;
+        * devolve '' para cliente inexistente.
+"""
+
+import pytest
+
+from apps.clients import public as clients_public
+
+
+@pytest.fixture
+def workspace_a(db):
+    from apps.workspaces.models import Workspace
+    return Workspace.objects.create(name='A', slug='ws-cli-a')
+
+
+@pytest.fixture
+def workspace_b(db):
+    from apps.workspaces.models import Workspace
+    return Workspace.objects.create(name='B', slug='ws-cli-b')
+
+
+@pytest.fixture
+def client_a(db, workspace_a):
+    from apps.clients.models import Client
+    return Client.objects.create(
+        workspace=workspace_a, name='CA', email='a@a.com',
+        public_code='CLI-PUB001',
+    )
+
+
+@pytest.fixture
+def client_b(db, workspace_b):
+    from apps.clients.models import Client
+    return Client.objects.create(
+        workspace=workspace_b, name='CB', email='b@b.com',
+        public_code='CLI-PUB002',
+    )
+
+
+@pytest.fixture
+def user(db):
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    return User.objects.create_user(email='u@pub.com', password='x')
+
+
+@pytest.mark.django_db
+class TestClientSnapshot:
+
+    def test_snapshot_returns_data(self, client_a):
+        snap = clients_public.get_client_snapshot(client_a.id)
+        assert snap is not None
+        assert snap['id'] == str(client_a.id)
+        assert snap['name'] == 'CA'
+        assert snap['workspace_id'] == str(client_a.workspace_id)
+
+    def test_snapshot_returns_none_for_unknown(self):
+        import uuid
+        assert clients_public.get_client_snapshot(uuid.uuid4()) is None
+
+    def test_snapshot_returns_none_for_invalid_uuid(self):
+        assert clients_public.get_client_snapshot('not-uuid') is None
+
+
+@pytest.mark.django_db
+class TestClientNotesSnapshot:
+
+    def test_returns_notes_of_own_workspace(
+        self, client_a, user,
+    ):
+        from apps.clients.services import NoteService
+        NoteService.create_note(
+            client=client_a, author=user, content='n1',
+        )
+        notes = clients_public.get_client_notes_snapshot(
+            client_a.id, client_a.workspace,
+        )
+        assert len(notes) == 1
+        assert notes[0]['content'] == 'n1'
+        assert notes[0]['author_email'] == 'u@pub.com'
+
+    def test_other_workspace_returns_empty(
+        self, client_a, workspace_b,
+    ):
+        notes = clients_public.get_client_notes_snapshot(
+            client_a.id, workspace_b,
+        )
+        assert notes == []
+
+    def test_unknown_client_returns_empty(self, workspace_a):
+        import uuid
+        notes = clients_public.get_client_notes_snapshot(
+            uuid.uuid4(), workspace_a,
+        )
+        assert notes == []
+
+
+@pytest.mark.django_db
+class TestClientContextHash:
+
+    def test_empty_context_returns_empty_string(self, client_a):
+        assert clients_public.get_client_context_hash(client_a.id) == ''
+
+    def test_context_changes_hash(self, client_a):
+        client_a.context = {'a': 1}
+        client_a.save(update_fields=['context'])
+        h1 = clients_public.get_client_context_hash(client_a.id)
+
+        client_a.context = {'a': 2}
+        client_a.save(update_fields=['context'])
+        h2 = clients_public.get_client_context_hash(client_a.id)
+
+        assert h1
+        assert h2
+        assert h1 != h2
+
+    def test_same_context_same_hash(self, client_a):
+        client_a.context = {'a': 1, 'b': 2}
+        client_a.save(update_fields=['context'])
+        h1 = clients_public.get_client_context_hash(client_a.id)
+
+        # Re-save com o mesmo conteúdo
+        client_a.save(update_fields=['context'])
+        h2 = clients_public.get_client_context_hash(client_a.id)
+
+        assert h1 == h2
+
+    def test_unknown_client_returns_empty_string(self):
+        import uuid
+        assert clients_public.get_client_context_hash(uuid.uuid4()) == ''
+
+================================================================================
+ARQUIVO 43 DE 45
+================================================================================
+PASTA: C:\clivo-v1\apps\clients\tests
+ARQUIVO: test_signals_ingest.py
+TAMANHO: 5,44 KB
+EXTENSAO: .py
+LINHAS: 175
+================================================================================
+
+"""
+Testes do encaminhamento de eventos de `clients` para o
+`IngestService`.
+
+Cobrem:
+    - `client.updated` chega ao `IngestService` via `on_commit`.
+    - `note.created/updated/deleted` chegam com o `source_kind`
+      correto (NÃO briefing).
+    - `pre_delete` de `Client` publica invalidação.
+
+Não testa o `IngestService` em si — esse já tem seus testes em
+`intelligence`. Aqui validamos a PONTE.
+
+Usa `django_capture_on_commit_callbacks` (fixture do pytest-django
+4.4+) para capturar os callbacks de `transaction.on_commit`.
+"""
+
+import pytest
+from unittest.mock import patch
+
+
+@pytest.fixture
+def workspace(db):
+    from apps.workspaces.models import Workspace
+    return Workspace.objects.create(name='WS', slug='ws-sig')
+
+
+@pytest.fixture
+def client_obj(db, workspace):
+    from apps.clients.models import Client
+    return Client.objects.create(
+        workspace=workspace, name='Cli', email='c@sig.com',
+        public_code='CLI-SIG001',
+    )
+
+
+@pytest.fixture
+def user(db):
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    return User.objects.create_user(email='u@sig.com', password='x')
+
+
+@pytest.mark.django_db
+class TestClientUpdatedIngest:
+
+    def test_client_updated_publishes_on_commit(
+        self, client_obj, user, django_capture_on_commit_callbacks,
+    ):
+        from apps.clients.services import ClientService
+
+        with django_capture_on_commit_callbacks(execute=False) as callbacks:
+            ClientService.update_client(
+                client=client_obj, actor=user, name='Novo Nome',
+            )
+
+        assert len(callbacks) >= 1
+
+        with patch(
+            'apps.intelligence.services.IngestService.ingest_change_event',
+        ) as mock_ingest:
+            for cb in callbacks:
+                cb()
+
+        assert mock_ingest.called
+        kw = mock_ingest.call_args.kwargs
+        assert kw['source_kind'] == 'client.updated'
+        assert kw['client_id'] == client_obj.id
+
+
+@pytest.mark.django_db
+class TestClientNoteIngest:
+
+    def test_note_created_uses_client_note_kind(
+        self, client_obj, user, django_capture_on_commit_callbacks,
+    ):
+        from apps.clients.services import NoteService
+
+        with django_capture_on_commit_callbacks(execute=False) as callbacks:
+            NoteService.create_note(
+                client=client_obj, author=user, content='n1',
+            )
+
+        with patch(
+            'apps.intelligence.services.IngestService.ingest_change_event',
+        ) as mock_ingest:
+            for cb in callbacks:
+                cb()
+
+        assert mock_ingest.called
+        kw = mock_ingest.call_args.kwargs
+        assert kw['source_kind'] == 'client.note.created'
+
+    def test_note_updated_uses_client_note_kind(
+        self, client_obj, user, django_capture_on_commit_callbacks,
+    ):
+        from apps.clients.services import NoteService
+
+        note = NoteService.create_note(
+            client=client_obj, author=user, content='v1',
+        )
+
+        with django_capture_on_commit_callbacks(execute=False) as callbacks:
+            NoteService.update_note(
+                note=note, actor=user, content='v2',
+            )
+
+        with patch(
+            'apps.intelligence.services.IngestService.ingest_change_event',
+        ) as mock_ingest:
+            for cb in callbacks:
+                cb()
+
+        assert mock_ingest.called
+        kw = mock_ingest.call_args.kwargs
+        assert kw['source_kind'] == 'client.note.updated'
+        assert kw['source_ref'] == str(note.id)
+
+    def test_note_deleted_uses_client_note_kind(
+        self, client_obj, user, django_capture_on_commit_callbacks,
+    ):
+        from apps.clients.services import NoteService
+
+        note = NoteService.create_note(
+            client=client_obj, author=user, content='x',
+        )
+        note_id = note.id
+
+        with django_capture_on_commit_callbacks(execute=False) as callbacks:
+            NoteService.delete_note(note=note)
+
+        with patch(
+            'apps.intelligence.services.IngestService.ingest_change_event',
+        ) as mock_ingest:
+            for cb in callbacks:
+                cb()
+
+        assert mock_ingest.called
+        kw = mock_ingest.call_args.kwargs
+        assert kw['source_kind'] == 'client.note.deleted'
+        assert kw['source_ref'] == str(note_id)
+
+
+@pytest.mark.django_db
+class TestClientDeletionIngest:
+
+    def test_delete_schedules_on_commit(
+        self, client_obj, django_capture_on_commit_callbacks,
+    ):
+        with django_capture_on_commit_callbacks(execute=False) as callbacks:
+            client_obj.delete()
+
+        assert len(callbacks) >= 1
+
+    def test_delete_publishes_invalidation(
+        self, client_obj, django_capture_on_commit_callbacks,
+    ):
+        client_id = client_obj.id
+        workspace_id = client_obj.workspace_id
+
+        with django_capture_on_commit_callbacks(execute=False) as callbacks:
+            client_obj.delete()
+
+        with patch(
+            'apps.intelligence.services.IngestService.ingest_change_event',
+        ) as mock_ingest:
+            for cb in callbacks:
+                cb()
+
+        assert mock_ingest.called
+        kw = mock_ingest.call_args.kwargs
+        assert kw['client_id'] == client_id
+        assert kw['workspace_id'] == workspace_id
+        assert kw['source_kind'] == 'client.updated'
+        assert 'client.deleted' in kw['source_ref']
+
+================================================================================
+ARQUIVO 44 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\clients
 ARQUIVO: urls.py
@@ -4115,7 +4853,7 @@ urlpatterns = [
 ]
 
 ================================================================================
-ARQUIVO 42 DE 42
+ARQUIVO 45 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\clients
 ARQUIVO: views.py
@@ -4149,7 +4887,7 @@ class ClientesView(View):
     def get(self, request):
         if not request.user.is_authenticated:
             return redirect('/login/')
-        return render(request, 'clientes.html')
+        return render(request, 'cliente.html')
 
 
 # =========================================================================

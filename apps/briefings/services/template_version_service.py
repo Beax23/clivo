@@ -64,6 +64,7 @@ from apps.briefings.models import (
 from apps.briefings.exceptions import (
     BriefingError,
     BriefingTemplateNotFoundError,
+    BriefingTemplateVersionNotFoundError,
 )
 
 logger = logging.getLogger('briefings')
@@ -92,7 +93,9 @@ class BriefingTemplateVersionService:
         except (ValueError, TypeError):
             version = None
         if version is None:
-            raise BriefingError('Versão não encontrada.')
+            raise BriefingTemplateVersionNotFoundError(
+                'Versão não encontrada.'
+            )
         return version
 
     @staticmethod

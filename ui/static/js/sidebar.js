@@ -1,9 +1,28 @@
 /* =========================================================================
    SIDEBAR — Application Shell (JS)
+   v5 — leitura do workspace_public_id via DOM (#app / body) e função helper
    ========================================================================= */
 
 (function() {
     'use strict';
+
+    // ============================================================
+    // WORKSPACE PUBLIC ID — leitura direta do DOM
+    // O middleware `WorkspaceContextMiddleware` injeta o valor no
+    // <body> e no <div id="app">. Esses elementos NÃO são tocados
+    // pelo Soft Nav, então o valor está sempre disponível.
+    // ============================================================
+    function getWorkspacePublicId() {
+        const appEl = document.getElementById('app');
+        if (appEl && appEl.dataset.workspacePublicId) {
+            return appEl.dataset.workspacePublicId;
+        }
+        const bodyEl = document.body;
+        if (bodyEl && bodyEl.dataset.workspacePublicId) {
+            return bodyEl.dataset.workspacePublicId;
+        }
+        return '';
+    }
 
     window.Clivo = window.Clivo || {
         user: null,
@@ -21,11 +40,11 @@
 
     window.ClivoPages = window.ClivoPages || {};
 
-    (function readWorkspacePublicIdFromUrl() {
-        const appEl = document.getElementById('app');
-        const raw = appEl ? (appEl.dataset.workspacePublicId || '') : '';
-        window.Clivo.workspacePublicIdFromUrl = raw || null;
-    })();
+    // Snapshot inicial (compatibilidade com código legado).
+    window.Clivo.workspacePublicIdFromUrl = getWorkspacePublicId() || null;
+
+    // Expõe helper para uso externo (mesa.js, cliente.js).
+    window.clivoGetWorkspacePublicId = getWorkspacePublicId;
 
     // ============================================================
     // ASSET LOADER
@@ -646,7 +665,6 @@
     }
 
     async function gBriefOpenModal() {
-        // Garante que o form e o botão estão ligados mesmo após soft-nav
         if (!gBrief.root || !document.body.contains(gBrief.root)) {
             gBriefSetupModal();
         }
@@ -886,9 +904,6 @@
         if (gBrief.clientSearchClear) gBrief.clientSearchClear.classList.add('hidden');
     }
 
-    // ------------------------------------------------------------
-    // SUBMIT DO FORM DE BRIEFING — handler único e idempotente
-    // ------------------------------------------------------------
     async function gBriefSubmitHandler(e) {
         if (e) e.preventDefault();
 
@@ -1080,16 +1095,10 @@
             });
         }
 
-        // Submit — ligado no form E no botão, com flag de idempotência.
         if (!gBrief.submitBound) {
             gBrief.form.addEventListener('submit', gBriefSubmitHandler);
             if (gBrief.submitBtn) {
-                // O botão fica fora do form (no footer). O form="..." nativo
-                // submete no clique, mas garantimos também via listener.
                 gBrief.submitBtn.addEventListener('click', function(ev) {
-                    // Só intercepta se o form association não disparar submit.
-                    // Prevenimos o clique para evitar duplo submit nativo,
-                    // e chamamos o handler diretamente.
                     ev.preventDefault();
                     gBriefSubmitHandler(ev);
                 });
@@ -1134,43 +1143,99 @@
     }
 
     // ============================================================
+    // NAV — SET ACTIVE
+    // ============================================================
+
+    const NAV_DEFS = [
+        { key: 'mesa',        prefixes: ['/mesa'] },
+        { key: 'briefings',   prefixes: ['/fluxo'] },
+        { key: 'clientes',    prefixes: ['/clientes'] },
+        { key: 'projetos',    prefixes: ['/projetos'] },
+        { key: 'documents',   prefixes: ['/documentos', '/documents'] },
+        { key: 'financeiro',  prefixes: ['/economia', '/financeiro'] },
+        { key: 'propostas',   prefixes: ['/propostas'] },
+        { key: 'referencias', prefixes: ['/referencias', '/referências'] },
+    ];
+
+    function normalizePath(input) {
+        if (!input) return '/';
+        let s = String(input);
+        try {
+            if (s.indexOf('http://') === 0 || s.indexOf('https://') === 0) {
+                s = new URL(s).pathname;
+            } else if (s.indexOf('//') === 0) {
+                s = new URL(window.location.protocol + s).pathname;
+            } else if (s.charAt(0) !== '/') {
+                s = '/' + s;
+            }
+        } catch (e) {
+            s = s.replace(/^https?:\/\/[^/]+/i, '');
+            if (s.charAt(0) !== '/') s = '/' + s;
+        }
+        s = s.split('#')[0].split('?')[0];
+        if (s.length > 1 && s.charAt(s.length - 1) === '/') {
+            s = s.slice(0, -1);
+        }
+        return s || '/';
+    }
+
+    function isPathUnder(path, prefix) {
+        const p = normalizePath(prefix);
+        if (path === p) return true;
+        return path.indexOf(p + '/') === 0;
+    }
+
+    function navKeyForPath(rawPath) {
+        const path = normalizePath(rawPath);
+        for (let i = 0; i < NAV_DEFS.length; i++) {
+            const def = NAV_DEFS[i];
+            for (let j = 0; j < def.prefixes.length; j++) {
+                if (isPathUnder(path, def.prefixes[j])) return def.key;
+            }
+        }
+        return null;
+    }
+
+    function setActiveNav(rawPath) {
+        const links = document.querySelectorAll('.sidebar-nav a');
+        links.forEach(function(l) { l.classList.remove('active'); });
+
+        const path = normalizePath(rawPath);
+        const key = navKeyForPath(path);
+
+        let matched = null;
+
+        if (key) {
+            for (let i = 0; i < links.length; i++) {
+                if (links[i].dataset.nav === key) { matched = links[i]; break; }
+            }
+        }
+
+        if (!matched) {
+            for (let i = 0; i < links.length; i++) {
+                const href = links[i].getAttribute('href');
+                if (!href || href === '#') continue;
+                const hrefPath = normalizePath(href);
+                if (isPathUnder(path, hrefPath)) { matched = links[i]; break; }
+            }
+        }
+
+        if (matched) matched.classList.add('active');
+
+        const cfgBtn = document.getElementById('configToggle');
+        if (cfgBtn) {
+            if (isPathUnder(path, '/configuracoes')) cfgBtn.classList.add('is-active');
+            else cfgBtn.classList.remove('is-active');
+        }
+    }
+
+    // ============================================================
     // SOFT NAV
     // ============================================================
     const navProgress = document.getElementById('softNavProgress');
     const pageCache = new Map();
     const CACHE_TTL_MS = 60000;
     let isNavigating = false;
-
-    function findLinkByPath(path) {
-        let found = null;
-        document.querySelectorAll('.sidebar-nav a[href]').forEach(function(a) {
-            const href = a.getAttribute('href');
-            if (!href || href === '#') return;
-            if (href === path || href === path + '/') {
-                found = a;
-            } else if (a.dataset.nav === 'mesa' && path.indexOf('/mesa/') === 0) {
-                found = a;
-            } else if (a.dataset.nav === 'clientes' && path.indexOf('/clientes') === 0) {
-                found = a;
-            } else if (a.dataset.nav === 'briefings' && path.indexOf('/fluxo') === 0) {
-                found = a;
-            }
-        });
-        return found;
-    }
-
-    function setActiveNav(path) {
-        document.querySelectorAll('.sidebar-nav a').forEach(function(l) {
-            l.classList.remove('active');
-        });
-        const link = findLinkByPath(path);
-        if (link) link.classList.add('active');
-        const cfgBtn = document.getElementById('configToggle');
-        if (cfgBtn) {
-            if (path.indexOf('/configuracoes') === 0) cfgBtn.classList.add('is-active');
-            else cfgBtn.classList.remove('is-active');
-        }
-    }
 
     function extractMain(html) {
         const tpl = document.createElement('template');
@@ -1268,11 +1333,16 @@
             curMain.innerHTML = page.mainHTML;
             curMain.dataset.page = newPage || '';
             window.Clivo.currentPage = newPage;
+            // Refresh do public_id (o #app e o <body> NÃO mudam no soft nav,
+            // mas mantemos o snapshot coerente por segurança).
+            window.Clivo.workspacePublicIdFromUrl = getWorkspacePublicId() || null;
             if (page.title) document.title = page.title;
-            setActiveNav(page.finalUrl || href);
+
+            const finalUrl = page.finalUrl || href;
+            setActiveNav(finalUrl);
+
             if (!opts.replace) {
-                const displayUrl = page.finalUrl || href;
-                history.pushState({ soft: true, path: displayUrl }, '', displayUrl);
+                history.pushState({ soft: true, path: finalUrl }, '', finalUrl);
             }
             if (newPage && window.ClivoPages[newPage] &&
                 typeof window.ClivoPages[newPage].mount === 'function') {
@@ -1304,7 +1374,7 @@
     window.clivoSoftNavigate = softNavigate;
 
     // ============================================================
-    // NAV
+    // NAV BIND
     // ============================================================
     function bindSidebarNav() {
         document.querySelectorAll('.sidebar-nav a').forEach(function(link) {
@@ -1334,7 +1404,7 @@
                 e.preventDefault();
 
                 if (link.classList.contains('active') &&
-                    currentHref === window.location.pathname) {
+                    normalizePath(window.location.pathname) === normalizePath(currentHref)) {
                     if (isMobile()) closeSidebar();
                     return;
                 }
@@ -1475,6 +1545,7 @@
         if (!workspace || !workspace.public_id) return;
         const link = document.getElementById('navMesaLink');
         if (link) link.setAttribute('href', '/mesa/' + workspace.public_id + '/');
+        setActiveNav(window.location.pathname);
     }
 
     // ============================================================
@@ -1581,7 +1652,9 @@
             window.clivoRefreshIcons();
             await loadUserAndWorkspace();
             await loadCapabilities();
+
             setActiveNav(window.location.pathname);
+
             const curMain = document.getElementById('mainContent');
             const initialPage = curMain && curMain.dataset.page;
             window.Clivo.currentPage = initialPage || null;
@@ -1591,6 +1664,10 @@
                 catch (e) { console.error('mount inicial falhou:', e); }
             }
             requestAnimationFrame(function() { window.clivoRefreshIcons(); });
+
+            setTimeout(function() {
+                setActiveNav(window.location.pathname);
+            }, 50);
 
             setTimeout(function() {
                 preloadPage('/clientes/');

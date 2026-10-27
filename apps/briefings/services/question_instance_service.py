@@ -1,30 +1,42 @@
 """
-BriefingQuestionInstanceService — CRUD de perguntas exclusivas.
+BriefingQuestionInstanceService — CRUD de perguntas complementares.
 
 REGRA ARQUITETURAL
 ------------------
-Perguntas exclusivas só podem ser adicionadas/removidas enquanto o
-briefing NÃO tem nenhuma resposta (`is_snapshot_locked()` retorna
-False).
+Perguntas complementares vão SEMPRE para o `supplementary_snapshot`,
+nunca reescrevem o `structure_snapshot` original.
 
-Quando a primeira resposta chega, o snapshot do briefing já
-incorporou as custom questions — e a partir daí qualquer alteração
-invalidaria a estrutura que o cliente está vendo.
+Podem ser adicionadas em qualquer momento — inclusive quando o
+briefing já tem respostas ou está `completed`. NÃO são bloqueadas
+por `is_snapshot_locked()`.
+
+Exceção: briefings `cancelled` NÃO aceitam perguntas complementares.
+
+REMOÇÃO
+-------
+Remoção é DELETE real. Sem soft delete.
+
+Perguntas JÁ RESPONDIDAS não podem ser removidas. Regra de negócio:
+o arquiteto deve adicionar uma nova pergunta complementar para
+corrigir, e a resposta antiga permanece no histórico.
+
+Perguntas NÃO respondidas podem ser removidas. O evento
+`custom_question_removed` guarda o snapshot completo da pergunta
+removida no `content`, preservando o histórico.
 """
 
 import logging
 
 from django.db import transaction
-from django.utils import timezone
 
 from apps.briefings.models import (
     Briefing,
+    BriefingAnswer,
+    BriefingEvent,
     BriefingQuestionInstance,
 )
-from apps.briefings.exceptions import (
-    BriefingError,
-    BriefingNotFoundError,
-)
+from apps.briefings.exceptions import BriefingError
+from apps.briefings.services.event_service import BriefingEventService
 
 logger = logging.getLogger('briefings')
 
@@ -32,30 +44,38 @@ logger = logging.getLogger('briefings')
 class BriefingQuestionInstanceService:
 
     @staticmethod
-    def _assert_briefing_editable(briefing: Briefing) -> None:
+    def _assert_briefing_accepts_supplementary(briefing: Briefing) -> None:
         """
-        Levanta BriefingError se o briefing não aceita mais edições
-        estruturais.
+        Levanta BriefingError se o briefing não aceita perguntas
+        complementares no estado atual.
+
+        Permitido em: in_progress, paused, completed.
+        Bloqueado em: cancelled.
         """
-        if briefing.status == Briefing.STATUS_COMPLETED:
+        if briefing.status == Briefing.STATUS_CANCELLED:
             raise BriefingError(
-                'Este briefing já foi concluído. Não é possível '
-                'adicionar ou remover perguntas.'
+                'Este briefing foi cancelado. Não é possível adicionar '
+                'ou remover perguntas complementares.'
             )
-        if briefing.status == Briefing.STATUS_CLOSED:
+
+    @staticmethod
+    def _assert_instance_not_answered(
+        briefing: Briefing,
+        instance_id,
+    ) -> None:
+        """
+        Levanta BriefingError se a pergunta já foi respondida.
+        Perguntas respondidas não podem ser editadas nem removidas.
+        """
+        exists = BriefingAnswer.objects.filter(
+            briefing=briefing,
+            question_id=instance_id,
+        ).exists()
+        if exists:
             raise BriefingError(
-                'Este briefing foi encerrado. Não é possível '
-                'adicionar ou remover perguntas.'
-            )
-        if briefing.status == Briefing.STATUS_EXPIRED:
-            raise BriefingError(
-                'Este briefing expirou. Não é possível '
-                'adicionar ou remover perguntas.'
-            )
-        if briefing.is_snapshot_locked():
-            raise BriefingError(
-                'O cliente já começou a responder. Não é possível '
-                'alterar a estrutura agora.'
+                'Esta pergunta já foi respondida e não pode ser '
+                'alterada. Para corrigir, adicione uma nova pergunta '
+                'complementar.'
             )
 
     # ------------------------------------------------------------------
@@ -96,7 +116,9 @@ class BriefingQuestionInstanceService:
         is_required: bool = True,
         actor=None,
     ) -> BriefingQuestionInstance:
-        BriefingQuestionInstanceService._assert_briefing_editable(briefing)
+        BriefingQuestionInstanceService._assert_briefing_accepts_supplementary(
+            briefing,
+        )
 
         text = (text or '').strip()
         if not text:
@@ -106,18 +128,21 @@ class BriefingQuestionInstanceService:
         if not section_ref:
             raise BriefingError('A seção é obrigatória.')
 
-        # Confirma que a seção existe no snapshot do briefing
-        snapshot = briefing.structure_snapshot or {}
-        section_ids = {
-            str(s.get('id')) for s in snapshot.get('sections', [])
-        }
-        if section_ref not in section_ids:
+        section_exists = False
+        for s in (briefing.structure_snapshot or {}).get('sections', []):
+            if str(s.get('id')) == section_ref:
+                section_exists = True
+                break
+        if not section_exists:
+            for s in (briefing.supplementary_snapshot or {}).get('sections', []):
+                if str(s.get('id')) == section_ref:
+                    section_exists = True
+                    break
+        if not section_exists:
             raise BriefingError(
                 'A seção informada não pertence a este briefing.'
             )
 
-        # Próxima posição (respeitando o que já existe no snapshot
-        # daquela seção E as custom questions já adicionadas)
         last_position = BriefingQuestionInstanceService._next_position(
             briefing=briefing,
             section_ref=section_ref,
@@ -140,19 +165,38 @@ class BriefingQuestionInstanceService:
             created_by=actor,
         )
 
-        # Marca o briefing como personalizado
+        from apps.briefings.services.briefing_service import BriefingService
+        BriefingService.freeze_supplementary_questions_into_snapshot(briefing)
+
+        BriefingEventService.log(
+            briefing=briefing,
+            kind=BriefingEvent.KIND_CUSTOM_QUESTION_ADDED,
+            user=actor,
+            question_id=instance.id,
+            content={
+                'instance_id': str(instance.id),
+                'section_ref': section_ref,
+                'text': text,
+                'is_required': bool(is_required),
+                'question_type': instance.question_type,
+            },
+        )
+
         if not briefing.has_custom_questions:
             briefing.has_custom_questions = True
-            briefing.save(update_fields=['has_custom_questions', 'updated_at'])
+            briefing.save(update_fields=[
+                'has_custom_questions', 'updated_at',
+            ])
+
+        logger.info(
+            'Pergunta complementar adicionada | briefing=%s | instance=%s',
+            briefing.id, instance.id,
+        )
 
         return instance
 
     @staticmethod
     def _next_position(*, briefing: Briefing, section_ref: str) -> int:
-        """
-        Retorna a próxima posição livre na seção, considerando tanto
-        as perguntas do snapshot quanto as custom questions já criadas.
-        """
         snapshot_positions = []
         for s in (briefing.structure_snapshot or {}).get('sections', []):
             if str(s.get('id')) != section_ref:
@@ -186,8 +230,11 @@ class BriefingQuestionInstanceService:
         is_required: bool = None,
         actor=None,
     ) -> BriefingQuestionInstance:
-        BriefingQuestionInstanceService._assert_briefing_editable(
+        BriefingQuestionInstanceService._assert_briefing_accepts_supplementary(
             instance.briefing,
+        )
+        BriefingQuestionInstanceService._assert_instance_not_answered(
+            instance.briefing, instance.id,
         )
 
         fields = []
@@ -222,6 +269,11 @@ class BriefingQuestionInstanceService:
         if fields:
             instance.save(update_fields=fields + ['updated_at'])
 
+            from apps.briefings.services.briefing_service import BriefingService
+            BriefingService.freeze_supplementary_questions_into_snapshot(
+                instance.briefing,
+            )
+
         return instance
 
     # ------------------------------------------------------------------
@@ -235,19 +287,43 @@ class BriefingQuestionInstanceService:
         instance: BriefingQuestionInstance,
         actor=None,
     ) -> None:
-        BriefingQuestionInstanceService._assert_briefing_editable(
+        BriefingQuestionInstanceService._assert_briefing_accepts_supplementary(
             instance.briefing,
         )
+        BriefingQuestionInstanceService._assert_instance_not_answered(
+            instance.briefing, instance.id,
+        )
+
+        briefing = instance.briefing
+        instance_id = instance.id
+        payload = instance.to_removal_event_payload()
+
         instance.delete()
 
-        # Se não sobrou nenhuma, limpa a flag
+        from apps.briefings.services.briefing_service import BriefingService
+        BriefingService.freeze_supplementary_questions_into_snapshot(briefing)
+
+        BriefingEventService.log(
+            briefing=briefing,
+            kind=BriefingEvent.KIND_CUSTOM_QUESTION_REMOVED,
+            user=actor,
+            question_id=instance_id,
+            content=payload,
+        )
+
         remaining = BriefingQuestionInstance.objects.filter(
-            briefing=instance.briefing,
+            briefing=briefing,
         ).exists()
         if not remaining:
-            b = instance.briefing
-            b.has_custom_questions = False
-            b.save(update_fields=['has_custom_questions', 'updated_at'])
+            briefing.has_custom_questions = False
+            briefing.save(update_fields=[
+                'has_custom_questions', 'updated_at',
+            ])
+
+        logger.info(
+            'Pergunta complementar removida | briefing=%s | instance=%s',
+            briefing.id, instance_id,
+        )
 
     # ------------------------------------------------------------------
     # HELPERS
@@ -262,5 +338,5 @@ class BriefingQuestionInstanceService:
         except (ValueError, TypeError):
             instance = None
         if instance is None:
-            raise BriefingError('Pergunta exclusiva não encontrada.')
+            raise BriefingError('Pergunta complementar não encontrada.')
         return instance

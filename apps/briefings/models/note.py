@@ -62,6 +62,12 @@ class BriefingNote(models.Model):
         help_text=_('Conteúdo da anotação'),
     )
 
+    is_pinned = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text=_('Se True, a nota aparece no topo da lista.'),
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -69,11 +75,12 @@ class BriefingNote(models.Model):
         db_table = 'briefing_note'
         verbose_name = _('Anotação de Briefing')
         verbose_name_plural = _('Anotações de Briefing')
-        ordering = ['-created_at']
+        ordering = ['-is_pinned', '-created_at']
         indexes = [
             models.Index(fields=['briefing', '-created_at']),
             models.Index(fields=['briefing', 'question_id']),
             models.Index(fields=['author']),
+            models.Index(fields=['briefing', '-is_pinned', '-created_at']),
         ]
 
     def __str__(self):
@@ -81,4 +88,5 @@ class BriefingNote(models.Model):
             f'Q:{str(self.question_id)[:8]}' if self.question_id
             else 'geral'
         )
-        return f"Note {self.briefing_id} · {scope}"
+        pin = ' 📌' if self.is_pinned else ''
+        return f"Note {self.briefing_id} · {scope}{pin}"

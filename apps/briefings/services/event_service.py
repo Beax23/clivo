@@ -8,7 +8,8 @@ Só este service escreve.
 
 Isso garante:
     - consistência do campo `content`
-    - autoria explícita (user XOR portal_session)
+    - autoria explícita (user XOR portal_session, ou ambos None
+      para eventos de sistema)
     - eventos de sistema (user=None, portal_session=None) permitidos
       para ações internas (envio de e-mail, notificações), mas
       marcados como tal
@@ -38,8 +39,7 @@ class BriefingEventService:
         Autoridade:
             - Se `user` preenchido → autor é o usuário do escritório.
             - Se `portal_session` preenchido → autor é o cliente.
-            - Se ambos vazios → evento de sistema (ex.: envio
-              automático de e-mail pelo NotificationService).
+            - Se ambos vazios → evento de sistema.
             - Se ambos preenchidos → erro (autor ambíguo).
 
         Validação:

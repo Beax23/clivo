@@ -15,7 +15,7 @@ SIDEBAR — Application Shell
     <title>{% block title %}Mesa · Clivo{% endblock %}</title>
 
     <!-- Favicon / Ícone da Aba do Navegador -->
-    <link rel="icon" type="image/jfif" href="{% static 'img/c1.jfif' %}">
+    <link rel="icon" type="image/jfif" href="{% static 'img/clivo-logo.svg' %}">
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -30,11 +30,11 @@ SIDEBAR — Application Shell
 
     {% block page_css %}{% endblock %}
 </head>
-<body data-workspace-public-id="{{ workspace_public_id|default:'' }}">
+<body data-workspace-public-id="{{ request.workspace_public_id|default:'' }}">
 
     <div class="soft-nav-progress" id="softNavProgress"></div>
 
-    <div id="app" data-workspace-public-id="{{ workspace_public_id|default:'' }}">
+    <div id="app" data-workspace-public-id="{{ request.workspace_public_id|default:'' }}">
         <div id="loadingState" class="loading-overlay">
             <div class="loading-spinner"></div>
             Carregando...
@@ -44,7 +44,7 @@ SIDEBAR — Application Shell
 
             <div class="icon-rail">
                 <button class="logo" id="logoBtn" type="button" title="Menu">
-                    C
+                    <img src="{% static 'img/clivo-logo.svg' %}" alt="Clivo" class="logo-img">
                 </button>
 
                 <button class="rail-btn" id="newBriefingBtn" title="Novo briefing">

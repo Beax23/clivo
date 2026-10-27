@@ -1,1145 +1,1208 @@
 /* =========================================================================
-   CLIENTE — master/detail.
-   Cache por aba — sem re-fetch ao alternar.
+   CLIENTES — v11
    ========================================================================= */
+(function () {
+  "use strict";
 
-(function() {
-    'use strict';
+  const $ = (s, r) => (r || document).querySelector(s);
+  const $$ = (s, r) =>
+    Array.prototype.slice.call((r || document).querySelectorAll(s));
 
-    function showToast(msg, type) {
-        if (typeof window.clivoShowToast === 'function') {
-            window.clivoShowToast(msg, type);
-        }
+  function esc(s) {
+    if (s === null || s === undefined) return "";
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function getCookie(name) {
+    const m = document.cookie.match("(^|;)\\s*" + name + "\\s*=\\s*([^;]+)");
+    return m ? decodeURIComponent(m.pop()) : "";
+  }
+
+  function api(path, opts) {
+    opts = opts || {};
+    const headers = Object.assign(
+      { Accept: "application/json" },
+      opts.headers || {},
+    );
+    if (
+      opts.body &&
+      typeof opts.body === "object" &&
+      !(opts.body instanceof FormData)
+    ) {
+      headers["Content-Type"] = "application/json";
+      opts.body = JSON.stringify(opts.body);
     }
-
-    function api(url, method, body) {
-        return window.clivoApi(url, method, body);
+    if (!/^(GET|HEAD|OPTIONS)$/i.test(opts.method || "GET")) {
+      headers["X-CSRFToken"] = getCookie("csrftoken");
     }
+    return fetch(
+      path,
+      Object.assign({ credentials: "same-origin" }, opts, { headers }),
+    ).then((r) => {
+      if (!r.ok) {
+        return r.text().then((t) => {
+          let p;
+          try {
+            p = JSON.parse(t);
+          } catch (e) {
+            p = { error: t || r.statusText };
+          }
+          throw Object.assign(new Error(p.error || "Erro"), {
+            status: r.status,
+            payload: p,
+          });
+        });
+      }
+      const ct = r.headers.get("content-type") || "";
+      return ct.includes("application/json") ? r.json() : r.text();
+    });
+  }
 
-    const _escCache = new Map();
-    function escapeHtml(s) {
-        if (s === null || s === undefined) return '';
-        s = String(s);
-        if (_escCache.has(s)) return _escCache.get(s);
-        const r = s
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;');
-        if (_escCache.size < 500) _escCache.set(s, r);
-        return r;
-    }
-
-    function setLoading(btn, loading, label) {
-        if (!btn) return;
-        if (loading) {
-            if (!btn.dataset.loading) {
-                btn.dataset.originalText = btn.innerHTML;
-                btn.dataset.loading = '1';
-            }
-            btn.disabled = true;
-            btn.innerHTML =
-                '<span class="loading-spinner" style="width:12px;height:12px;border-width:2px;border-color:rgba(255,255,255,0.3);border-top-color:#fff;display:inline-block;border-radius:50%;"></span> ' +
-                (label || 'Aguarde...');
-        } else {
-            btn.disabled = false;
-            if (btn.dataset.originalText !== undefined) {
-                btn.innerHTML = btn.dataset.originalText;
-            }
-            delete btn.dataset.loading;
-            delete btn.dataset.originalText;
-        }
-    }
-
-    function formatDate(iso) {
-        if (!iso) return '';
+  function refreshIcons() {
+    if (window.lucide && typeof window.lucide.createIcons === "function") {
+      requestAnimationFrame(() => {
         try {
-            const d = new Date(iso);
-            return d.toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' });
-        } catch (e) { return ''; }
+          window.lucide.createIcons();
+        } catch (e) {}
+      });
     }
-
-    function formatDateTime(iso) {
-        if (!iso) return '';
-        try {
-            const d = new Date(iso);
-            return d.toLocaleString('pt-BR', {
-                day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
-            });
-        } catch (e) { return ''; }
+  }
+  function showToast(msg, type) {
+    if (typeof window.clivoShowToast === "function") {
+      window.clivoShowToast(msg, type || "info");
     }
-
-    function formatDeadlineFull(iso) {
-        if (!iso) return '';
-        try {
-            const d = new Date(iso);
-            const now = new Date();
-            const sameYear = d.getFullYear() === now.getFullYear();
-            return d.toLocaleDateString('pt-BR', {
-                day: 'numeric',
-                month: 'short',
-                ...(sameYear ? {} : { year: 'numeric' }),
-            });
-        } catch (e) { return ''; }
+  }
+  function fmtDate(iso) {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    return isNaN(d.getTime()) ? "—" : d.toLocaleDateString("pt-BR");
+  }
+  function relativeTime(iso) {
+    if (!iso) return "—";
+    const then = new Date(iso).getTime();
+    if (Number.isNaN(then)) return "—";
+    const diff = Math.max(0, Date.now() - then) / 1000;
+    if (diff < 60) return "agora";
+    if (diff < 3600) return "há " + Math.floor(diff / 60) + " min";
+    if (diff < 86400) return "há " + Math.floor(diff / 3600) + " h";
+    if (diff < 604800) return "há " + Math.floor(diff / 86400) + " d";
+    return new Date(iso).toLocaleDateString("pt-BR");
+  }
+  function deadlineInfo(expiresAt, status) {
+    if (!expiresAt) return { label: "Sem prazo", cls: "" };
+    const d = new Date(expiresAt);
+    if (isNaN(d.getTime())) return { label: "Sem prazo", cls: "" };
+    if (
+      status === "completed" ||
+      status === "cancelled" ||
+      status === "closed"
+    ) {
+      return { label: fmtDate(expiresAt), cls: "" };
     }
-
-    function computeDeadlineInfo(expiresAt, status) {
-        if (!expiresAt) {
-            return { label: 'Sem prazo', cls: '' };
-        }
-        let date;
-        try {
-            date = new Date(expiresAt);
-            if (isNaN(date.getTime())) return { label: 'Sem prazo', cls: '' };
-        } catch (e) {
-            return { label: 'Sem prazo', cls: '' };
-        }
-
-        const now = Date.now();
-        const diffMs = date.getTime() - now;
-        const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-
-        if (status === 'completed' || status === 'closed') {
-            return { label: formatDeadlineFull(expiresAt), cls: '' };
-        }
-
-        if (diffMs < 0) {
-            const over = Math.abs(diffDays);
-            return {
-                label: over <= 1 ? 'Venceu ontem' : 'Venceu há ' + over + ' dias',
-                cls: 'is-danger',
-            };
-        }
-
-        if (diffDays === 0) {
-            return { label: 'Vence hoje', cls: 'is-danger' };
-        }
-        if (diffDays === 1) {
-            return { label: 'Vence amanhã', cls: 'is-warning' };
-        }
-        if (diffDays <= 3) {
-            return { label: 'Vence em ' + diffDays + ' dias', cls: 'is-warning' };
-        }
-        return { label: formatDeadlineFull(expiresAt), cls: '' };
+    const diffMs = d.getTime() - Date.now();
+    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+    if (diffMs < 0) {
+      const over = Math.abs(diffDays);
+      return {
+        label: over <= 1 ? "Venceu ontem" : "Venceu há " + over + " d",
+        cls: "is-danger",
+      };
     }
+    if (diffDays === 0) return { label: "Vence hoje", cls: "is-danger" };
+    if (diffDays === 1) return { label: "Vence amanhã", cls: "is-warning" };
+    if (diffDays <= 3)
+      return { label: "Vence em " + diffDays + " d", cls: "is-warning" };
+    return { label: fmtDate(expiresAt), cls: "" };
+  }
 
-    function refreshIcons() {
-        if (typeof window.clivoRefreshIcons === 'function') {
-            window.clivoRefreshIcons();
-        }
+  const CLIENT_STATUS_FALLBACK = {
+    active: "Ativo",
+    inactive: "Inativo",
+    suspended: "Suspenso",
+  };
+  const BRIEFING_STATUS = {
+    in_progress: "Em andamento",
+    paused: "Pausado",
+    completed: "Concluído",
+    closed: "Encerrado",
+    expired: "Expirado",
+    cancelled: "Cancelado",
+  };
+
+  const state = {
+    clients: [],
+    filtered: [],
+    activeId: null,
+    filter: "all",
+    query: "",
+    statusChoices: [],
+    briefings: [],
+    briefingsSearch: "",
+    listCache: new Map(),
+    detailCache: new Map(),
+    abortDetail: null,
+    prefetching: new Set(),
+    lastClickTs: 0,
+    mounted: false,
+    root: null,
+    kebabOpen: false,
+    statusMenuOpen: false,
+    reanalyzing: false,
+    changingStatus: false,
+    codeCopiedTimer: null,
+  };
+
+  const el = {};
+
+  function cacheElements() {
+    const root = state.root;
+    if (!root) return;
+    el.search = document.getElementById("clSearchInput");
+    el.list = document.getElementById("clList");
+    el.listTpl = document.getElementById("clClientItemTpl");
+    el.kpis = document.getElementById("clKpis");
+    el.count = document.getElementById("clCount");
+    el.detailEmpty = document.getElementById("clDetailEmpty");
+    el.detailView = document.getElementById("clDetailView");
+    el.detailAvatar = document.getElementById("clDetailAvatar");
+    el.detailName = document.getElementById("clDetailName");
+    el.detailCreated = document.getElementById("clDetailCreated");
+    el.detailCode = document.getElementById("clDetailCode");
+    el.detailUpdated = document.getElementById("clDetailUpdated");
+    el.codeCopyBtn = document.getElementById("clCodeCopy");
+    el.statusPill = document.getElementById("clStatusPill");
+    el.statusLabel = document.getElementById("clStatusLabel");
+    el.statusMenu = document.getElementById("clStatusMenu");
+    el.viewKnowledge = document.getElementById("clViewKnowledge");
+    el.countKnowledge = document.getElementById("clCountKnowledge");
+    el.viewProfile = document.getElementById("clViewProfile");
+    el.wishesList = document.getElementById("clWishesList");
+    el.dislikesList = document.getElementById("clDislikesList");
+    el.attentionList = document.getElementById("clAttentionList");
+    el.tagsList = document.getElementById("clTagsList");
+    el.briefingsList = document.getElementById("clBriefingsList");
+    el.briefingsCount = document.getElementById("clBriefingsCount");
+    el.briefingsSearch = document.getElementById("clBriefingsSearchInput");
+    el.kebabBtn = document.getElementById("clKebabBtn");
+    el.kebabMenu = document.getElementById("clKebabMenu");
+    el.editBtn = document.getElementById("clEditBtn");
+    el.sendCodeBtn = document.getElementById("clSendCodeBtn");
+    el.deleteBtn = document.getElementById("clDeleteBtn");
+    el.backBtn = document.getElementById("clBackBtn");
+    el.body = document.getElementById("clBody");
+    el.configModal = document.getElementById("clConfigModal");
+    el.deleteModal = document.getElementById("clDeleteModal");
+    el.fieldName = document.getElementById("clFieldName");
+    el.fieldEmail = document.getElementById("clFieldEmail");
+    el.fieldPhone = document.getElementById("clFieldPhone");
+    el.saveIdentityBtn = document.getElementById("clSaveIdentityBtn");
+    el.deleteInput = document.getElementById("clDeleteInput");
+    el.deleteConfirmBtn = document.getElementById("clDeleteConfirmBtn");
+    el.deleteWord = document.getElementById("clDeleteWord");
+    el.reanalyzeBtn = document.getElementById("clReanalyzeBtn");
+  }
+
+  function openModal(m) {
+    if (!m) return;
+    m.classList.add("active");
+    document.body.style.overflow = "hidden";
+    refreshIcons();
+  }
+  function closeModal(m) {
+    if (!m) return;
+    m.classList.remove("active");
+    document.body.style.overflow = "";
+  }
+  function bindModalClosers() {
+    state.root.querySelectorAll("[data-close]").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        const id = btn.getAttribute("data-close");
+        if (id) closeModal(document.getElementById(id));
+      });
+    });
+    state.root.querySelectorAll(".cl-modal-overlay").forEach((ov) => {
+      ov.addEventListener("click", (e) => {
+        if (e.target === ov) closeModal(ov);
+      });
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        const open = document.querySelector(".cl-modal-overlay.active");
+        if (open) closeModal(open);
+      }
+    });
+  }
+
+  let _kebabDocHandler = null;
+  function openKebab() {
+    if (!el.kebabMenu || !el.kebabBtn) return;
+    el.kebabMenu.hidden = false;
+    el.kebabBtn.setAttribute("aria-expanded", "true");
+    el.kebabBtn.classList.add("is-open");
+    state.kebabOpen = true;
+    setTimeout(() => {
+      _kebabDocHandler = (ev) => {
+        if (el.kebabMenu.contains(ev.target) || el.kebabBtn.contains(ev.target))
+          return;
+        closeKebab();
+      };
+      document.addEventListener("click", _kebabDocHandler, true);
+    }, 0);
+  }
+  function closeKebab() {
+    if (!el.kebabMenu || !el.kebabBtn) return;
+    el.kebabMenu.hidden = true;
+    el.kebabBtn.setAttribute("aria-expanded", "false");
+    el.kebabBtn.classList.remove("is-open");
+    state.kebabOpen = false;
+    if (_kebabDocHandler) {
+      document.removeEventListener("click", _kebabDocHandler, true);
+      _kebabDocHandler = null;
     }
+  }
 
-    const STATUS_LABELS = {
-        active: 'Ativo',
-        inactive: 'Inativo',
-        suspended: 'Suspenso',
-    };
-
-    function statusLabel(status) {
-        return STATUS_LABELS[status] || status || '—';
+  function statusLabelFor(value, sample) {
+    if (sample && sample.status_display && sample.status === value)
+      return sample.status_display;
+    return CLIENT_STATUS_FALLBACK[value] || value || "—";
+  }
+  function computeStatusChoices() {
+    const seen = {},
+      out = [];
+    for (let i = 0; i < state.clients.length; i++) {
+      const c = state.clients[i];
+      if (!c.status || seen[c.status]) continue;
+      seen[c.status] = true;
+      out.push({ value: c.status, label: statusLabelFor(c.status, c) });
     }
-
-    const BRIEFING_STATUS_LABELS = {
-        in_progress: 'Em andamento',
-        paused: 'Pausado',
-        completed: 'Concluído',
-        closed: 'Encerrado',
-        expired: 'Expirado',
-        cancelled: 'Cancelado',
-    };
-
-    const CTX = {
-        PROFILE: 'profile',
-        KNOWLEDGE: 'knowledge',
-        WISHES: 'wishes',
-        DISLIKES: 'dislikes',
-    };
-
-    // =====================================================================
-    // ESTADO
-    // =====================================================================
-    let clientsCache = [];
-    let clientsLoaded = false;
-    let clientsPromise = null;
-    let currentClient = null;
-    let briefingsCache = [];
-    let briefingsSearch = '';
-    let isOpening = false;
-    let detailCache = new Map();
-    let detailPromises = new Map();
-    let briefingsCacheByClient = new Map();
-
-    // =====================================================================
-    // LISTA
-    // =====================================================================
-    async function loadClients(force) {
-        const listEl = document.getElementById('clList');
-        if (!listEl) return;
-
-        const CACHE_TTL = 30000;
-        const now = Date.now();
-
-        if (!force && clientsLoaded && clientsCache.length) {
-            renderClients();
-            updateListSubtitle();
-            schedulePrefetch();
-            return;
-        }
-
-        if (!force && window.Clivo.cache.clients &&
-            (now - window.Clivo.cache.clients.timestamp) < CACHE_TTL) {
-            clientsCache = window.Clivo.cache.clients.data || [];
-            clientsLoaded = true;
-            renderClients();
-            updateListSubtitle();
-            schedulePrefetch();
-            return;
-        }
-
-        if (clientsPromise) {
-            await clientsPromise;
-            renderClients();
-            updateListSubtitle();
-            return;
-        }
-
-        clientsPromise = (async function() {
-            try {
-                const data = await api('/api/clients/');
-                clientsCache = Array.isArray(data) ? data : (data.results || []);
-                clientsLoaded = true;
-                window.Clivo.cache.clients = {
-                    data: clientsCache,
-                    timestamp: Date.now(),
-                };
-                return clientsCache;
-            } catch (e) {
-                clientsCache = [];
-                clientsLoaded = true;
-                throw e;
-            } finally {
-                clientsPromise = null;
-            }
-        })();
-
-        try {
-            await clientsPromise;
-        } catch (e) {
-            listEl.innerHTML = '<li class="cl-list-empty">Erro ao carregar clientes</li>';
-            updateListSubtitle();
-            return;
-        }
-
-        renderClients();
-        updateListSubtitle();
-        schedulePrefetch();
+    if (!out.length) {
+      Object.keys(CLIENT_STATUS_FALLBACK).forEach((k) => {
+        out.push({ value: k, label: CLIENT_STATUS_FALLBACK[k] });
+      });
     }
-
-    function schedulePrefetch() {
-        const run = function() {
-            clientsCache.slice(0, 5).forEach(function(c) {
-                prefetchClientDetail(c.id);
-            });
-        };
-        if (typeof requestIdleCallback === 'function') {
-            requestIdleCallback(run, { timeout: 1500 });
-        } else {
-            setTimeout(run, 300);
-        }
+    return out;
+  }
+  function renderFilters() {
+    if (!el.kpis) return;
+    const counts = { all: state.clients.length };
+    for (let i = 0; i < state.clients.length; i++) {
+      const s = state.clients[i].status;
+      if (s) counts[s] = (counts[s] || 0) + 1;
     }
-
-    function updateListSubtitle() {
-        const countEl = document.getElementById('clCount');
-        if (countEl) countEl.textContent = String(clientsCache.length);
+    const parts = [
+      '<button type="button" class="cl-filter' +
+        (state.filter === "all" ? " is-active" : "") +
+        '" role="tab" data-kpi="all" aria-selected="' +
+        (state.filter === "all" ? "true" : "false") +
+        '">' +
+        '<span>Todos</span><span class="cl-filter-count">' +
+        (counts.all || 0) +
+        "</span></button>",
+    ];
+    for (let i = 0; i < state.statusChoices.length; i++) {
+      const ch = state.statusChoices[i];
+      const active = state.filter === ch.value;
+      parts.push(
+        '<button type="button" class="cl-filter' +
+          (active ? " is-active" : "") +
+          '" role="tab" data-kpi="' +
+          esc(ch.value) +
+          '" aria-selected="' +
+          (active ? "true" : "false") +
+          '">' +
+          "<span>" +
+          esc(ch.label) +
+          "</span>" +
+          '<span class="cl-filter-count">' +
+          (counts[ch.value] || 0) +
+          "</span></button>",
+      );
     }
+    el.kpis.innerHTML = parts.join("");
+  }
+  function setFilter(kpi) {
+    if (state.filter === kpi) return;
+    state.filter = kpi;
+    renderFilters();
+    renderList();
+  }
 
-    function getFilteredClients() {
-        const searchInput = document.getElementById('clSearchInput');
-        const query = (searchInput && searchInput.value || '').trim().toLowerCase();
-        const statusSelect = document.getElementById('clStatusFilter');
-        const statusFilter = statusSelect ? statusSelect.value : '';
-
-        if (!query && !statusFilter) return clientsCache.slice();
-
-        let items = clientsCache;
-        if (statusFilter) {
-            items = items.filter(function(c) { return c.status === statusFilter; });
-        }
-        if (query) {
-            items = items.filter(function(c) {
-                return (c.name || '').toLowerCase().indexOf(query) !== -1
-                    || (c.email || '').toLowerCase().indexOf(query) !== -1;
-            });
-        }
-        return items.slice();
+  function applyFilter(items) {
+    const q = state.query.trim().toLowerCase();
+    const out = [];
+    for (let i = 0; i < items.length; i++) {
+      const c = items[i];
+      if (state.filter !== "all" && c.status !== state.filter) continue;
+      if (q) {
+        const hay =
+          (c.name || "") + " " + (c.email || "") + " " + (c.public_code || "");
+        if (hay.toLowerCase().indexOf(q) === -1) continue;
+      }
+      out.push(c);
     }
-
-    function renderClients() {
-        const listEl = document.getElementById('clList');
-        if (!listEl) return;
-
-        const items = getFilteredClients();
-
-        if (!items.length) {
-            const searchInput = document.getElementById('clSearchInput');
-            const statusSelect = document.getElementById('clStatusFilter');
-            const hasQuery = (searchInput && searchInput.value.trim()) ||
-                             (statusSelect && statusSelect.value);
-            listEl.innerHTML =
-                '<li class="cl-list-empty">' +
-                (hasQuery ? 'Nada encontrado' : 'Nenhum cliente ainda') +
-                '</li>';
-            return;
-        }
-
-        const currentId = currentClient ? currentClient.id : null;
-        const parts = [];
-        for (let i = 0; i < items.length; i++) {
-            const c = items[i];
-            const initial = (c.name || '?').charAt(0).toUpperCase();
-            const email = c.email || '—';
-            const status = c.status || 'active';
-            const statusText = statusLabel(status);
-            const isSel = currentId && currentId === c.id;
-            parts.push(
-                '<li class="cl-list-item' + (isSel ? ' is-active' : '') + '" data-client-id="' + c.id + '">' +
-                    '<div class="cl-avatar">' + escapeHtml(initial) + '</div>' +
-                    '<div class="cl-list-item-body">' +
-                        '<div class="cl-list-item-title">' +
-                            '<span class="cl-status-led ' + escapeHtml(status) + '" title="' + escapeHtml(statusText) + '"></span>' +
-                            '<span>' + escapeHtml(c.name || '—') + '</span>' +
-                        '</div>' +
-                        '<div class="cl-list-item-meta">' + escapeHtml(email) + '</div>' +
-                    '</div>' +
-                '</li>'
-            );
-        }
-        listEl.innerHTML = parts.join('');
+    out.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    return out;
+  }
+  function renderList() {
+    if (!el.list || !el.listTpl) return;
+    state.filtered = applyFilter(state.clients);
+    if (el.count) el.count.textContent = String(state.clients.length);
+    if (!state.filtered.length) {
+      state.listCache.clear();
+      el.list.innerHTML =
+        '<li class="cl-empty">Nenhum cliente encontrado.</li>';
+      return;
     }
-
-    function bindListEvents() {
-        const listEl = document.getElementById('clList');
-        if (!listEl || listEl.__clBound) return;
-        listEl.__clBound = true;
-
-        listEl.addEventListener('mouseover', function(e) {
-            const card = e.target.closest('.cl-list-item');
-            if (!card) return;
-            const id = card.dataset.clientId;
-            if (id) prefetchClientDetail(id);
-        });
-
-        listEl.addEventListener('click', function(e) {
-            const card = e.target.closest('.cl-list-item');
-            if (!card) return;
-            const id = card.dataset.clientId;
-            if (!id) return;
-            if (currentClient && currentClient.id === id) return;
-            openClient(id);
-        });
+    const frag = document.createDocumentFragment();
+    const nextCache = new Map();
+    for (let i = 0; i < state.filtered.length; i++) {
+      const c = state.filtered[i];
+      let li = state.listCache.get(c.id);
+      if (li) populateClientLi(li, c);
+      else {
+        const node = el.listTpl.content.cloneNode(true);
+        li = node.querySelector(".cl-client");
+        if (!li) continue;
+        populateClientLi(li, c);
+      }
+      nextCache.set(c.id, li);
+      frag.appendChild(li);
     }
-
-    function updateSelection() {
-        const listEl = document.getElementById('clList');
-        if (!listEl) return;
-        const currentId = currentClient ? currentClient.id : null;
-        const items = listEl.querySelectorAll('.cl-list-item');
-        for (let i = 0; i < items.length; i++) {
-            items[i].classList.toggle('is-active', items[i].dataset.clientId === currentId);
-        }
+    state.listCache = nextCache;
+    el.list.innerHTML = "";
+    el.list.appendChild(frag);
+    refreshIcons();
+  }
+  function populateClientLi(li, c) {
+    li.dataset.id = c.id;
+    li.classList.toggle("is-active", String(c.id) === String(state.activeId));
+    const av = li.querySelector(".cl-client-avatar");
+    if (av) av.textContent = (c.name || "?").charAt(0).toUpperCase();
+    const name = li.querySelector(".cl-client-name");
+    if (name) name.textContent = c.name || "—";
+    const email = li.querySelector(".cl-client-email");
+    if (email) email.textContent = c.email || "—";
+    const code = li.querySelector(".cl-client-code");
+    if (code) code.textContent = c.public_code || "—";
+    const st = c.status || "active";
+    const badge = li.querySelector(".cl-client-status");
+    if (badge) {
+      badge.dataset.status = st;
+      const lbl = badge.querySelector(".cl-client-status-label");
+      if (lbl) lbl.textContent = statusLabelFor(st, c);
     }
+  }
 
-    // =====================================================================
-    // DETALHE
-    // =====================================================================
-    function setDetailOpen(open) {
-        const body = document.getElementById('clBody');
-        if (body) body.classList.toggle('detail-open', !!open);
+  function showEmpty() {
+    if (el.detailEmpty) el.detailEmpty.hidden = false;
+    if (el.detailView) el.detailView.hidden = true;
+    if (el.body) el.body.classList.remove("detail-open");
+  }
+  function showDetail() {
+    if (el.detailEmpty) el.detailEmpty.hidden = true;
+    if (el.detailView) el.detailView.hidden = false;
+    if (el.body) el.body.classList.add("detail-open");
+  }
+  function applyDetailHeader(c) {
+    if (!c) return;
+    if (el.detailName) el.detailName.textContent = c.name || "—";
+    if (el.detailAvatar)
+      el.detailAvatar.textContent = (c.name || "?").charAt(0).toUpperCase();
+    if (el.detailCode) el.detailCode.textContent = c.public_code || "—";
+    if (el.detailCreated) el.detailCreated.textContent = fmtDate(c.created_at);
+    if (el.detailUpdated)
+      el.detailUpdated.textContent = relativeTime(c.updated_at);
+    const st = c.status || "active";
+    if (el.statusPill) el.statusPill.dataset.status = st;
+    if (el.statusLabel) el.statusLabel.textContent = statusLabelFor(st, c);
+  }
+
+  function renderStatusMenu() {
+    if (!el.statusMenu) return;
+    const current = state.clients.find(
+      (x) => String(x.id) === String(state.activeId),
+    );
+    const cur = (current && current.status) || "active";
+    const parts = [];
+    for (let i = 0; i < state.statusChoices.length; i++) {
+      const ch = state.statusChoices[i];
+      const isCur = ch.value === cur;
+      parts.push(
+        '<button type="button" class="cl-status-menu-item' +
+          (isCur ? " is-current" : "") +
+          '" role="option" data-status="' +
+          esc(ch.value) +
+          '"' +
+          (isCur ? " disabled" : "") +
+          ">" +
+          '<span class="cl-status-pill-dot" data-status="' +
+          esc(ch.value) +
+          '"></span>' +
+          "<span>" +
+          esc(ch.label) +
+          "</span>" +
+          '<i data-lucide="check" class="cl-status-menu-check"></i></button>',
+      );
     }
-
-    function showDetailEmpty() {
-        const empty = document.getElementById('clDetailEmpty');
-        const content = document.getElementById('clDetailContent');
-        if (empty) empty.classList.remove('is-hidden');
-        if (content) content.classList.add('is-hidden');
-    }
-
-    function showDetailContent() {
-        const empty = document.getElementById('clDetailEmpty');
-        const content = document.getElementById('clDetailContent');
-        if (empty) empty.classList.add('is-hidden');
-        if (content) content.classList.remove('is-hidden');
-    }
-
-    function prefetchClientDetail(clientId) {
-        if (!clientId) return;
-        if (detailCache.has(clientId) || detailPromises.has(clientId)) return;
-        const p = api('/api/clients/' + clientId + '/')
-            .then(function(client) {
-                detailCache.set(clientId, client);
-                return client;
-            })
-            .catch(function() {})
-            .finally(function() {
-                detailPromises.delete(clientId);
-            });
-        detailPromises.set(clientId, p);
-    }
-
-    function fetchClientDetail(clientId) {
-        if (detailCache.has(clientId)) {
-            return Promise.resolve(detailCache.get(clientId));
-        }
-        if (detailPromises.has(clientId)) {
-            return detailPromises.get(clientId);
-        }
-        const p = api('/api/clients/' + clientId + '/')
-            .then(function(client) {
-                detailCache.set(clientId, client);
-                return client;
-            })
-            .finally(function() {
-                detailPromises.delete(clientId);
-            });
-        detailPromises.set(clientId, p);
-        return p;
-    }
-
-    async function openClient(clientId) {
-        if (isOpening) return;
-        if (currentClient && currentClient.id === clientId) {
-            setDetailOpen(true);
-            updateSelection();
-            return;
-        }
-
-        isOpening = true;
-        try {
-            const client = await fetchClientDetail(clientId);
-            currentClient = client;
-
-            briefingsCache = [];
-            briefingsSearch = '';
-
-            if (window.location.hash !== '#' + clientId) {
-                history.replaceState(
-                    { soft: true, path: window.location.pathname + '#' + clientId },
-                    '',
-                    window.location.pathname + '#' + clientId
-                );
-            }
-
-            renderDetail();
-            showDetailContent();
-            setDetailOpen(true);
-            updateSelection();
-        } catch (e) {
-            showToast('Erro ao carregar cliente', 'error');
-            showDetailEmpty();
-        } finally {
-            isOpening = false;
-        }
-    }
-
-    function closeDetail() {
-        setDetailOpen(false);
-        if (window.location.hash) {
-            history.replaceState(
-                { soft: true, path: window.location.pathname },
-                '',
-                window.location.pathname
-            );
-        }
-        currentClient = null;
-        updateSelection();
-        showDetailEmpty();
-    }
-
-    function renderDetail() {
-        if (!currentClient) return;
-        const c = currentClient;
-        const status = c.status || 'active';
-        const initial = (c.name || '?').charAt(0).toUpperCase();
-
-        const setText = function(id, val) {
-            const el = document.getElementById(id);
-            if (el) el.textContent = val;
-        };
-
-        const av = document.getElementById('clDetailAvatar');
-        if (av) av.textContent = initial;
-
-        setText('clDetailName', c.name || '—');
-        setText('clDetailCode', c.public_code || '—');
-        setText('clDetailCreatedAt',
-            c.created_at ? ('Criado em ' + formatDate(c.created_at)) : '—');
-        setText('clDetailCreatedBy',
-            c.created_by_name ? ('por ' + c.created_by_name) : '—');
-
-        updateStatusPill(status);
-
-        const nameInput = document.getElementById('clFieldName');
-        const emailInput = document.getElementById('clFieldEmail');
-        const phoneInput = document.getElementById('clFieldPhone');
-        if (nameInput) nameInput.value = c.name || '';
-        if (emailInput) emailInput.value = c.email || '';
-        if (phoneInput) phoneInput.value = c.phone || '';
-
-        renderContextViews();
-        setText('clDeleteWord', c.name || '');
-
-        // Reset search input de briefings ao trocar de cliente
-        const bSearch = document.getElementById('clBriefingsSearchInput');
-        if (bSearch) bSearch.value = '';
-        briefingsSearch = '';
-
-        loadBriefings();
-        loadHistorico();
-
-        document.title = 'Cliente · Clivo';
-    }
-
-    function renderContextViews() {
-        if (!currentClient) return;
-        const ctx = currentClient.context || {};
-
-        const pairs = [
-            { el: 'clViewProfile',   value: (ctx[CTX.PROFILE] || '').trim() },
-            { el: 'clViewKnowledge', value: (ctx[CTX.KNOWLEDGE] || '').trim() },
-            { el: 'clViewWishes',    value: (ctx[CTX.WISHES] || '').trim() },
-            { el: 'clViewDislikes',  value: (ctx[CTX.DISLIKES] || '').trim() },
-        ];
-
-        for (let i = 0; i < pairs.length; i++) {
-            const pair = pairs[i];
-            const el = document.getElementById(pair.el);
-            if (!el) continue;
-            if (pair.value) {
-                el.innerHTML = '<p>' + escapeHtml(pair.value) + '</p>';
-            } else {
-                el.innerHTML = '<p class="cl-prop-empty">Sem informações ainda.</p>';
-            }
-        }
-    }
-
-    // =====================================================================
-    // STATUS PILL
-    // =====================================================================
-    function updateStatusPill(status) {
-        const pill = document.getElementById('clStatusPill');
-        const label = document.getElementById('clStatusPillLabel');
-        const dot = document.getElementById('clStatusPillDot');
-        if (pill) pill.setAttribute('data-status', status);
-        if (label) label.textContent = statusLabel(status);
-        if (dot) dot.className = 'cl-status-pill-dot ' + status;
-        document.querySelectorAll('#clStatusMenu .cl-status-menu-item').forEach(function(item) {
-            item.classList.toggle('is-current', item.dataset.status === status);
-        });
-    }
-
-    function openStatusMenu() {
-        const menu = document.getElementById('clStatusMenu');
-        const pill = document.getElementById('clStatusPill');
-        if (!menu || !pill) return;
-        menu.classList.add('is-open');
-        pill.setAttribute('aria-expanded', 'true');
-    }
-
-    function closeStatusMenu() {
-        const menu = document.getElementById('clStatusMenu');
-        const pill = document.getElementById('clStatusPill');
-        if (!menu || !pill) return;
-        menu.classList.remove('is-open');
-        pill.setAttribute('aria-expanded', 'false');
-    }
-
-    function setupStatusMenu() {
-        const pill = document.getElementById('clStatusPill');
-        const menu = document.getElementById('clStatusMenu');
-        if (!pill || !menu) return;
-
-        pill.addEventListener('click', function(e) {
-            e.stopPropagation();
-            if (menu.classList.contains('is-open')) {
-                closeStatusMenu();
-            } else {
-                openStatusMenu();
-            }
-        });
-
-        menu.querySelectorAll('.cl-status-menu-item').forEach(function(item) {
-            item.addEventListener('click', async function(e) {
-                e.stopPropagation();
-                if (!currentClient) return;
-                const newStatus = this.dataset.status;
-                const oldStatus = currentClient.status;
-                closeStatusMenu();
-                if (newStatus === oldStatus) return;
-
-                try {
-                    const updated = await api(
-                        '/api/clients/' + currentClient.id + '/',
-                        'PATCH',
-                        { status: newStatus }
-                    );
-                    currentClient = updated;
-                    detailCache.set(currentClient.id, currentClient);
-                    updateStatusPill(newStatus);
-
-                    const idx = clientsCache.findIndex(function(c) {
-                        return c.id === currentClient.id;
-                    });
-                    if (idx !== -1) {
-                        clientsCache[idx] = Object.assign({}, clientsCache[idx], {
-                            status: currentClient.status,
-                        });
-                        window.Clivo.cache.clients = {
-                            data: clientsCache,
-                            timestamp: Date.now(),
-                        };
-                        renderClients();
-                        updateSelection();
-                    }
-                    loadHistorico();
-                    showToast('Status atualizado', 'success');
-                } catch (err) {
-                    showToast(err.message || 'Erro ao atualizar status', 'error');
-                }
-            });
-        });
-
-        document.addEventListener('click', function(e) {
-            if (!menu.classList.contains('is-open')) return;
-            if (menu.contains(e.target) || pill.contains(e.target)) return;
-            closeStatusMenu();
-        });
-
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') closeStatusMenu();
-        });
-    }
-
-    // =====================================================================
-    // BRIEFINGS — cards verticais clássicos
-    // =====================================================================
-    function getFilteredBriefings() {
-        const q = (briefingsSearch || '').trim().toLowerCase();
-        if (!q) return briefingsCache.slice();
-        return briefingsCache.filter(function(b) {
-            const title = (b.title || '').toLowerCase();
-            const tpl = (b.template_name || '').toLowerCase();
-            return title.indexOf(q) !== -1 || tpl.indexOf(q) !== -1;
-        });
-    }
-
-    async function loadBriefings(force) {
-        const el = document.getElementById('clBriefingsList');
-        if (!el || !currentClient) return;
-
-        if (!force && briefingsCacheByClient.has(currentClient.id)) {
-            briefingsCache = briefingsCacheByClient.get(currentClient.id);
-            renderBriefings();
-            return;
-        }
-
-        el.innerHTML = '<div class="cl-empty">Carregando…</div>';
-        try {
-            const data = await api('/api/briefings/?client=' + currentClient.id);
-            briefingsCache = Array.isArray(data) ? data : (data.results || []);
-            briefingsCacheByClient.set(currentClient.id, briefingsCache);
-        } catch (e) {
-            briefingsCache = [];
-        }
-        renderBriefings();
-    }
-
-    function renderBriefings() {
-        const el = document.getElementById('clBriefingsList');
-        const countEl = document.getElementById('clBriefingsCount');
-        if (!el) return;
-
-        const items = getFilteredBriefings();
-        const total = briefingsCache.length;
-
-        if (countEl) countEl.textContent = String(total);
-
-        if (!items.length) {
-            el.innerHTML = '<div class="cl-empty">' +
-                (total ? 'Nada encontrado' : 'Nenhum briefing ainda') +
-                '</div>';
-            return;
-        }
-
-        const parts = [];
-        for (let i = 0; i < items.length; i++) {
-            const b = items[i];
-            const status = b.status || 'in_progress';
-            const statusText = BRIEFING_STATUS_LABELS[status] || status;
-            const progress = b.progress || {};
-            const pct = typeof progress.percent === 'number' ? Math.round(progress.percent) : 0;
-            const answered = progress.answered || 0;
-            const totalQ = progress.total_required || 0;
-
-            const deadline = computeDeadlineInfo(b.expires_at, status);
-            const deadlineClass = deadline.cls ? ' ' + deadline.cls : '';
-            const deadlineIcon = deadline.cls === 'is-danger'
-                ? 'alert-triangle'
-                : (deadline.cls === 'is-warning' ? 'clock-alert' : 'calendar');
-
-            const coverUrl = b.cover_url || '';
-            const title = b.title || 'Briefing';
-
-            const progressText = totalQ
-                ? answered + ' de ' + totalQ + ' perguntas'
-                : '—';
-
-            const coverInner = coverUrl
-                ? '<img src="' + escapeHtml(coverUrl) + '" alt="" loading="lazy" ' +
-                  'onerror="this.style.display=\'none\';this.parentNode.classList.add(\'is-empty\');' +
-                  'this.parentNode.innerHTML=\'<i data-lucide=\\\'image\\\'></i>\';' +
-                  'if(window.lucide)window.lucide.createIcons();">'
-                : '<i data-lucide="image"></i>';
-
-            const coverHtml = '<div class="cl-briefing-cover' +
-                (coverUrl ? '' : ' is-empty') + '">' +
-                coverInner +
-            '</div>';
-
-            parts.push(
-                '<button type="button" class="cl-briefing status-' + escapeHtml(status) + '" data-briefing-open="' + b.id + '">' +
-                    coverHtml +
-                    '<div class="cl-briefing-content">' +
-                        '<p class="cl-briefing-title">' + escapeHtml(title) + '</p>' +
-                        '<div class="cl-briefing-meta">' +
-                            '<span class="cl-briefing-status">' + escapeHtml(statusText) + '</span>' +
-                            '<span class="cl-briefing-deadline' + deadlineClass + '">' +
-                                '<i data-lucide="' + deadlineIcon + '"></i>' +
-                                '<span>' + escapeHtml(deadline.label) + '</span>' +
-                            '</span>' +
-                        '</div>' +
-                        '<div class="cl-briefing-progress">' +
-                            '<div class="cl-briefing-bar">' +
-                                '<div class="cl-briefing-bar-fill" style="width:' + pct + '%"></div>' +
-                            '</div>' +
-                            '<span class="cl-briefing-pct">' + escapeHtml(progressText) + '</span>' +
-                        '</div>' +
-                    '</div>' +
-                '</button>'
-            );
-        }
-        el.innerHTML = parts.join('');
-        refreshIcons();
-
-        el.querySelectorAll('[data-briefing-open]').forEach(function(btn) {
-            btn.addEventListener('click', function() {
-                const id = this.dataset.briefingOpen;
-                if (typeof window.clivoSoftNavigate === 'function') {
-                    window.clivoSoftNavigate('/fluxo/', {
-                        afterMount: function() {
-                            window.location.hash = id;
-                        }
-                    });
-                } else {
-                    window.location.href = '/fluxo/#' + id;
-                }
-            });
-        });
-    }
-
-    function setupBriefingsSearch() {
-        const input = document.getElementById('clBriefingsSearchInput');
-        if (!input || input.__clBound) return;
-        input.__clBound = true;
-        input.addEventListener('input', function() {
-            briefingsSearch = this.value || '';
-            renderBriefings();
-        });
-    }
-
-    // =====================================================================
-    // HISTÓRICO
-    // =====================================================================
-    async function loadHistorico() {
-        const el = document.getElementById('clHistoryList');
-        if (!el || !currentClient) return;
-
-        el.innerHTML = '<div class="cl-empty">Carregando…</div>';
-
-        const [notes, briefings] = await Promise.all([
-            loadNotasForHistory(),
-            loadBriefingsForHistory(),
-        ]);
-
-        const events = [];
-
-        notes.forEach(function(n) {
-            const wasEdited = n.updated_at && n.created_at &&
-                              n.updated_at !== n.created_at;
-            events.push({
-                kind: 'note',
-                icon: wasEdited ? 'pencil' : 'sticky-note',
-                label: wasEdited ? 'Nota editada' : 'Nota criada',
-                detail: n.content ? n.content.slice(0, 140) : '',
-                at: wasEdited ? n.updated_at : n.created_at,
-                author: n.author_name || n.author_email || '',
-            });
-        });
-
-        briefings.forEach(function(b) {
-            events.push({
-                kind: 'briefing',
-                icon: 'workflow',
-                label: 'Briefing: ' + (b.title || '—'),
-                detail: 'Status: ' + (BRIEFING_STATUS_LABELS[b.status] || b.status || '—'),
-                at: b.created_at,
-                author: b.created_by_name || '',
-            });
-        });
-
-        if (currentClient.created_at) {
-            events.push({
-                kind: 'status',
-                icon: 'user-plus',
-                label: 'Cliente criado',
-                detail: currentClient.public_code || '',
-                at: currentClient.created_at,
-                author: currentClient.created_by_name || '',
-            });
-        }
-
-        if (currentClient.updated_at && currentClient.created_at &&
-            currentClient.updated_at !== currentClient.created_at) {
-            events.push({
-                kind: 'status',
-                icon: 'activity',
-                label: 'Cliente atualizado',
-                detail: 'Status: ' + statusLabel(currentClient.status),
-                at: currentClient.updated_at,
-                author: '',
-            });
-        }
-
-        events.sort(function(a, b) {
-            const da = a.at ? new Date(a.at).getTime() : 0;
-            const db = b.at ? new Date(b.at).getTime() : 0;
-            return db - da;
-        });
-
-        renderHistory(events);
-    }
-
-    function loadNotasForHistory() {
-        if (!currentClient) return Promise.resolve([]);
-        return api('/api/clients/' + currentClient.id + '/notes/')
-            .then(function(data) {
-                return Array.isArray(data) ? data : (data.results || []);
-            })
-            .catch(function() { return []; });
-    }
-
-    function loadBriefingsForHistory() {
-        if (!currentClient) return Promise.resolve([]);
-        if (briefingsCacheByClient.has(currentClient.id)) {
-            return Promise.resolve(briefingsCacheByClient.get(currentClient.id));
-        }
-        return api('/api/briefings/?client=' + currentClient.id)
-            .then(function(data) {
-                const list = Array.isArray(data) ? data : (data.results || []);
-                briefingsCacheByClient.set(currentClient.id, list);
-                return list;
-            })
-            .catch(function() { return []; });
-    }
-
-    function renderHistory(events) {
-        const el = document.getElementById('clHistoryList');
-        if (!el) return;
-
-        if (!events.length) {
-            el.innerHTML = '<div class="cl-empty">Nada por aqui ainda</div>';
-            return;
-        }
-
-        const parts = [];
-        for (let i = 0; i < events.length; i++) {
-            const e = events[i];
-            const detail = e.detail ? e.detail.replace(/\n+/g, ' ').trim() : '';
-
-            parts.push(
-                '<div class="cl-feed-item">' +
-                    '<div class="cl-feed-icon is-' + escapeHtml(e.kind) + '">' +
-                        '<i data-lucide="' + escapeHtml(e.icon) + '"></i>' +
-                    '</div>' +
-                    '<div class="cl-feed-stack">' +
-                        '<p class="cl-feed-label">' + escapeHtml(e.label) + '</p>' +
-                        (detail
-                            ? '<p class="cl-feed-detail">' + escapeHtml(detail) + '</p>'
-                            : '') +
-                    '</div>' +
-                    '<div class="cl-feed-meta">' +
-                        '<span class="cl-feed-meta-date">' + formatDateTime(e.at) + '</span>' +
-                        (e.author
-                            ? '<span class="cl-feed-meta-author">' + escapeHtml(e.author) + '</span>'
-                            : '') +
-                    '</div>' +
-                '</div>'
-            );
-        }
-        el.innerHTML = parts.join('');
-        refreshIcons();
-    }
-
-    // =====================================================================
-    // MODAL EXCLUIR CLIENTE
-    // =====================================================================
-    function setupDeleteModal() {
-        const modal = document.getElementById('clDeleteModal');
-        const input = document.getElementById('clDeleteInput');
-        const btn = document.getElementById('clDeleteConfirmBtn');
-        if (!modal || !input || !btn) return;
-
-        input.addEventListener('input', function() {
-            const expected = (currentClient && currentClient.name) || '';
-            btn.disabled = this.value.trim() !== expected;
-        });
-
-        btn.addEventListener('click', async function() {
-            if (!currentClient) return;
-
-            const originalText = btn.textContent;
-            btn.disabled = true;
-            btn.textContent = 'Excluindo…';
-
-            try {
-                const deletedId = currentClient.id;
-                await api('/api/clients/' + deletedId + '/', 'DELETE');
-                showToast('Cliente excluído', 'success');
-                modal.classList.remove('active');
-                window.Clivo.cache.clients = null;
-
-                detailCache.delete(deletedId);
-                briefingsCacheByClient.delete(deletedId);
-                clientsCache = clientsCache.filter(function(c) {
-                    return c.id !== deletedId;
-                });
-                window.Clivo.cache.clients = {
-                    data: clientsCache,
-                    timestamp: Date.now(),
-                };
-
-                currentClient = null;
-                closeDetail();
-                renderClients();
-                updateListSubtitle();
-                ensureActive();
-            } catch (e) {
-                showToast(e.message || 'Erro', 'error');
-                btn.disabled = false;
-                btn.textContent = originalText;
-            }
-        });
-
-        modal.querySelectorAll('[data-close="clDeleteModal"]').forEach(function(el) {
-            el.addEventListener('click', function() {
-                modal.classList.remove('active');
-                input.value = '';
-                btn.disabled = true;
-            });
-        });
-    }
-
-    // =====================================================================
-    // AÇÕES DO DETALHE
-    // =====================================================================
-    function setupDetailActions() {
-        const backBtn = document.getElementById('clBackBtn');
-        if (backBtn) backBtn.addEventListener('click', closeDetail);
-
-        const saveBtn = document.getElementById('clSaveIdentityBtn');
-        if (saveBtn) {
-            saveBtn.addEventListener('click', async function() {
-                if (!currentClient) return;
-                const btn = this;
-                const nameEl = document.getElementById('clFieldName');
-                const emailEl = document.getElementById('clFieldEmail');
-                const phoneEl = document.getElementById('clFieldPhone');
-                const payload = {
-                    name: nameEl ? nameEl.value.trim() : '',
-                    email: emailEl ? emailEl.value.trim() : '',
-                    phone: phoneEl ? phoneEl.value.trim() : '',
-                };
-                if (!payload.name) { showToast('Informe o nome', 'error'); return; }
-
-                setLoading(btn, true, 'Salvando…');
-                try {
-                    currentClient = await api('/api/clients/' + currentClient.id + '/', 'PATCH', payload);
-                    detailCache.set(currentClient.id, currentClient);
-                    renderDetail();
-
-                    const idx = clientsCache.findIndex(function(c) { return c.id === currentClient.id; });
-                    if (idx !== -1) {
-                        clientsCache[idx] = Object.assign({}, clientsCache[idx], {
-                            name: currentClient.name,
-                            email: currentClient.email,
-                            phone: currentClient.phone,
-                        });
-                        window.Clivo.cache.clients = {
-                            data: clientsCache,
-                            timestamp: Date.now(),
-                        };
-                        renderClients();
-                        updateSelection();
-                    }
-                    loadHistorico();
-                    showToast('Cliente atualizado', 'success');
-                } catch (e) {
-                    showToast(e.message || 'Erro', 'error');
-                } finally {
-                    setLoading(btn, false);
-                }
-            });
-        }
-
-        const copyBtn = document.getElementById('clCopyCodeBtn');
-        if (copyBtn) {
-            copyBtn.addEventListener('click', function() {
-                if (!currentClient) return;
-                if (navigator.clipboard) {
-                    navigator.clipboard.writeText(currentClient.public_code || '');
-                }
-                showToast('Código copiado', 'success');
-            });
-        }
-
-        const sendBtn = document.getElementById('clSendCodeBtn');
-        if (sendBtn) {
-            sendBtn.addEventListener('click', function() {
-                sendClientCode(sendBtn);
-            });
-        }
-
-        const delBtn = document.getElementById('clDeleteBtn');
-        if (delBtn) {
-            delBtn.addEventListener('click', function() {
-                if (!currentClient) return;
-                const input = document.getElementById('clDeleteInput');
-                const confirmBtn = document.getElementById('clDeleteConfirmBtn');
-                const modal = document.getElementById('clDeleteModal');
-                if (input) input.value = '';
-                if (confirmBtn) confirmBtn.disabled = true;
-                if (modal) modal.classList.add('active');
-                setTimeout(function() { if (input) input.focus(); }, 100);
-            });
-        }
-    }
-
-    async function sendClientCode(btn) {
-        if (!currentClient) return;
-        if (!currentClient.email) {
-            showToast('Cliente não possui email cadastrado', 'error');
-            return;
-        }
-        setLoading(btn, true, 'Enviando…');
-        try {
-            await api('/api/clients/' + currentClient.id + '/send-code/', 'POST');
-            showToast('Código enviado por email', 'success');
-        } catch (e) {
-            showToast(e.message || 'Erro ao enviar', 'error');
-        } finally {
-            setLoading(btn, false);
-        }
-    }
-
-    // =====================================================================
-    // ROUTE / MOUNT / UNMOUNT
-    // =====================================================================
-    function route() {
-        const hash = (window.location.hash || '').replace('#', '');
-
-        if (hash) {
-            openClient(hash);
-            return;
-        }
-
-        if (clientsLoaded && clientsCache.length) {
-            renderClients();
-            updateListSubtitle();
-            ensureActive();
-        } else {
-            loadClients().then(ensureActive);
-        }
-    }
-
-    function ensureActive() {
-        if (currentClient) return;
-        if (window.innerWidth < 800) return;
-        if (!clientsCache.length) return;
-        openClient(clientsCache[0].id);
-    }
-
-    window.clivoOnClientCreated = function(created) {
-        window.Clivo.cache.clients = null;
-        clientsLoaded = false;
-        if (window.Clivo.currentPage === 'cliente') {
-            loadClients(true).then(function() {
-                if (created && created.id) openClient(created.id);
-            });
-        }
-    };
-
-    window.clivoOnBriefingCreated = function(briefing, clientId) {
-        if (!briefing || !clientId) return;
-        if (window.Clivo.currentPage !== 'cliente') return;
-        if (!currentClient || currentClient.id !== clientId) return;
-
-        briefingsCacheByClient.delete(clientId);
-        loadBriefings(true);
-        loadHistorico();
-    };
-
-    window.clivoRefreshClientes = function() {
-        if (window.Clivo.currentPage !== 'cliente') return;
-        if (!currentClient) return;
-        briefingsCacheByClient.delete(currentClient.id);
-        loadBriefings(true);
-        loadHistorico();
-    };
-
-    function mount() {
-        if (!clientsLoaded) clientsCache = [];
-        currentClient = null;
-        briefingsCache = [];
-        briefingsSearch = '';
-        isOpening = false;
-
-        const searchInput = document.getElementById('clSearchInput');
-        if (searchInput) searchInput.addEventListener('input', function() {
-            renderClients();
-        });
-
-        const statusFilter = document.getElementById('clStatusFilter');
-        if (statusFilter) statusFilter.addEventListener('change', function() {
-            renderClients();
-        });
-
-        setupDetailActions();
-        setupDeleteModal();
-        setupStatusMenu();
-        setupBriefingsSearch();
-        bindListEvents();
-
-        loadClients().then(ensureActive);
-    }
-
-    function unmount() {
+    el.statusMenu.innerHTML = parts.join("");
+    refreshIcons();
+  }
+  function openStatusMenu() {
+    if (!el.statusMenu || !el.statusPill) return;
+    if (state.changingStatus) return;
+    renderStatusMenu();
+    el.statusMenu.hidden = false;
+    el.statusPill.setAttribute("aria-expanded", "true");
+    state.statusMenuOpen = true;
+    setTimeout(() => {
+      const off = (ev) => {
+        if (
+          el.statusMenu.contains(ev.target) ||
+          el.statusPill.contains(ev.target)
+        )
+          return;
         closeStatusMenu();
+        document.removeEventListener("click", off, true);
+      };
+      document.addEventListener("click", off, true);
+    }, 0);
+  }
+  function closeStatusMenu() {
+    if (!el.statusMenu || !el.statusPill) return;
+    el.statusMenu.hidden = true;
+    el.statusPill.setAttribute("aria-expanded", "false");
+    state.statusMenuOpen = false;
+  }
+
+  async function changeStatus(newStatus) {
+    if (!state.activeId || !newStatus || state.changingStatus) return;
+    const idx = state.clients.findIndex(
+      (x) => String(x.id) === String(state.activeId),
+    );
+    if (idx === -1) return;
+    const current = state.clients[idx];
+    if (current.status === newStatus) {
+      closeStatusMenu();
+      return;
     }
 
-    window.ClivoPages = window.ClivoPages || {};
-    window.ClivoPages.cliente = {
-        mount: mount,
-        unmount: unmount,
-        route: route,
+    state.changingStatus = true;
+    closeStatusMenu();
+    if (el.statusPill) el.statusPill.disabled = true;
+
+    try {
+      const updated = await api("/api/clients/" + state.activeId + "/", {
+        method: "PATCH",
+        body: { status: newStatus },
+      });
+      if (updated && updated.status) {
+        state.clients[idx] = Object.assign({}, state.clients[idx], updated);
+      } else {
+        state.clients[idx].status = newStatus;
+      }
+      state.detailCache.delete(String(state.activeId));
+      applyDetailHeader(state.clients[idx]);
+      renderList();
+      renderFilters();
+      showToast("Status atualizado", "success");
+    } catch (err) {
+      showToast((err && err.message) || "Erro ao atualizar status", "error");
+    } finally {
+      state.changingStatus = false;
+      if (el.statusPill) el.statusPill.disabled = false;
+    }
+  }
+
+  async function fetchBundle(clientId, ctrl) {
+    const [client, briefings, notes] = await Promise.all([
+      api("/api/clients/" + clientId + "/", {
+        signal: ctrl ? ctrl.signal : undefined,
+      }),
+      api("/api/briefings/?client=" + clientId, {
+        signal: ctrl ? ctrl.signal : undefined,
+      }).catch(() => []),
+      api("/api/clients/" + clientId + "/notes/", {
+        signal: ctrl ? ctrl.signal : undefined,
+      }).catch(() => []),
+    ]);
+    return {
+      client,
+      briefings: Array.isArray(briefings)
+        ? briefings
+        : (briefings && briefings.results) || [],
+      notes: Array.isArray(notes) ? notes : (notes && notes.results) || [],
     };
+  }
+  function putCachedDetail(id, bundle) {
+    state.detailCache.set(String(id), { bundle, ts: Date.now() });
+  }
+  function getCachedDetail(id) {
+    const hit = state.detailCache.get(String(id));
+    if (!hit) return null;
+    if (Date.now() - hit.ts > 30000) {
+      state.detailCache.delete(String(id));
+      return null;
+    }
+    return hit.bundle;
+  }
+  function hydrateDetail(id, bundle) {
+    state.briefings = bundle.briefings || [];
+    applyDetailHeader(bundle.client);
+    renderBriefings();
+    renderContext(bundle.client);
+    renderProfile(bundle.client);
+    renderAttention(bundle.client);
+    renderDislikes(bundle.client);
+    renderWishes(bundle.client);
+    renderTags(bundle.client);
+  }
+  async function loadClient(id) {
+    if (!id) return;
+    if (state.abortDetail) state.abortDetail.abort();
+    const ctrl = new AbortController();
+    state.abortDetail = ctrl;
+    state.activeId = id;
+    const fromList = state.clients.find((x) => String(x.id) === String(id));
+    if (fromList) applyDetailHeader(fromList);
+    showDetail();
+    const cached = getCachedDetail(id);
+    if (cached) {
+      hydrateDetail(id, cached);
+      return;
+    }
+    try {
+      const bundle = await fetchBundle(id, ctrl);
+      if (ctrl.signal.aborted) return;
+      putCachedDetail(id, bundle);
+      hydrateDetail(id, bundle);
+    } catch (err) {
+      if (err && err.name === "AbortError") return;
+      console.warn("[cliente] falha ao carregar", err);
+      showEmpty();
+    }
+  }
+  function prefetchClient(id) {
+    if (
+      !id ||
+      String(id) === String(state.activeId) ||
+      getCachedDetail(id) ||
+      state.prefetching.has(String(id))
+    )
+      return;
+    state.prefetching.add(String(id));
+    fetchBundle(id)
+      .then((b) => putCachedDetail(id, b))
+      .catch(() => {})
+      .finally(() => state.prefetching.delete(String(id)));
+  }
+
+  function openBriefingInNewTab(briefingId) {
+      if (!briefingId) return;
+      const pid = (window.Clivo && window.Clivo.workspacePublicIdFromUrl) || '';
+      if (!pid) {
+          showToast("Workspace não identificado. Recarregue a página.", "error");
+          return;
+      }
+      const url = "/w/" + pid + "/briefings/" + briefingId + "/resumo/";
+      window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  function renderBriefings() {
+    if (!el.briefingsList) return;
+    const q = (state.briefingsSearch || "").trim().toLowerCase();
+    const items = !q
+      ? state.briefings
+      : state.briefings.filter(
+          (b) =>
+            (b.title || "").toLowerCase().indexOf(q) !== -1 ||
+            (b.template_name || "").toLowerCase().indexOf(q) !== -1,
+        );
+    if (el.briefingsCount)
+      el.briefingsCount.textContent = state.briefings.length;
+    if (!items.length) {
+      el.briefingsList.innerHTML =
+        '<div class="cl-empty">' +
+        (state.briefings.length
+          ? "Nada encontrado."
+          : "Nenhum briefing ainda.") +
+        "</div>";
+      return;
+    }
+    const parts = [];
+    for (let i = 0; i < items.length; i++) {
+      const b = items[i];
+      const status = b.status || "in_progress";
+      const p = b.progress || {};
+      const pct = typeof p.percent === "number" ? Math.round(p.percent) : 0;
+      const answered = p.answered || 0;
+      const total = p.total_required || 0;
+      const progText = total ? answered + "/" + total : "—";
+      const dl = deadlineInfo(b.expires_at, status);
+      const cover = b.cover_url || "";
+      const thumb = cover
+        ? '<span class="cl-brief-thumb"><img src="' +
+          esc(cover) +
+          '" alt="" loading="lazy"></span>'
+        : '<span class="cl-brief-thumb is-empty"><i data-lucide="workflow"></i></span>';
+      parts.push(
+        '<button type="button" class="cl-brief" data-brief-open="' +
+          esc(String(b.id)) +
+          '">' +
+          '<div class="cl-brief-top-row">' +
+          thumb +
+          '<div class="cl-brief-body">' +
+          '<span class="cl-brief-name" title="' +
+          esc(b.title || "Briefing") +
+          '">' +
+          esc(b.title || "Briefing") +
+          "</span>" +
+          '<span class="cl-brief-status" data-status="' +
+          esc(status) +
+          '">' +
+          esc(BRIEFING_STATUS[status] || status) +
+          "</span>" +
+          "</div>" +
+          "</div>" +
+          '<div class="cl-brief-foot">' +
+          '<span class="cl-brief-deadline' +
+          (dl.cls ? " " + dl.cls : "") +
+          '">' +
+          "<span>" +
+          esc(dl.label) +
+          "</span>" +
+          "</span>" +
+          '<span class="cl-brief-progress">' +
+          '<span class="cl-brief-bar"><span class="cl-brief-bar-fill" style="width:' +
+          pct +
+          '%"></span></span>' +
+          '<span class="cl-brief-pct">' +
+          esc(progText) +
+          "</span>" +
+          "</span>" +
+          "</div>" +
+          "</button>",
+      );
+    }
+    el.briefingsList.innerHTML = parts.join("");
+    refreshIcons();
+  }
+
+  function normalizeContextList(raw) {
+    if (!raw) return [];
+    if (Array.isArray(raw)) {
+      return raw
+        .map((item) => {
+          if (typeof item === "string") return { title: item, subtitle: "" };
+          if (item && typeof item === "object")
+            return {
+              title: item.title || item.name || "",
+              subtitle: item.subtitle || item.description || "",
+            };
+          return null;
+        })
+        .filter(Boolean);
+    }
+    if (typeof raw === "string") {
+      return raw
+        .split(/\n+/)
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .map((s) => ({ title: s, subtitle: "" }));
+    }
+    return [];
+  }
+
+  function fillChecks(ul, items) {
+    if (!ul) return;
+    const slots = ul.querySelectorAll(".cl-check-slot");
+    for (let i = 0; i < slots.length; i++) {
+      const slot = slots[i];
+      const item = items[i];
+      const strong = slot.querySelector(".cl-check-text strong");
+      const small = slot.querySelector(".cl-check-text small");
+      if (!strong) continue;
+      if (item && (item.title || item.subtitle)) {
+        slot.classList.remove("is-empty");
+        strong.textContent = item.title || "—";
+        if (small) small.textContent = item.subtitle || "";
+      } else {
+        slot.classList.add("is-empty");
+        strong.textContent = "—";
+        if (small) small.textContent = "";
+      }
+    }
+  }
+
+  function renderContext(c) {
+    if (!c) return;
+    const ctx = c.context || {};
+    if (el.viewKnowledge) {
+      const text = (ctx.knowledge || "").trim();
+      el.viewKnowledge.innerHTML = text
+        ? "<p>" + esc(text) + "</p>"
+        : '<p class="cl-knowledge-empty">Sem informações ainda.</p>';
+    }
+    if (el.countKnowledge) {
+      const lines = (ctx.knowledge || "").trim()
+        ? (ctx.knowledge || "").split(/\n+/).filter(Boolean)
+        : [];
+      el.countKnowledge.textContent = String(lines.length);
+    }
+  }
+
+  function renderProfile(c) {
+    if (!el.viewProfile) return;
+    const ctx = (c && c.context) || {};
+    const text = (ctx.profile || "").trim();
+    el.viewProfile.innerHTML = text
+      ? "<p>" + esc(text) + "</p>"
+      : '<p class="cl-profile-empty">Sem informações ainda.</p>';
+  }
+
+  function renderAttention(c) {
+    if (!el.attentionList) return;
+    const ctx = (c && c.context) || {};
+    fillChecks(el.attentionList, normalizeContextList(ctx.attention));
+  }
+  function renderDislikes(c) {
+    if (!el.dislikesList) return;
+    const ctx = (c && c.context) || {};
+    fillChecks(el.dislikesList, normalizeContextList(ctx.dislikes));
+  }
+  function renderWishes(c) {
+    if (!el.wishesList) return;
+    const ctx = (c && c.context) || {};
+    fillChecks(el.wishesList, normalizeContextList(ctx.wishes));
+  }
+
+  function renderTags(c) {
+    if (!el.tagsList) return;
+    const ctx = (c && c.context) || {};
+    const tags = Array.isArray(ctx.tags) ? ctx.tags : [];
+    el.tagsList.innerHTML = !tags.length
+      ? '<span class="cl-tag cl-tag--empty">—</span>'
+      : tags
+          .map((t) => '<span class="cl-tag">' + esc(String(t)) + "</span>")
+          .join("");
+  }
+
+  function openEditModal() {
+    if (!state.activeId) return;
+    const c = state.clients.find(
+      (x) => String(x.id) === String(state.activeId),
+    );
+    if (!c) return;
+    if (el.fieldName) el.fieldName.value = c.name || "";
+    if (el.fieldEmail) el.fieldEmail.value = c.email || "";
+    if (el.fieldPhone) el.fieldPhone.value = c.phone || "";
+    openModal(el.configModal);
+  }
+  async function saveIdentity() {
+    if (!state.activeId) return;
+    const payload = {
+      name: ((el.fieldName && el.fieldName.value) || "").trim(),
+      email: ((el.fieldEmail && el.fieldEmail.value) || "").trim(),
+      phone: ((el.fieldPhone && el.fieldPhone.value) || "").trim(),
+    };
+    if (!payload.name) {
+      showToast("Informe o nome", "error");
+      return;
+    }
+    try {
+      const updated = await api("/api/clients/" + state.activeId + "/", {
+        method: "PATCH",
+        body: payload,
+      });
+      const idx = state.clients.findIndex(
+        (x) => String(x.id) === String(state.activeId),
+      );
+      if (idx !== -1)
+        state.clients[idx] = Object.assign({}, state.clients[idx], updated);
+      state.detailCache.delete(String(state.activeId));
+      applyDetailHeader(updated);
+      renderList();
+      renderFilters();
+      closeModal(el.configModal);
+      showToast("Cliente atualizado", "success");
+    } catch (err) {
+      showToast((err && err.message) || "Erro ao salvar", "error");
+    }
+  }
+  async function sendCode() {
+    if (!state.activeId) return;
+    const c = state.clients.find(
+      (x) => String(x.id) === String(state.activeId),
+    );
+    if (!c || !c.email) {
+      showToast("Cliente sem email cadastrado", "error");
+      return;
+    }
+    try {
+      await api("/api/clients/" + state.activeId + "/send-code/", {
+        method: "POST",
+        body: {},
+      });
+      showToast("Código enviado por email", "success");
+    } catch (err) {
+      showToast((err && err.message) || "Erro ao enviar", "error");
+    }
+  }
+  function openDeleteModal() {
+    if (!state.activeId) return;
+    const c = state.clients.find(
+      (x) => String(x.id) === String(state.activeId),
+    );
+    if (!c) return;
+    if (el.deleteWord) el.deleteWord.textContent = c.name || "";
+    if (el.deleteInput) el.deleteInput.value = "";
+    if (el.deleteConfirmBtn) el.deleteConfirmBtn.disabled = true;
+    openModal(el.deleteModal);
+    setTimeout(() => {
+      if (el.deleteInput) el.deleteInput.focus();
+    }, 80);
+  }
+  async function confirmDelete() {
+    if (!state.activeId) return;
+    const input = ((el.deleteInput && el.deleteInput.value) || "").trim();
+    const c = state.clients.find(
+      (x) => String(x.id) === String(state.activeId),
+    );
+    if (!c || input !== (c.name || "")) return;
+    const btn = el.deleteConfirmBtn;
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "Excluindo…";
+    }
+    try {
+      await api("/api/clients/" + state.activeId + "/", { method: "DELETE" });
+      const removed = state.activeId;
+      state.clients = state.clients.filter(
+        (x) => String(x.id) !== String(removed),
+      );
+      state.detailCache.delete(String(removed));
+      state.activeId = null;
+      closeModal(el.deleteModal);
+      renderList();
+      renderFilters();
+      showEmpty();
+      showToast("Cliente excluído", "success");
+    } catch (err) {
+      showToast((err && err.message) || "Erro ao excluir", "error");
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = "Excluir";
+      }
+    }
+  }
+
+  async function triggerReanalysis() {
+    if (!state.activeId || !el.reanalyzeBtn) return;
+    if (state.reanalyzing) return;
+    state.reanalyzing = true;
+    el.reanalyzeBtn.classList.add("is-loading");
+    el.reanalyzeBtn.disabled = true;
+    const started = Date.now();
+    try {
+      const result = await api(
+        "/api/intelligence/clients/" + state.activeId + "/reanalyze/",
+        {
+          method: "POST",
+          body: {},
+        },
+      );
+      const wait = Math.max(0, 400 - (Date.now() - started));
+      if (wait) await new Promise((res) => setTimeout(res, wait));
+      const jobId = (result && result.job_id) || "";
+      showToast(
+        jobId
+          ? "Análise agendada (" + String(jobId).slice(0, 8) + ")"
+          : "Análise agendada",
+        "success",
+      );
+    } catch (err) {
+      if (err && err.status === 404) {
+        showToast(
+          "Análise manual ainda não disponível neste ambiente",
+          "error",
+        );
+      } else if (err && err.status === 403) {
+        showToast("Sua governança não permite esta ação", "error");
+      } else if (err && err.status === 400) {
+        showToast(
+          (err && err.message) || "Análise bloqueada pela política de quota",
+          "error",
+        );
+      } else {
+        showToast((err && err.message) || "Falha ao agendar", "error");
+      }
+    } finally {
+      state.reanalyzing = false;
+      el.reanalyzeBtn.classList.remove("is-loading");
+      el.reanalyzeBtn.disabled = false;
+    }
+  }
+
+  function copyCode() {
+    if (!el.detailCode) return;
+    const code = (el.detailCode.textContent || "").trim();
+    if (!code || code === "—") return;
+
+    const onCopied = () => {
+      if (!el.codeCopyBtn) return;
+      el.codeCopyBtn.classList.add("is-copied");
+      const icon = el.codeCopyBtn.querySelector("svg, i");
+      if (icon) {
+        const original = icon.outerHTML;
+        if (window.lucide) {
+          icon.outerHTML = '<i data-lucide="check"></i>';
+          refreshIcons();
+        }
+        if (state.codeCopiedTimer) clearTimeout(state.codeCopiedTimer);
+        state.codeCopiedTimer = setTimeout(() => {
+          el.codeCopyBtn.classList.remove("is-copied");
+          const cur = el.codeCopyBtn.querySelector("svg, i");
+          if (cur) cur.outerHTML = original;
+          refreshIcons();
+        }, 1500);
+      } else {
+        if (state.codeCopiedTimer) clearTimeout(state.codeCopiedTimer);
+        state.codeCopiedTimer = setTimeout(() => {
+          el.codeCopyBtn.classList.remove("is-copied");
+        }, 1500);
+      }
+      showToast("Código copiado", "success");
+    };
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard
+        .writeText(code)
+        .then(onCopied)
+        .catch(() => {
+          fallbackCopy(code, onCopied);
+        });
+    } else {
+      fallbackCopy(code, onCopied);
+    }
+  }
+  function fallbackCopy(text, cb) {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "absolute";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+      cb();
+    } catch (e) {
+      showToast("Não foi possível copiar", "error");
+    }
+  }
+
+  function bindEvents() {
+    if (el.kpis)
+      el.kpis.addEventListener("click", (e) => {
+        const btn = e.target.closest(".cl-filter");
+        if (btn) setFilter(btn.dataset.kpi);
+      });
+    if (el.search) {
+      let t;
+      el.search.addEventListener("input", () => {
+        clearTimeout(t);
+        t = setTimeout(() => {
+          const q = el.search.value || "";
+          if (q === state.query) return;
+          state.query = q;
+          renderList();
+        }, 80);
+      });
+    }
+    if (el.list) {
+      el.list.addEventListener("mouseover", (e) => {
+        const item = e.target.closest(".cl-client");
+        if (item) prefetchClient(item.dataset.id);
+      });
+      el.list.addEventListener("click", (e) => {
+        const item = e.target.closest(".cl-client");
+        if (!item) return;
+        const id = item.dataset.id;
+        if (!id || String(id) === String(state.activeId)) return;
+        const now = Date.now();
+        if (now - state.lastClickTs < 80) return;
+        state.lastClickTs = now;
+        const prev = el.list.querySelector(".cl-client.is-active");
+        if (prev) prev.classList.remove("is-active");
+        item.classList.add("is-active");
+        loadClient(id);
+      });
+    }
+    if (el.backBtn)
+      el.backBtn.addEventListener("click", () => {
+        if (el.body) el.body.classList.remove("detail-open");
+        showEmpty();
+      });
+    if (el.briefingsSearch) {
+      let t;
+      el.briefingsSearch.addEventListener("input", () => {
+        clearTimeout(t);
+        t = setTimeout(() => {
+          state.briefingsSearch = el.briefingsSearch.value || "";
+          renderBriefings();
+        }, 80);
+      });
+    }
+    if (el.briefingsList)
+      el.briefingsList.addEventListener("click", (e) => {
+        const btn = e.target.closest("[data-brief-open]");
+        if (!btn) return;
+        const id = btn.dataset.briefOpen;
+        if (id) openBriefingInNewTab(id);
+      });
+
+    if (el.kebabBtn)
+      el.kebabBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (state.kebabOpen) closeKebab();
+        else openKebab();
+      });
+    if (el.editBtn)
+      el.editBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        closeKebab();
+        openEditModal();
+      });
+    if (el.sendCodeBtn)
+      el.sendCodeBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        closeKebab();
+        sendCode();
+      });
+    if (el.deleteBtn)
+      el.deleteBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        closeKebab();
+        openDeleteModal();
+      });
+
+    if (el.statusPill)
+      el.statusPill.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (state.statusMenuOpen) closeStatusMenu();
+        else openStatusMenu();
+      });
+    if (el.statusMenu)
+      el.statusMenu.addEventListener("click", (e) => {
+        const btn = e.target.closest(".cl-status-menu-item");
+        if (btn && !btn.disabled) changeStatus(btn.dataset.status);
+      });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && state.statusMenuOpen) closeStatusMenu();
+    });
+
+    if (el.codeCopyBtn) el.codeCopyBtn.addEventListener("click", copyCode);
+
+    if (el.saveIdentityBtn)
+      el.saveIdentityBtn.addEventListener("click", saveIdentity);
+    if (el.deleteInput)
+      el.deleteInput.addEventListener("input", () => {
+        const c = state.clients.find(
+          (x) => String(x.id) === String(state.activeId),
+        );
+        if (el.deleteConfirmBtn)
+          el.deleteConfirmBtn.disabled =
+            !c || el.deleteInput.value.trim() !== (c.name || "");
+      });
+    if (el.deleteConfirmBtn)
+      el.deleteConfirmBtn.addEventListener("click", confirmDelete);
+    if (el.reanalyzeBtn)
+      el.reanalyzeBtn.addEventListener("click", triggerReanalysis);
+  }
+
+  async function loadClients() {
+    try {
+      const data = await api("/api/clients/");
+      state.clients = Array.isArray(data) ? data : (data && data.results) || [];
+    } catch (err) {
+      console.warn("[cliente] falha ao carregar lista", err);
+      state.clients = [];
+    }
+    state.statusChoices = computeStatusChoices();
+    renderFilters();
+    renderList();
+    if (state.clients.length && !state.activeId && window.innerWidth >= 800) {
+      loadClient(state.clients[0].id);
+    } else if (!state.clients.length) {
+      showEmpty();
+    }
+  }
+
+  function mount() {
+    const root = document.getElementById("clPage");
+    if (!root) return;
+    if (state.mounted && state.root === root) return;
+    state.root = root;
+    state.mounted = true;
+    state.clients = [];
+    state.filtered = [];
+    state.activeId = null;
+    state.filter = "all";
+    state.query = "";
+    state.statusChoices = [];
+    state.briefings = [];
+    state.briefingsSearch = "";
+    state.listCache = new Map();
+    state.detailCache = new Map();
+    state.prefetching = new Set();
+    state.lastClickTs = 0;
+    state.kebabOpen = false;
+    state.statusMenuOpen = false;
+    state.reanalyzing = false;
+    state.changingStatus = false;
+    state.codeCopiedTimer = null;
+
+    cacheElements();
+    bindEvents();
+    bindModalClosers();
+    loadClients();
+  }
+
+  function unmount() {
+    state.mounted = false;
+    if (state.abortDetail) {
+      try {
+        state.abortDetail.abort();
+      } catch (e) {}
+      state.abortDetail = null;
+    }
+    state.listCache = new Map();
+    state.detailCache = new Map();
+    state.prefetching = new Set();
+    document.body.style.overflow = "";
+    closeKebab();
+    closeStatusMenu();
+    if (state.codeCopiedTimer) {
+      clearTimeout(state.codeCopiedTimer);
+      state.codeCopiedTimer = null;
+    }
+  }
+
+  window.ClivoPages = window.ClivoPages || {};
+  window.ClivoPages.cliente = { mount, unmount };
+
+  function autoMount() {
+    if (document.getElementById("clPage")) mount();
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", autoMount);
+  } else {
+    autoMount();
+  }
 })();

@@ -7,6 +7,16 @@ O serviço chama `boto3.client(...)` dentro de `fetch()`, então o
 mock precisa patchear `boto3.client` no módulo `boto3` em si
 (não no módulo do serviço).
 
+O serviço usa `list_object_versions` (não `list_objects_v2`) para
+contabilizar TODAS as versões de cada objeto — a B2 cobra por todas
+elas, não só pela versão ativa. Os mocks abaixo refletem esse
+formato:
+
+    {
+        'Versions': [{'Key', 'Size', 'IsLatest'}, ...],
+        'DeleteMarkers': [...],
+    }
+
 A validação contra a API real do B2 fica em
 `test_b2_usage_service_integration.py`, que só roda com `B2_INTEGRATION=1`.
 """
@@ -49,20 +59,38 @@ def _make_client_error(code: str, message: str) -> ClientError:
     """Constrói um ClientError com payload mínimo."""
     return ClientError(
         {'Error': {'Code': code, 'Message': message}},
-        operation_name='ListObjectsV2',
+        operation_name='ListObjectVersions',
     )
 
 
-def _make_paginator(contents_per_page):
+def _make_paginator(versions_per_page, delete_markers_per_page=None):
     """
-    Cria um mock de paginador do boto3 que devolve as páginas na ordem.
+    Cria um mock de paginador do boto3 que devolve páginas no
+    formato de `list_object_versions`:
 
-    `contents_per_page`: lista de listas de dicts. Cada item da lista
-    externa é uma página. Cada item da interna é um objeto S3.
+        {'Versions': [...], 'DeleteMarkers': [...]}
+
+    `versions_per_page`: lista de listas de dicts. Cada item da
+    lista externa é uma página; cada item da interna é uma versão
+    de objeto (`{'Key': ..., 'Size': int, 'IsLatest': bool}`).
+
+    `delete_markers_per_page`: opcional. Lista de listas no mesmo
+    formato. Se omitido, cada página terá `DeleteMarkers=[]`.
     """
+    if delete_markers_per_page is None:
+        delete_markers_per_page = [
+            [] for _ in versions_per_page
+        ]
+
     paginator = MagicMock()
     paginator.paginate.return_value = [
-        {'Contents': page} for page in contents_per_page
+        {
+            'Versions': page,
+            'DeleteMarkers': markers,
+        }
+        for page, markers in zip(
+            versions_per_page, delete_markers_per_page,
+        )
     ]
     return paginator
 
@@ -72,6 +100,11 @@ def _make_client_with_paginator(paginator):
     client = MagicMock()
     client.get_paginator.return_value = paginator
     return client
+
+
+def _v(key='a.txt', size=100, is_latest=True):
+    """Helper para criar um item de versão."""
+    return {'Key': key, 'Size': size, 'IsLatest': is_latest}
 
 
 # =========================================================================
@@ -145,6 +178,9 @@ class TestFetch:
         payload = result['payload']
         assert payload['total_bytes'] == 0
         assert payload['file_count'] == 0
+        assert payload['active_versions_count'] == 0
+        assert payload['total_versions_count'] == 0
+        assert payload['delete_markers_count'] == 0
         assert payload['truncated'] is False
         assert payload['bucket_name'] == 'test-bucket'
         assert payload['payload_version'] == PAYLOAD_VERSION
@@ -152,7 +188,7 @@ class TestFetch:
     @override_settings(**B2_SETTINGS)
     def test_returns_ok_with_single_object(self, mocker):
         paginator = _make_paginator([
-            [{'Key': 'a.txt', 'Size': 100}],
+            [_v(key='a.txt', size=100, is_latest=True)],
         ])
         client = _make_client_with_paginator(paginator)
         mocker.patch('boto3.client', return_value=client)
@@ -162,17 +198,19 @@ class TestFetch:
         assert result['ok'] is True
         assert result['payload']['total_bytes'] == 100
         assert result['payload']['file_count'] == 1
+        assert result['payload']['active_versions_count'] == 1
+        assert result['payload']['total_versions_count'] == 1
 
     @override_settings(**B2_SETTINGS)
     def test_returns_ok_with_multiple_pages(self, mocker):
         """Soma correta em múltiplas páginas de paginação."""
         paginator = _make_paginator([
             [
-                {'Key': 'a.txt', 'Size': 100},
-                {'Key': 'b.txt', 'Size': 250},
+                _v(key='a.txt', size=100),
+                _v(key='b.txt', size=250),
             ],
             [
-                {'Key': 'c.txt', 'Size': 75},
+                _v(key='c.txt', size=75),
             ],
         ])
         client = _make_client_with_paginator(paginator)
@@ -183,15 +221,16 @@ class TestFetch:
         assert result['ok'] is True
         assert result['payload']['total_bytes'] == 425
         assert result['payload']['file_count'] == 3
+        assert result['payload']['total_versions_count'] == 3
 
     @override_settings(**B2_SETTINGS)
     def test_ignores_objects_without_size(self, mocker):
         """Objeto sem `Size` (ou não-int) não entra na soma nem na contagem."""
         paginator = _make_paginator([
             [
-                {'Key': 'a.txt', 'Size': 100},
-                {'Key': 'no-size.txt'},          # sem Size
-                {'Key': 'b.txt', 'Size': 'invalid'},  # Size inválido
+                _v(key='a.txt', size=100),
+                {'Key': 'no-size.txt', 'IsLatest': True},          # sem Size
+                {'Key': 'b.txt', 'Size': 'invalid', 'IsLatest': True},  # Size inválido
             ],
         ])
         client = _make_client_with_paginator(paginator)
@@ -202,6 +241,53 @@ class TestFetch:
         assert result['ok'] is True
         assert result['payload']['total_bytes'] == 100
         assert result['payload']['file_count'] == 1
+        assert result['payload']['total_versions_count'] == 1
+
+    @override_settings(**B2_SETTINGS)
+    def test_counts_delete_markers(self, mocker):
+        """
+        DeleteMarkers são contados para auditoria, mas NÃO somam
+        bytes (não têm `Size`).
+        """
+        paginator = _make_paginator(
+            versions_per_page=[
+                [_v(key='a.txt', size=100)],
+            ],
+            delete_markers_per_page=[
+                [{'Key': 'deleted.txt'}],
+            ],
+        )
+        client = _make_client_with_paginator(paginator)
+        mocker.patch('boto3.client', return_value=client)
+
+        result = BackblazeB2UsageService.fetch()
+
+        assert result['ok'] is True
+        assert result['payload']['total_bytes'] == 100
+        assert result['payload']['delete_markers_count'] == 1
+
+    @override_settings(**B2_SETTINGS)
+    def test_counts_old_versions(self, mocker):
+        """
+        Versões antigas (`IsLatest=False`) entram em `total_bytes` e
+        em `total_versions_count`, mas NÃO em `active_versions_count`.
+        """
+        paginator = _make_paginator([
+            [
+                _v(key='a.txt', size=100, is_latest=True),
+                _v(key='a.txt', size=100, is_latest=False),
+                _v(key='a.txt', size=100, is_latest=False),
+            ],
+        ])
+        client = _make_client_with_paginator(paginator)
+        mocker.patch('boto3.client', return_value=client)
+
+        result = BackblazeB2UsageService.fetch()
+
+        assert result['ok'] is True
+        assert result['payload']['total_bytes'] == 300
+        assert result['payload']['active_versions_count'] == 1
+        assert result['payload']['total_versions_count'] == 3
 
     @override_settings(**B2_SETTINGS)
     def test_handles_client_error(self, mocker):
@@ -288,8 +374,8 @@ class TestSync:
     def test_creates_ok_snapshot(self, mocker):
         paginator = _make_paginator([
             [
-                {'Key': 'a.txt', 'Size': 1000},
-                {'Key': 'b.txt', 'Size': 2000},
+                _v(key='a.txt', size=1000),
+                _v(key='b.txt', size=2000),
             ],
         ])
         client = _make_client_with_paginator(paginator)
@@ -330,7 +416,7 @@ class TestSync:
         rate_limit_*, objects_count, resources_count, derived_resources_count)
         ficam NULL. Nunca preenchidos.
         """
-        paginator = _make_paginator([[{'Key': 'a.txt', 'Size': 100}]])
+        paginator = _make_paginator([[_v(key='a.txt', size=100)]])
         client = _make_client_with_paginator(paginator)
         mocker.patch('boto3.client', return_value=client)
 
@@ -371,7 +457,7 @@ class TestSync:
         Dois snapshots coexistem; a leitura usa o último 'ok'.
         """
         # 1ª chamada: sucesso
-        paginator = _make_paginator([[{'Key': 'a.txt', 'Size': 500}]])
+        paginator = _make_paginator([[_v(key='a.txt', size=500)]])
         client = _make_client_with_paginator(paginator)
         mocker.patch('boto3.client', return_value=client)
         ok_snapshot = BackblazeB2UsageService.sync()
@@ -415,7 +501,7 @@ class TestSync:
         Cada `sync()` cria uma linha NOVA. Nunca sobrescreve.
         Verifica que após N chamadas, existem N snapshots.
         """
-        paginator = _make_paginator([[{'Key': 'a.txt', 'Size': 100}]])
+        paginator = _make_paginator([[_v(key='a.txt', size=100)]])
         client = _make_client_with_paginator(paginator)
         mocker.patch('boto3.client', return_value=client)
 

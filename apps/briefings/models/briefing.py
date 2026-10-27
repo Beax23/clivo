@@ -14,8 +14,27 @@ Referências:
 
 CUSTOM QUESTIONS
 ----------------
-`custom_questions` (via BriefingQuestionInstance) só podem ser
-adicionadas/removidas enquanto o briefing NÃO tem nenhuma resposta.
+`custom_questions` (via BriefingQuestionInstance) podem ser adicionadas
+enquanto o briefing NÃO tem nenhuma resposta (comportamento antigo).
+
+PERGUNTAS COMPLEMENTARES
+------------------------
+A partir desta versão, perguntas adicionadas APÓS o briefing já ter
+respostas vão para um bloco separado, o `supplementary_snapshot`, e
+NÃO reescrevem o `structure_snapshot` original.
+
+O snapshot original permanece imutável. O bloco complementar é
+reconstruído a partir de `BriefingQuestionInstance` sempre que o
+arquiteto adiciona ou remove uma pergunta.
+
+REMOÇÃO
+-------
+Pergunta complementar NÃO respondida pode ser removida (DELETE real
++ evento com snapshot completo no `content`).
+
+Pergunta complementar JÁ respondida NÃO pode ser removida. Para
+corrigir, o arquiteto adiciona uma nova pergunta complementar. A
+`BriefingAnswer` e os eventos originais permanecem intactos.
 
 INTRO
 -----
@@ -30,8 +49,12 @@ ESTADOS
 -------
     in_progress   Em andamento (aceita resposta)
     paused        Arquiteto pausou (não aceita resposta)
-    completed     Cliente respondeu tudo
+    completed     Cliente respondeu tudo do bloco original
     cancelled     Encerrado manualmente ou prazo expirou
+
+`status` refere-se ao BLOCO ORIGINAL. O estado das perguntas
+complementares é controlado separadamente por
+`supplementary_completed_at`.
 """
 
 import uuid
@@ -62,6 +85,7 @@ class Briefing(models.Model):
     PORTAL_COMPLETED = 'completed'
     PORTAL_CANCELLED = 'cancelled'
     PORTAL_REOPENED = 'reopened'
+    PORTAL_SUPPLEMENTARY_PENDING = 'supplementary_pending'
 
     id = models.UUIDField(
         primary_key=True,
@@ -111,8 +135,29 @@ class Briefing(models.Model):
         default=dict,
         help_text=_(
             'Snapshot imutável da estrutura (sessões e perguntas) '
-            'copiado do template no momento da criação, incluindo '
-            'perguntas exclusivas adicionadas antes do congelamento.'
+            'copiado do template no momento da criação. '
+            'NUNCA reescrito após o primeiro congelamento.'
+        ),
+    )
+
+    supplementary_snapshot = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text=_(
+            'Estrutura das perguntas complementares, separada do '
+            'structure_snapshot original. Nunca reescreve o snapshot '
+            'original. Formato: '
+            '{"snapshot_version": 1, "sections": [...]}.'
+        ),
+    )
+
+    supplementary_completed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=_(
+            'Quando todas as perguntas complementares obrigatórias '
+            'foram respondidas. NULL = ainda há pendência ou nunca '
+            'houve complemento.'
         ),
     )
 
@@ -165,6 +210,18 @@ class Briefing(models.Model):
         ),
     )
 
+    last_viewed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=_(
+            'Última vez que o cliente abriu o portal deste briefing. '
+            'Usado para detectar perguntas complementares ainda não '
+            'vistas. Diferente de first_opened_at (que só registra a '
+            'primeira abertura).'
+        ),
+    )
+
     completed_at = models.DateTimeField(
         null=True,
         blank=True,
@@ -211,6 +268,7 @@ class Briefing(models.Model):
             models.Index(fields=['expires_at']),
             models.Index(fields=['template_version']),
             models.Index(fields=['first_opened_at']),
+            models.Index(fields=['last_viewed_at']),
         ]
 
     def __str__(self):
@@ -234,6 +292,19 @@ class Briefing(models.Model):
         if self.intro_seen_at is None:
             self.intro_seen_at = timezone.now()
             self.save(update_fields=['intro_seen_at', 'updated_at'])
+
+    def mark_viewed(self):
+        """
+        Registra a visualização atual. Atualiza SEMPRE, não só na
+        primeira vez. Diferente de `first_opened_at`.
+        """
+        now = timezone.now()
+        fields = ['last_viewed_at', 'updated_at']
+        self.last_viewed_at = now
+        if self.first_opened_at is None:
+            self.first_opened_at = now
+            fields.append('first_opened_at')
+        self.save(update_fields=fields)
 
     # ------------------------------------------------------------------
     # ESTADO
@@ -268,6 +339,14 @@ class Briefing(models.Model):
         return False
 
     def is_snapshot_locked(self) -> bool:
+        """
+        Retorna True se o snapshot ORIGINAL não pode mais ser alterado.
+
+        Nota: esta guarda continua válida para `structure_snapshot`.
+        Perguntas complementares NÃO dependem desta guarda — vão para
+        `supplementary_snapshot` e são gerenciadas por
+        BriefingQuestionInstanceService.
+        """
         return self.answers.exists()
 
     def has_available_origin(self) -> bool:
@@ -276,6 +355,134 @@ class Briefing(models.Model):
         if self.template_version is None:
             return False
         return True
+
+    # ------------------------------------------------------------------
+    # PERGUNTAS COMPLEMENTARES
+    # ------------------------------------------------------------------
+
+    def supplementary_questions(self) -> list:
+        """
+        Retorna a lista achatada de perguntas complementares do
+        `supplementary_snapshot`, com `section_id` e `section_title`
+        embutidos em cada item.
+        """
+        result = []
+        sections = sorted(
+            (self.supplementary_snapshot or {}).get('sections', []),
+            key=lambda s: s.get('position', 0),
+        )
+        for section in sections:
+            questions = sorted(
+                section.get('questions', []),
+                key=lambda q: q.get('position', 0),
+            )
+            for q in questions:
+                result.append({
+                    **q,
+                    'section_id': section.get('id'),
+                    'section_title': section.get('title'),
+                })
+        return result
+
+    def has_supplementary_questions(self) -> bool:
+        return bool(self.supplementary_questions())
+
+    def has_pending_supplementary(self) -> bool:
+        """
+        True se existe pelo menos uma pergunta complementar OBRIGATÓRIA
+        sem resposta em estado ANSWERED. Perguntas opcionais não contam.
+        """
+        from apps.briefings.models.briefing_answer import BriefingAnswer
+
+        questions = self.supplementary_questions()
+        if not questions:
+            return False
+
+        required_ids = {
+            str(q['id']) for q in questions if q.get('is_required')
+        }
+        if not required_ids:
+            return False
+
+        answered_ids = set(
+            str(a.question_id)
+            for a in BriefingAnswer.objects.filter(
+                briefing=self,
+                state=BriefingAnswer.STATE_ANSWERED,
+            )
+        )
+        return not required_ids.issubset(answered_ids)
+
+    def supplementary_state(self) -> dict:
+        """
+        Estado consolidado do complemento, para o portal.
+
+        Retorna:
+            {
+                'has_questions': bool,
+                'has_pending_required': bool,
+                'count_pending_required': int,
+                'count_pending_optional': int,
+                'is_complete': bool,
+            }
+        """
+        from apps.briefings.models.briefing_answer import BriefingAnswer
+
+        questions = self.supplementary_questions()
+        if not questions:
+            return {
+                'has_questions': False,
+                'has_pending_required': False,
+                'count_pending_required': 0,
+                'count_pending_optional': 0,
+                'is_complete': False,
+            }
+
+        answers = {
+            str(a.question_id): a
+            for a in BriefingAnswer.objects.filter(briefing=self)
+        }
+
+        count_pending_required = 0
+        count_pending_optional = 0
+        for q in questions:
+            qid = str(q['id'])
+            answer = answers.get(qid)
+            is_answered = (
+                answer is not None
+                and answer.state == BriefingAnswer.STATE_ANSWERED
+            )
+            if is_answered:
+                continue
+            if q.get('is_required'):
+                count_pending_required += 1
+            else:
+                count_pending_optional += 1
+
+        is_complete = (
+            count_pending_required == 0
+            and self.supplementary_completed_at is not None
+        )
+
+        return {
+            'has_questions': True,
+            'has_pending_required': count_pending_required > 0,
+            'count_pending_required': count_pending_required,
+            'count_pending_optional': count_pending_optional,
+            'is_complete': is_complete,
+        }
+
+    def mark_supplementary_completed(self):
+        """
+        Marca o complemento como concluído. Idempotente.
+        Não altera o `status` do briefing original.
+        """
+        if self.supplementary_completed_at is not None:
+            return
+        self.supplementary_completed_at = timezone.now()
+        self.save(update_fields=[
+            'supplementary_completed_at', 'updated_at',
+        ])
 
     # ------------------------------------------------------------------
     # STATUS DERIVADO PARA O PORTAL
@@ -290,6 +497,8 @@ class Briefing(models.Model):
                 self.completed_at,
             ):
                 return self.PORTAL_REOPENED
+            if self.has_pending_supplementary():
+                return self.PORTAL_SUPPLEMENTARY_PENDING
             return self.PORTAL_COMPLETED
 
         if self.status == self.STATUS_CANCELLED:
@@ -309,11 +518,21 @@ class Briefing(models.Model):
         return self.PORTAL_IN_PROGRESS
 
     def portal_can_answer(self) -> bool:
-        return self.portal_status() in (
+        """
+        Se o cliente pode enviar respostas agora.
+
+        Inclui o caso: briefing original concluído, mas complemento
+        pendente. Nesse caso, o cliente PODE responder as perguntas
+        complementares.
+        """
+        if self.portal_status() in (
             self.PORTAL_NOT_STARTED,
             self.PORTAL_IN_PROGRESS,
             self.PORTAL_REOPENED,
-        )
+            self.PORTAL_SUPPLEMENTARY_PENDING,
+        ):
+            return True
+        return False
 
     # ------------------------------------------------------------------
     # HELPERS "REOPENED"
@@ -342,7 +561,7 @@ class Briefing(models.Model):
         return self._was_reopened_since(terminal)
 
     # ------------------------------------------------------------------
-    # SNAPSHOT
+    # SNAPSHOT ORIGINAL
     # ------------------------------------------------------------------
 
     def snapshot_questions(self) -> list:
@@ -369,3 +588,18 @@ class Briefing(models.Model):
             if str(q.get('id')) == str(question_id):
                 return q
         return None
+
+    def supplementary_question_by_id(self, question_id: str) -> dict:
+        for q in self.supplementary_questions():
+            if str(q.get('id')) == str(question_id):
+                return q
+        return None
+
+    def all_questions(self) -> list:
+        """
+        Concatena original + complementares, preservando a ordem de
+        resposta esperada: original primeiro, complementares depois.
+        """
+        return list(self.snapshot_questions()) + list(
+            self.supplementary_questions()
+        )

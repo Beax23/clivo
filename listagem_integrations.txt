@@ -1,10 +1,10 @@
 ================================================================================
 LISTAGEM COMPLETA DO MÓDULO integrations
-Gerado em: 16/10/2026 15:00:00
-Total de arquivos: 58
+Gerado em: 27/10/2026 12:03:18
+Total de arquivos: 59
 ================================================================================
 ================================================================================
-ARQUIVO 1 DE 58
+ARQUIVO 1 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations
 ARQUIVO: __init__.py
@@ -104,7 +104,7 @@ V1 — ESCOPO
 default_app_config = 'apps.integrations.apps.IntegrationsConfig'
 
 ================================================================================
-ARQUIVO 2 DE 58
+ARQUIVO 2 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations
 ARQUIVO: admin.py
@@ -189,7 +189,7 @@ class WorkspaceIntegrationAdmin(admin.ModelAdmin):
     )
 
 ================================================================================
-ARQUIVO 3 DE 58
+ARQUIVO 3 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\api
 ARQUIVO: __init__.py
@@ -200,7 +200,7 @@ LINHAS: 0
 
 
 ================================================================================
-ARQUIVO 4 DE 58
+ARQUIVO 4 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\api\serializers
 ARQUIVO: __init__.py
@@ -228,7 +228,7 @@ __all__ = [
 ]
 
 ================================================================================
-ARQUIVO 5 DE 58
+ARQUIVO 5 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\api\serializers
 ARQUIVO: google_forms_serializers.py
@@ -375,7 +375,7 @@ class FormImportResultSerializer(serializers.Serializer):
     questions_created = serializers.IntegerField(read_only=True)
 
 ================================================================================
-ARQUIVO 6 DE 58
+ARQUIVO 6 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\api
 ARQUIVO: urls.py
@@ -418,7 +418,7 @@ urlpatterns = [
 ]
 
 ================================================================================
-ARQUIVO 7 DE 58
+ARQUIVO 7 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\api\views
 ARQUIVO: __init__.py
@@ -440,7 +440,7 @@ __all__ = [
 ]
 
 ================================================================================
-ARQUIVO 8 DE 58
+ARQUIVO 8 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\api\views
 ARQUIVO: google_forms_views.py
@@ -837,7 +837,7 @@ class GoogleFormsImportView(_GoogleFormsBaseView):
         return Response(FormImportResultSerializer(result).data)
 
 ================================================================================
-ARQUIVO 9 DE 58
+ARQUIVO 9 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations
 ARQUIVO: apps.py
@@ -869,7 +869,7 @@ class IntegrationsConfig(AppConfig):
         ProviderRegistry.register(GoogleConnector(), override=False)
 
 ================================================================================
-ARQUIVO 10 DE 58
+ARQUIVO 10 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations
 ARQUIVO: capabilities.py
@@ -904,7 +904,7 @@ ESTADO ATUAL (V1):
 CAPABILITIES = []
 
 ================================================================================
-ARQUIVO 11 DE 58
+ARQUIVO 11 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\encryption
 ARQUIVO: __init__.py
@@ -918,7 +918,7 @@ from apps.integrations.encryption.service import EncryptionService
 __all__ = ['EncryptionService']
 
 ================================================================================
-ARQUIVO 12 DE 58
+ARQUIVO 12 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\encryption
 ARQUIVO: service.py
@@ -1073,7 +1073,7 @@ class EncryptionService:
         )
 
 ================================================================================
-ARQUIVO 13 DE 58
+ARQUIVO 13 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\exceptions
 ARQUIVO: __init__.py
@@ -1143,7 +1143,7 @@ __all__ = [
 ]
 
 ================================================================================
-ARQUIVO 14 DE 58
+ARQUIVO 14 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\exceptions
 ARQUIVO: integration_exceptions.py
@@ -1517,7 +1517,7 @@ class CannotRevokePreferredError(WorkspaceIntegrationError):
     """
 
 ================================================================================
-ARQUIVO 15 DE 58
+ARQUIVO 15 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\management
 ARQUIVO: __init__.py
@@ -1528,7 +1528,7 @@ LINHAS: 0
 
 
 ================================================================================
-ARQUIVO 16 DE 58
+ARQUIVO 16 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\management\commands
 ARQUIVO: __init__.py
@@ -1539,7 +1539,7 @@ LINHAS: 0
 
 
 ================================================================================
-ARQUIVO 17 DE 58
+ARQUIVO 17 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\management\commands
 ARQUIVO: refresh_google_tokens.py
@@ -1691,7 +1691,7 @@ class Command(BaseCommand):
             ))
 
 ================================================================================
-ARQUIVO 18 DE 58
+ARQUIVO 18 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\management\commands
 ARQUIVO: seed_integration_providers.py
@@ -1810,7 +1810,7 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS('✅ Seed concluído.'))
 
 ================================================================================
-ARQUIVO 19 DE 58
+ARQUIVO 19 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\migrations
 ARQUIVO: __init__.py
@@ -1821,7 +1821,7 @@ LINHAS: 0
 
 
 ================================================================================
-ARQUIVO 20 DE 58
+ARQUIVO 20 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\migrations
 ARQUIVO: 0001_initial.py
@@ -1923,7 +1923,37 @@ class Migration(migrations.Migration):
 
 
 ================================================================================
-ARQUIVO 21 DE 58
+ARQUIVO 21 DE 59
+================================================================================
+PASTA: C:\clivo-v1\apps\integrations\migrations
+ARQUIVO: 0002_alter_integrationresource_slug.py
+TAMANHO: 0,49 KB
+EXTENSAO: .py
+LINHAS: 18
+================================================================================
+
+# Generated by Django 6.1.1 on 2026-10-16 18:14
+
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ('integrations', '0001_initial'),
+    ]
+
+    operations = [
+        migrations.AlterField(
+            model_name='integrationresource',
+            name='slug',
+            field=models.CharField(help_text='Identificador canônico do recurso dentro do provider (ex: "drive.file.read").', max_length=100),
+        ),
+    ]
+
+
+================================================================================
+ARQUIVO 22 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\models
 ARQUIVO: __init__.py
@@ -1943,7 +1973,7 @@ __all__ = [
 ]
 
 ================================================================================
-ARQUIVO 22 DE 58
+ARQUIVO 23 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\models
 ARQUIVO: integration_provider.py
@@ -2047,13 +2077,13 @@ class IntegrationProvider(models.Model):
         super().save(*args, **kwargs)
 
 ================================================================================
-ARQUIVO 23 DE 58
+ARQUIVO 24 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\models
 ARQUIVO: integration_resource.py
-TAMANHO: 2,79 KB
+TAMANHO: 3,35 KB
 EXTENSAO: .py
-LINHAS: 101
+LINHAS: 117
 ================================================================================
 
 """
@@ -2095,7 +2125,15 @@ class IntegrationResource(models.Model):
         help_text=_('Provider ao qual o recurso pertence.'),
     )
 
-    slug = models.SlugField(
+    # Slug é o identificador canônico do recurso dentro do provider.
+    #
+    # Usamos CharField (não SlugField) porque o slug inclui pontos
+    # para indicar hierarquia — ex: "drive.file.read".
+    # O SlugField padrão do Django NÃO aceita pontos.
+    #
+    # A validação de formato (minúsculas, sem espaços) é feita no
+    # método `clean()` abaixo.
+    slug = models.CharField(
         max_length=100,
         help_text=_(
             'Identificador canônico do recurso dentro do provider '
@@ -2141,6 +2179,14 @@ class IntegrationResource(models.Model):
         return f"{self.provider.key}:{self.slug}"
 
     def clean(self):
+        """
+        Valida o formato do slug.
+
+        Regras:
+            - Não pode ser vazio
+            - Deve ser minúsculo
+            - Não pode conter espaços
+        """
         from django.core.exceptions import ValidationError
 
         if not self.slug:
@@ -2159,7 +2205,7 @@ class IntegrationResource(models.Model):
         super().save(*args, **kwargs)
 
 ================================================================================
-ARQUIVO 24 DE 58
+ARQUIVO 25 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\models
 ARQUIVO: workspace_integration.py
@@ -2374,7 +2420,7 @@ class WorkspaceIntegration(models.Model):
         return self.status == self.STATUS_ACTIVE
 
 ================================================================================
-ARQUIVO 25 DE 58
+ARQUIVO 26 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\normalization
 ARQUIVO: __init__.py
@@ -2402,7 +2448,7 @@ __all__ = [
 ]
 
 ================================================================================
-ARQUIVO 26 DE 58
+ARQUIVO 27 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\normalization\google
 ARQUIVO: __init__.py
@@ -2418,7 +2464,7 @@ from apps.integrations.normalization.google.drive import (
 __all__ = ['GoogleDriveNormalizer']
 
 ================================================================================
-ARQUIVO 27 DE 58
+ARQUIVO 28 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\normalization\google
 ARQUIVO: drive.py
@@ -2482,7 +2528,7 @@ def _parse_datetime(value):
         return None
 
 ================================================================================
-ARQUIVO 28 DE 58
+ARQUIVO 29 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\providers
 ARQUIVO: __init__.py
@@ -2503,7 +2549,7 @@ __all__ = [
 ]
 
 ================================================================================
-ARQUIVO 29 DE 58
+ARQUIVO 30 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\providers
 ARQUIVO: base.py
@@ -2636,7 +2682,7 @@ class ProviderConnector(ABC):
         return []
 
 ================================================================================
-ARQUIVO 30 DE 58
+ARQUIVO 31 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\providers\google
 ARQUIVO: __init__.py
@@ -2650,13 +2696,13 @@ from apps.integrations.providers.google.connector import GoogleConnector
 __all__ = ['GoogleConnector']
 
 ================================================================================
-ARQUIVO 31 DE 58
+ARQUIVO 32 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\providers\google
 ARQUIVO: connector.py
-TAMANHO: 24,61 KB
+TAMANHO: 28,90 KB
 EXTENSAO: .py
-LINHAS: 658
+LINHAS: 764
 ================================================================================
 
 """
@@ -2664,7 +2710,7 @@ GoogleConnector — conector para as APIs do Google (Drive, Forms).
 
 Escopo desta versão:
     - build_auth_url  → IMPLEMENTADO (real)
-    - exchange_code   → IMPLEMENTADO (real)
+    - exchange_code   → IMPLEMENTADO (real, via HTTP direto)
     - refresh         → IMPLEMENTADO (real)
     - revoke          → IMPLEMENTADO (real)
 
@@ -2705,7 +2751,7 @@ DIVISÃO DE RESPONSABILIDADES:
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import httpx
 from django.conf import settings
@@ -2818,6 +2864,7 @@ class GoogleConnector(ProviderConnector):
         redirect_uri: str,
         resources: list,
         state: str,
+        login_hint: str | None = None,
     ) -> str:
         """
         Gera a URL de consentimento do Google.
@@ -2830,6 +2877,15 @@ class GoogleConnector(ProviderConnector):
                            RESOURCE_TO_SCOPE.
             state        — nonce anti-CSRF gerado pelo chamador.
                            Devolvido intacto pelo Google no callback.
+            login_hint   — email do usuário logado na Clivo. Quando
+                           informado, o Google pré-seleciona a
+                           conta correspondente no consentimento,
+                           evitando que outras contas logadas no
+                           navegador sejam exibidas por padrão.
+
+                           NÃO há acoplamento com `accounts`: o
+                           valor vem de `request.user.email`, que
+                           é campo padrão do Django.
 
         Retorna: URL completa de consentimento.
 
@@ -2838,12 +2894,24 @@ class GoogleConnector(ProviderConnector):
             IntegrationConfigurationError — Client OAuth ausente.
 
         NOTA sobre `prompt='consent'`:
-            Não enviamos `prompt='consent'` por padrão. Isso força a
-            tela de consentimento a cada tentativa — inclusive quando
-            o usuário já consentiu com os mesmos escopos.
+            Forçamos `prompt='consent'` para GARANTIR que o Google
+            envie um `refresh_token` novo a cada autorização.
 
-            O Google já faz o certo: só reexibe a tela se houver
-            escopos novos.
+            Sem isso, o Google pode omitir o `refresh_token` quando
+            o usuário já autorizou o app anteriormente — o que
+            inviabiliza persistir uma integração durável.
+
+            Trade-off: o usuário vê a tela de consentimento sempre.
+            Aceitável em desenvolvimento/testes. Em produção, com o
+            app verificado e política de reconexão bem definida,
+            pode-se considerar remover este parâmetro.
+
+        NOTA sobre `login_hint`:
+            O Google trata `login_hint` como SUGESTÃO. O usuário
+            ainda pode trocar para outra conta se quiser. Mas o
+            caminho padrão passa a ser a conta correta — que é
+            justamente a conta com a qual o usuário faz login na
+            Clivo.
         """
         scopes = [self.resource_to_scope(r) for r in resources]
         client_config = self._build_client_config()
@@ -2855,14 +2923,31 @@ class GoogleConnector(ProviderConnector):
             state=state,
         )
 
-        auth_url, _ = flow.authorization_url(
-            access_type='offline',
-            include_granted_scopes='true',
-        )
+        # Parâmetros extras enviados ao Google.
+        #
+        # `access_type='offline'` é necessário para obter refresh_token.
+        # `include_granted_scopes='true'` permite reaproveitar
+        # consentimentos anteriores (útil para re-autorizações).
+        # `prompt='consent'` FORÇA a tela de consentimento a cada
+        # autorização — e, com isso, garante o envio de um novo
+        # `refresh_token`.
+        auth_params = {
+            'access_type': 'offline',
+            'include_granted_scopes': 'true',
+            'prompt': 'consent',
+        }
+
+        # Se temos o email do usuário logado na Clivo, usa como
+        # `login_hint`. O Google pré-seleciona essa conta.
+        if login_hint:
+            auth_params['login_hint'] = login_hint
+
+        auth_url, _ = flow.authorization_url(**auth_params)
 
         logger.debug(
-            'Google auth URL gerada | scopes=%s | redirect=%s',
-            scopes, redirect_uri,
+            'Google auth URL gerada | scopes=%s | redirect=%s | '
+            'login_hint=%s | prompt=consent',
+            scopes, redirect_uri, login_hint or '—',
         )
 
         return auth_url
@@ -2876,10 +2961,24 @@ class GoogleConnector(ProviderConnector):
         """
         Troca um `code` de autorização por tokens OAuth.
 
+        Faz a chamada HTTP DIRETAMENTE ao endpoint de token do
+        Google, em vez de usar `Flow.fetch_token`.
+
+        MOTIVO DA MUDANÇA:
+            O `Flow.fetch_token` do `google-auth-oauthlib` faz uma
+            validação de escopos que dispara `Warning` em vários
+            cenários legítimos (ex: o Google devolve `openid`,
+            `email`, `profile` além dos escopos solicitados).
+            Como o Clivo só se importa com os escopos que
+            efetivamente consegue traduzir em recursos, essa
+            validação agressiva é desnecessária e quebra o fluxo.
+
+            A chamada HTTP direta devolve exatamente o mesmo
+            payload, sem a camada de validação.
+
         Parâmetros:
             code         — `code` devolvido pelo Google no callback.
             redirect_uri — o MESMO redirect_uri usado em `build_auth_url`.
-                           O Google exige que seja idêntico.
 
         Retorna: `OAuthResult` com:
             - access_token
@@ -2889,55 +2988,41 @@ class GoogleConnector(ProviderConnector):
             - external_account_id, email, display_name, avatar_url
 
         Levanta:
-            OAuthExchangeError — se o Google recusa a troca
-                (code inválido, expirado, redirect_uri incompatível).
-            IntegrationConfigurationError — se o Client OAuth
-                não está configurado.
+            OAuthExchangeError — se o Google recusa a troca.
+            IntegrationConfigurationError — Client OAuth ausente.
 
         NOTA sobre `refresh_token=None`:
             O Google pode não devolver `refresh_token` quando o
-            usuário já consentiu antes. Nesse caso, devolvemos `None`
-            em vez de inventar um valor.
-
-            A CAMADA DE SERVIÇO é responsável por:
-                - preservar um refresh_token anterior, se existir;
-                - recusar ativar a conexão se não houver nem um novo
-                  nem um anterior válido.
-
-            Este connector NÃO aplica essa política.
-
-        NOTA sobre `granted_scopes`:
-            O usuário pode conceder MENOS escopos do que os
-            solicitados. Devolvemos o que efetivamente veio.
-
-            A CAMADA DE SERVIÇO (GoogleDriveService, GoogleFormsService)
-            valida se o escopo necessário para cada operação está
-            presente antes de chamar a API.
-
-            Este connector NÃO valida contra REQUIRED_RESOURCES.
+            usuário já consentiu antes. Nesse caso, devolvemos `None`.
+            A camada de serviço (IntegrationService.upsert_from_oauth)
+            é quem decide se preserva um refresh_token anterior ou
+            se recusa ativar a conexão.
         """
         client_config = self._build_client_config()
+        web_config = client_config['web']
 
-        # O Flow precisa dos escopos que foram solicitados — o Google
-        # valida contra o `code` emitido. Como o escopo efetivamente
-        # concedido é o que interessa, o `Flow` não usa essa lista
-        # para nada além de contexto. Passamos uma lista vazia — o
-        # resultado real vem em `credentials.scopes`.
-        #
-        # Nota: passar `scopes=[]` é seguro. O Flow já tem o `code`,
-        # e `fetch_token` não revalida escopos.
-        flow = Flow.from_client_config(
-            client_config=client_config,
-            scopes=[],
-            redirect_uri=redirect_uri,
-        )
-
+        # Chamada HTTP direta ao endpoint de token do Google.
+        # O contrato é idêntico ao do `Flow`, mas sem validação
+        # de escopos.
         try:
-            flow.fetch_token(code=code)
-        except Exception as exc:
-            # Não vaza o `code` na mensagem de erro.
+            response = httpx.post(
+                web_config['token_uri'],
+                data={
+                    'grant_type': 'authorization_code',
+                    'code': code,
+                    'redirect_uri': redirect_uri,
+                    'client_id': web_config['client_id'],
+                    'client_secret': web_config['client_secret'],
+                },
+                headers={
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'Accept': 'application/json',
+                },
+                timeout=15.0,
+            )
+        except httpx.HTTPError as exc:
             logger.warning(
-                'Falha ao trocar code por tokens (Google): %s',
+                'Falha de rede ao trocar code por tokens (Google): %s',
                 type(exc).__name__,
             )
             raise OAuthExchangeError(
@@ -2949,23 +3034,90 @@ class GoogleConnector(ProviderConnector):
                 },
             ) from exc
 
-        credentials = flow.credentials
+        # Se o Google recusou, extrai o motivo para o contexto
+        # (sem vazar o code nem os tokens).
+        if response.status_code != 200:
+            error_code = None
+            error_description = None
+            try:
+                payload = response.json()
+                error_code = payload.get('error')
+                error_description = payload.get('error_description')
+            except Exception:
+                pass
 
-        # Busca informações da conta externa (id, email, nome, avatar).
-        userinfo = self._fetch_userinfo(credentials.token)
+            logger.warning(
+                'Google recusou exchange_code | status=%s | error=%s',
+                response.status_code, error_code,
+            )
+            raise OAuthExchangeError(
+                'O Google recusou a troca do código de autorização '
+                'por tokens.',
+                context={
+                    'provider_key': self.key,
+                    'status_code': response.status_code,
+                    'error': error_code,
+                    'error_description': error_description,
+                },
+            )
 
-        # Traduz escopos do Google → recursos do Clivo.
-        # Escopos devolvidos que não estão no nosso mapa são
-        # ignorados silenciosamente.
-        granted_resources = self._scopes_to_resources(
-            credentials.scopes or []
+        # Parse do payload JSON.
+        try:
+            data = response.json()
+        except ValueError as exc:
+            logger.warning(
+                'Google devolveu payload não-JSON em exchange_code',
+            )
+            raise OAuthExchangeError(
+                'O Google devolveu uma resposta inválida.',
+                context={
+                    'provider_key': self.key,
+                    'error_type': 'invalid_json',
+                },
+            ) from exc
+
+        access_token = data.get('access_token')
+        refresh_token = data.get('refresh_token')
+        expires_in = data.get('expires_in')
+        granted_scopes = data.get('scope', '').split()
+
+        if not access_token:
+            logger.warning(
+                'Google não devolveu access_token em exchange_code',
+            )
+            raise OAuthExchangeError(
+                'O Google não devolveu o token de acesso.',
+                context={'provider_key': self.key},
+            )
+
+        # Normaliza expires_at a partir de `expires_in`.
+        expires_at = None
+        if expires_in:
+            try:
+                expires_at = datetime.now(timezone.utc) + timedelta(
+                    seconds=int(expires_in),
+                )
+            except (TypeError, ValueError):
+                expires_at = None
+
+        # Busca userinfo usando o access_token.
+        userinfo = self._fetch_userinfo(access_token)
+
+        # Traduz escopos → recursos Clivo.
+        granted_resources = self._scopes_to_resources(granted_scopes)
+
+        logger.info(
+            'exchange_code OK | account=%s | has_refresh=%s | scopes=%s',
+            userinfo.get('email', '?'),
+            bool(refresh_token),
+            granted_scopes,
         )
 
         return OAuthResult(
-            access_token=credentials.token,
-            refresh_token=credentials.refresh_token,  # pode ser None
-            expires_at=self._normalize_expiry(credentials.expiry),
-            granted_scopes=list(credentials.scopes or []),
+            access_token=access_token,
+            refresh_token=refresh_token,
+            expires_at=expires_at,
+            granted_scopes=list(granted_scopes),
             external_account_id=userinfo.get('sub', ''),
             external_account_email=userinfo.get('email', ''),
             external_account_display_name=userinfo.get('name', ''),
@@ -3319,7 +3471,7 @@ class GoogleConnector(ProviderConnector):
         return expiry
 
 ================================================================================
-ARQUIVO 32 DE 58
+ARQUIVO 33 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\providers
 ARQUIVO: registry.py
@@ -3393,7 +3545,7 @@ class ProviderRegistry:
         cls._connectors.clear()
 
 ================================================================================
-ARQUIVO 33 DE 58
+ARQUIVO 34 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\providers
 ARQUIVO: types.py
@@ -3447,7 +3599,7 @@ class PaginatedResult:
     provider_metadata: dict = field(default_factory=dict)
 
 ================================================================================
-ARQUIVO 34 DE 58
+ARQUIVO 35 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\services
 ARQUIVO: __init__.py
@@ -3479,7 +3631,7 @@ __all__ = [
 ]
 
 ================================================================================
-ARQUIVO 35 DE 58
+ARQUIVO 36 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\services
 ARQUIVO: access.py
@@ -3717,58 +3869,60 @@ class WorkspaceIntegrationService:
         return list(qs)
 
 ================================================================================
-ARQUIVO 36 DE 58
+ARQUIVO 37 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\services
 ARQUIVO: google_forms.py
-TAMANHO: 28,35 KB
+TAMANHO: 37,98 KB
 EXTENSAO: .py
-LINHAS: 823
+LINHAS: 1069
 ================================================================================
 
 """
 GoogleFormsService — buscar, pré-visualizar e importar formulários
 Google Forms.
 
-Este é o serviço que o botão "Importar Forms" do Fluxo chama.
-
 RESPONSABILIDADES
 -----------------
-1. `search_forms(workspace, query)` — lista os formulários da
-   conta Google conectada ao workspace, opcionalmente filtrados
-   por nome.
+1. `search_forms(workspace, query)` — lista os formulários via
+   Google Drive API (filtrando pelo MIME type
+   `application/vnd.google-apps.form`), porque a Forms API não
+   tem endpoint para listar.
 
-2. `preview_form(workspace, form_url_or_id)` — busca o payload do
-   formulário e devolve um resumo (nome sugerido, contagem de
-   sessões e perguntas) SEM persistir nada. Usado pelo frontend
-   para montar a tela de confirmação antes da criação.
+2. `preview_form(workspace, form_url_or_id)` — busca o payload
+   do formulário e devolve um resumo SEM persistir nada.
 
 3. `import_form(workspace, form_url_or_id, template_name, actor)` —
-   CRIA UM NOVO BriefingTemplate no workspace e popula com sessões
-   e perguntas do formulário. Não aceita mais `template_id` — o
-   modelo é sempre criado novo.
+   cria um NOVO BriefingTemplate no workspace, populando com
+   sessões, perguntas E imagens (baixadas do Google e salvas
+   como Documents no workspace).
 
-REGRAS DE ESCOPO
-----------------
-Usamos apenas `forms.body.readonly`. Isso permite listar APENAS
-formulários criados pela conta conectada.
+MAPEAMENTO DE TIPOS
+-------------------
+Todos os 12 tipos nativos do Google Forms são mapeados para
+tipos correspondentes no Clivo:
 
-NÃO navegamos em formulários compartilhados nem em pastas do
-Drive. Isso exigiria `drive.readonly` — escopo mais amplo que o
-usuário precisa autorizar de forma explícita. Decisão de produto:
-não ampliar permissões silenciosamente.
+    Forms                             Clivo
+    ─────────────────────────────────────────────────────
+    Resposta curta                    short_text
+    Parágrafo                         long_text
+    Múltipla escolha (RADIO)          single_choice
+    Caixas de seleção (CHECKBOX)      multiple_choice
+    Lista suspensa (DROP_DOWN)        dropdown
+    Escala linear                     scale
+    Classificação                     rating
+    Grade de múltipla escolha         grid_single
+    Grade da caixa de seleção         grid_multiple
+    Data                              date
+    Horário                           time
+    Upload de arquivo                 file_upload
 
-ESTADO ATUAL
-------------
-- `search_forms` está IMPLEMENTADO (chama a API do Google).
-- `preview_form` está IMPLEMENTADO para validação + resolução de
-  integração + normalização. A chamada final à API do Google
-  Forms está isolada em `_fetch_form_payload`, que hoje levanta
-  `NotImplementedError` — ponto único de substituição quando a
-  integração real for validada.
-- `import_form` está IMPLEMENTADO para validação + resolução de
-  integração + normalização + criação do template. Mesmo ponto
-  único de substituição.
+IMAGENS
+-------
+As imagens são baixadas via `contentUri` da Forms API e salvas
+como `Document` no workspace, então referenciadas pelos campos
+`image_document_id` (em options) ou `reference_document_ids`
+(imagem da pergunta).
 """
 
 import logging
@@ -3800,29 +3954,17 @@ logger = logging.getLogger('integrations')
 
 PROVIDER_KEY = 'google'
 
-# Endpoint da API do Google Forms para listar os formulários da
-# conta conectada.
-FORMS_LIST_URL = 'https://forms.googleapis.com/v1/forms'
-
-# Endpoint para buscar um formulário específico pelo ID.
+DRIVE_FILES_URL = 'https://www.googleapis.com/drive/v3/files'
+GOOGLE_FORMS_MIME_TYPE = 'application/vnd.google-apps.form'
 FORMS_GET_URL_TEMPLATE = 'https://forms.googleapis.com/v1/forms/{form_id}'
 
-# Timeout HTTP para chamadas à API do Google.
 HTTP_TIMEOUT_SECONDS = 15.0
+IMAGE_DOWNLOAD_TIMEOUT_SECONDS = 30.0
 
-# Escopo necessário para esta operação.
 REQUIRED_SCOPE = 'https://www.googleapis.com/auth/forms.body.readonly'
-
-# Limite do campo `BriefingTemplate.name`.
 MAX_TEMPLATE_NAME_LENGTH = 200
 
 
-# Regex para extrair o ID de um formulário de uma URL do Google Forms.
-# Formatos suportados:
-#   https://docs.google.com/forms/d/<ID>/edit
-#   https://docs.google.com/forms/d/<ID>/viewform
-#   https://docs.google.com/forms/d/e/<ID>/viewform   (form publicado)
-#   https://forms.gle/<short>                          (encurtado)
 _FORMS_ID_PATTERN = re.compile(
     r'docs\.google\.com/forms/d/(?:e/)?([A-Za-z0-9_-]+)',
 )
@@ -3836,10 +3978,7 @@ _FORMS_SHORT_URL_PATTERN = re.compile(
 # =========================================================================
 
 class FormsScopeMissingError(InsufficientScopesError):
-    """
-    A integração Google existe, mas não tem o escopo de Forms
-    concedido. O usuário precisa reconectar autorizando o Forms.
-    """
+    """A integração Google existe, mas não tem o escopo de Forms."""
     pass
 
 
@@ -3848,59 +3987,22 @@ class FormsScopeMissingError(InsufficientScopesError):
 # =========================================================================
 
 class GoogleFormsService:
-    """
-    Cliente de alto nível para a API do Google Forms.
-
-    Todas as operações resolvem a integração por `workspace`.
-    """
 
     # =====================================================================
     # BUSCA
     # =====================================================================
 
     @staticmethod
-    def search_forms(
-        *,
-        workspace,
-        query: str = '',
-    ) -> list[dict]:
-        """
-        Lista os formulários da conta Google conectada.
-
-        Args:
-            workspace: o Workspace alvo.
-            query: filtro por nome (case-insensitive). Se vazio,
-                   retorna todos.
-
-        Retorna:
-            [ { id, name, url, description }, ... ]
-
-        Levanta:
-            ConnectionNotEstablishedError — sem integração ativa.
-            ConnectionExpiredError — refresh_token inválido.
-            FormsScopeMissingError — faltando o escopo do Forms.
-            ProviderServerError — erro 5xx do Google.
-            ProviderTimeoutError — timeout.
-            RateLimitError — rate limit (HTTP 429).
-        """
+    def search_forms(*, workspace, query: str = '') -> list[dict]:
+        """Lista os formulários da conta Google conectada."""
         integration = WorkspaceIntegrationService.get_for_workspace(
             workspace=workspace,
             provider_key=PROVIDER_KEY,
         )
-
-        try:
-            access_token = IntegrationService.get_valid_access_token(
-                integration,
-            )
-        except ConnectionExpiredError:
-            raise
-        except IntegrationError:
-            raise
-
+        access_token = IntegrationService.get_valid_access_token(integration)
         GoogleFormsService._assert_forms_scope(integration)
 
         raw_forms = GoogleFormsService._fetch_forms_list(access_token)
-
         forms = [
             GoogleFormsService._normalize_form_summary(f)
             for f in raw_forms
@@ -3913,7 +4015,6 @@ class GoogleFormsService:
                     f for f in forms
                     if q in (f.get('name') or '').lower()
                 ]
-
         return forms
 
     # =====================================================================
@@ -3921,39 +4022,8 @@ class GoogleFormsService:
     # =====================================================================
 
     @staticmethod
-    def preview_form(
-        *,
-        workspace,
-        form_url_or_id: str,
-    ) -> dict:
-        """
-        Pré-visualiza um formulário do Google SEM persistir nada.
-
-        Busca o payload do formulário, normaliza e devolve um
-        resumo com o nome sugerido e as contagens. É o que o
-        frontend usa para montar a tela de confirmação antes de
-        criar o template novo.
-
-        Args:
-            workspace: o Workspace alvo.
-            form_url_or_id: URL completa ou o ID do formulário.
-
-        Retorna:
-            {
-                "form_id": str,
-                "form_name": str,          # nome sugerido (do Google)
-                "form_description": str,
-                "sections_count": int,
-                "questions_count": int,
-            }
-
-        Levanta:
-            ValidationError — URL/ID inválido.
-            ConnectionNotEstablishedError — sem integração ativa.
-            FormsScopeMissingError — faltando escopo do Forms.
-            NotImplementedError — chamada ao Google ainda não
-                implementada (V1).
-        """
+    def preview_form(*, workspace, form_url_or_id: str) -> dict:
+        """Pré-visualiza um formulário SEM persistir nada."""
         from django.core.exceptions import ValidationError
 
         form_id = GoogleFormsService._extract_form_id(form_url_or_id)
@@ -3966,18 +4036,13 @@ class GoogleFormsService:
             workspace=workspace,
             provider_key=PROVIDER_KEY,
         )
-
-        access_token = IntegrationService.get_valid_access_token(
-            integration,
-        )
-
+        access_token = IntegrationService.get_valid_access_token(integration)
         GoogleFormsService._assert_forms_scope(integration)
 
         raw_form = GoogleFormsService._fetch_form_payload(
             access_token=access_token,
             form_id=form_id,
         )
-
         normalized = GoogleFormsService._normalize_form(raw_form)
 
         total_questions = sum(
@@ -4005,96 +4070,39 @@ class GoogleFormsService:
         template_name: str = '',
         actor=None,
     ) -> dict:
-        """
-        Importa um formulário do Google criando um NOVO
-        BriefingTemplate no workspace.
-
-        NÃO aceita `template_id`. O modelo é sempre criado novo.
-        O nome sugerido vem do payload do Google, mas o
-        `template_name` passado aqui tem precedência — é o nome
-        editado pelo usuário na tela de confirmação.
-
-        Args:
-            workspace: o Workspace alvo.
-            form_url_or_id: URL completa ou o ID do formulário.
-            template_name: nome escolhido pelo usuário. Se vazio,
-                usa o nome do formulário do Google.
-            actor: usuário que está importando (para rastreabilidade).
-
-        Retorna:
-            {
-                "imported": True,
-                "form_id": str,
-                "template_id": str,       # NOVO template criado
-                "template_name": str,
-                "sections_created": int,
-                "questions_created": int,
-            }
-
-        Levanta:
-            ValidationError — URL/ID inválido.
-            ConnectionNotEstablishedError — sem integração ativa.
-            FormsScopeMissingError — faltando escopo do Forms.
-            NotImplementedError — chamada ao Google ainda não
-                implementada (V1).
-        """
+        """Importa um formulário criando um NOVO BriefingTemplate."""
         from django.core.exceptions import ValidationError
 
-        # ------------------------------------------------------------------
-        # 1. Validação da entrada
-        # ------------------------------------------------------------------
         form_id = GoogleFormsService._extract_form_id(form_url_or_id)
         if not form_id:
             raise ValidationError(
                 'URL do Google Forms inválida. Cole o link do formulário.'
             )
 
-        # ------------------------------------------------------------------
-        # 2. Resolve a integração
-        # ------------------------------------------------------------------
         integration = WorkspaceIntegrationService.get_for_workspace(
             workspace=workspace,
             provider_key=PROVIDER_KEY,
         )
-
-        # ------------------------------------------------------------------
-        # 3. Obtém access_token válido
-        # ------------------------------------------------------------------
-        access_token = IntegrationService.get_valid_access_token(
-            integration,
-        )
-
+        access_token = IntegrationService.get_valid_access_token(integration)
         GoogleFormsService._assert_forms_scope(integration)
 
-        # ------------------------------------------------------------------
-        # 4. Busca o payload do formulário
-        # ------------------------------------------------------------------
         raw_form = GoogleFormsService._fetch_form_payload(
             access_token=access_token,
             form_id=form_id,
         )
-
-        # ------------------------------------------------------------------
-        # 5. Normaliza para o contrato interno
-        # ------------------------------------------------------------------
         normalized = GoogleFormsService._normalize_form(raw_form)
 
-        # ------------------------------------------------------------------
-        # 6. Decide o nome final do template
-        # ------------------------------------------------------------------
         final_name = (template_name or '').strip()
         if not final_name:
             final_name = normalized['name']
         final_name = final_name[:MAX_TEMPLATE_NAME_LENGTH]
 
-        # ------------------------------------------------------------------
-        # 7. Cria o BriefingTemplate novo + sessões + perguntas
-        # ------------------------------------------------------------------
         result = GoogleFormsService._create_template_from_form(
             workspace=workspace,
             normalized_form=normalized,
             template_name=final_name,
             actor=actor,
+            access_token=access_token,
         )
 
         return {
@@ -4112,25 +4120,8 @@ class GoogleFormsService:
 
     @staticmethod
     def _extract_form_id(url_or_id: str) -> Optional[str]:
-        """
-        Extrai o ID de um formulário a partir de uma URL do Google
-        Forms ou de um ID cru.
-
-        Suporta:
-            - https://docs.google.com/forms/d/<ID>/edit
-            - https://docs.google.com/forms/d/<ID>/viewform
-            - https://docs.google.com/forms/d/e/<ID>/viewform
-            - ID cru (string alfanumérica longa)
-
-        NÃO suporta (por ora):
-            - https://forms.gle/<short>  → exige HTTP HEAD para
-              resolver o redirect. Deixamos fora do V1.
-
-        Retorna None se nada válido for encontrado.
-        """
         if not url_or_id:
             return None
-
         value = url_or_id.strip()
 
         match = _FORMS_ID_PATTERN.search(value)
@@ -4139,8 +4130,7 @@ class GoogleFormsService:
 
         if _FORMS_SHORT_URL_PATTERN.match(value):
             logger.info(
-                'URL encurtada do Forms recebida (não suportada no V1): %s',
-                value,
+                'URL encurtada do Forms (não suportada no V1): %s', value,
             )
             return None
 
@@ -4155,15 +4145,91 @@ class GoogleFormsService:
 
     @staticmethod
     def _fetch_forms_list(access_token: str) -> list[dict]:
-        """
-        Chama a API do Google Forms para listar formulários.
+        """Lista os formulários do usuário via Drive API."""
+        params = {
+            'q': (
+                f"mimeType='{GOOGLE_FORMS_MIME_TYPE}' and trashed=false"
+            ),
+            'fields': (
+                'files(id,name,description,webViewLink,'
+                'createdTime,modifiedTime),nextPageToken'
+            ),
+            'pageSize': 100,
+            'orderBy': 'modifiedTime desc',
+        }
 
-        Retorna a lista crua de `forms` (cada item é o payload do
-        Google). Se a resposta for malformada, devolve [].
-        """
+        all_files: list = []
+        page_token = None
+
+        while True:
+            if page_token:
+                params['pageToken'] = page_token
+            else:
+                params.pop('pageToken', None)
+
+            try:
+                response = httpx.get(
+                    DRIVE_FILES_URL,
+                    headers={'Authorization': f'Bearer {access_token}'},
+                    params=params,
+                    timeout=HTTP_TIMEOUT_SECONDS,
+                )
+            except httpx.TimeoutException as exc:
+                raise ProviderTimeoutError(
+                    'A API do Google Drive não respondeu a tempo.',
+                    context={
+                        'provider_key': PROVIDER_KEY,
+                        'timeout_s': int(HTTP_TIMEOUT_SECONDS),
+                    },
+                ) from exc
+            except httpx.HTTPError as exc:
+                raise ProviderServerError(
+                    'Falha de rede ao consultar o Google Drive.',
+                    context={'provider_key': PROVIDER_KEY},
+                ) from exc
+
+            GoogleFormsService._raise_for_status(response)
+
+            try:
+                data = response.json()
+            except ValueError:
+                logger.warning(
+                    'Google Drive retornou payload não-JSON em /files'
+                )
+                return all_files
+
+            files = data.get('files') or []
+            if isinstance(files, list):
+                all_files.extend(files)
+
+            page_token = data.get('nextPageToken')
+            if not page_token:
+                break
+
+        normalized = []
+        for f in all_files:
+            normalized.append({
+                'formId': f.get('id', ''),
+                'info': {
+                    'title': f.get('name', ''),
+                    'description': f.get('description', ''),
+                },
+                'responderUri': f.get('webViewLink', ''),
+            })
+
+        logger.info(
+            'Drive API retornou %d formulários', len(normalized),
+        )
+        return normalized
+
+    @staticmethod
+    def _fetch_form_payload(*, access_token: str, form_id: str) -> dict:
+        """Busca o payload completo de um formulário (Forms API get)."""
+        url = FORMS_GET_URL_TEMPLATE.format(form_id=form_id)
+
         try:
             response = httpx.get(
-                FORMS_LIST_URL,
+                url,
                 headers={'Authorization': f'Bearer {access_token}'},
                 timeout=HTTP_TIMEOUT_SECONDS,
             )
@@ -4172,62 +4238,104 @@ class GoogleFormsService:
                 'A API do Google Forms não respondeu a tempo.',
                 context={
                     'provider_key': PROVIDER_KEY,
+                    'form_id': form_id,
                     'timeout_s': int(HTTP_TIMEOUT_SECONDS),
                 },
             ) from exc
         except httpx.HTTPError as exc:
             raise ProviderServerError(
                 'Falha de rede ao consultar o Google Forms.',
-                context={'provider_key': PROVIDER_KEY},
+                context={'provider_key': PROVIDER_KEY, 'form_id': form_id},
             ) from exc
 
         GoogleFormsService._raise_for_status(response)
 
         try:
             data = response.json()
-        except ValueError:
-            logger.warning(
-                'Google Forms retornou payload não-JSON em /forms'
-            )
-            return []
+        except ValueError as exc:
+            raise IntegrationError(
+                'O Google Forms devolveu uma resposta inválida.',
+                context={
+                    'provider_key': PROVIDER_KEY,
+                    'form_id': form_id,
+                    'error_type': 'invalid_json',
+                },
+            ) from exc
 
-        forms = data.get('forms') or []
-        if not isinstance(forms, list):
-            return []
-        return forms
+        if not isinstance(data, dict):
+            raise IntegrationError(
+                'O Google Forms devolveu um payload inesperado.',
+                context={
+                    'provider_key': PROVIDER_KEY,
+                    'form_id': form_id,
+                    'error_type': 'unexpected_payload_type',
+                },
+            )
+
+        items = data.get('items') or []
+        info = data.get('info') or {}
+        logger.info(
+            'Form payload obtido | form_id=%s | title=%r | items=%d',
+            form_id,
+            info.get('title', ''),
+            len(items) if isinstance(items, list) else 0,
+        )
+        return data
 
     @staticmethod
-    def _fetch_form_payload(
+    def _download_image_bytes(
         *,
         access_token: str,
-        form_id: str,
-    ) -> dict:
+        image_payload: dict,
+    ) -> Optional[tuple]:
         """
-        Busca o payload completo de um formulário específico.
+        Baixa os bytes de uma imagem do Google Forms.
 
-        PONTO ÚNICO DE SUBSTITUIÇÃO:
-            Esta é a ÚNICA função que precisa ser implementada para
-            trocar o mock pela chamada real ao Google. Todo o resto
-            do pipeline (validação, normalização, persistência) já
-            está pronto e testado.
-
-        Quando implementado, deve:
-            1. Chamar GET /v1/forms/<form_id>
-            2. Passar pela validação de status (_raise_for_status)
-            3. Retornar o JSON parseado
+        Aceita `contentUri` (link temporário baixável) ou
+        `sourceUri` (referência interna). Retorna (bytes, mime_type)
+        ou None se falhar.
         """
-        raise NotImplementedError(
-            'GoogleFormsService._fetch_form_payload ainda não foi '
-            'implementado. O fluxo do produto (conectar → buscar → '
-            'pré-visualizar → criar) está pronto; falta apenas esta '
-            'chamada.'
+        if not isinstance(image_payload, dict):
+            return None
+
+        url = (
+            image_payload.get('contentUri')
+            or image_payload.get('sourceUri')
         )
+        if not url:
+            return None
+
+        try:
+            response = httpx.get(
+                url,
+                headers={'Authorization': f'Bearer {access_token}'},
+                timeout=IMAGE_DOWNLOAD_TIMEOUT_SECONDS,
+                follow_redirects=True,
+            )
+        except httpx.HTTPError as exc:
+            logger.warning(
+                'Falha de rede ao baixar imagem do Forms: %s',
+                type(exc).__name__,
+            )
+            return None
+
+        if response.status_code != 200:
+            logger.warning(
+                'Google devolveu %s ao baixar imagem do Forms',
+                response.status_code,
+            )
+            return None
+
+        content_type = (
+            response.headers.get('Content-Type')
+            or 'image/png'
+        )
+        content_type = content_type.split(';')[0].strip()
+
+        return response.content, content_type
 
     @staticmethod
     def _raise_for_status(response: httpx.Response) -> None:
-        """
-        Traduz códigos HTTP do Google em exceções do domínio.
-        """
         status = response.status_code
 
         if 200 <= status < 300:
@@ -4249,7 +4357,7 @@ class GoogleFormsService:
 
         if status == 404:
             raise IntegrationError(
-                'Formulário não encontrado no Google Forms.',
+                'Recurso não encontrado no Google.',
                 context={'provider_key': PROVIDER_KEY, 'status_code': 404},
             )
 
@@ -4260,7 +4368,7 @@ class GoogleFormsService:
             except (TypeError, ValueError):
                 retry_after_s = None
             raise RateLimitError(
-                'A API do Google Forms está limitando requisições.',
+                'A API do Google está limitando requisições.',
                 context={
                     'provider_key': PROVIDER_KEY,
                     'retry_after_s': retry_after_s,
@@ -4269,12 +4377,12 @@ class GoogleFormsService:
 
         if 500 <= status < 600:
             raise ProviderServerError(
-                f'Erro {status} na API do Google Forms.',
+                f'Erro {status} na API do Google.',
                 context={'provider_key': PROVIDER_KEY, 'status_code': status},
             )
 
         raise IntegrationError(
-            f'Erro {status} na API do Google Forms.',
+            f'Erro {status} na API do Google.',
             context={'provider_key': PROVIDER_KEY, 'status_code': status},
         )
 
@@ -4284,10 +4392,6 @@ class GoogleFormsService:
 
     @staticmethod
     def _normalize_form_summary(raw: dict) -> dict:
-        """
-        Converte um item da lista do Google Forms no formato de
-        resumo usado pela UI.
-        """
         form_id = str(raw.get('formId') or '')
         info = raw.get('info') or {}
         name = (info.get('title') or '').strip()
@@ -4308,9 +4412,11 @@ class GoogleFormsService:
     def _normalize_form(raw: dict) -> dict:
         """
         Converte o payload completo de um formulário no contrato
-        interno.
+        interno do Clivo.
 
-        Esta função é pura — testável sem rede.
+        Preserva as imagens das opções no campo `_raw_image` (dict
+        cru vindo do Google). O download real acontece depois, na
+        criação do template.
         """
         info = raw.get('info') or {}
         items = raw.get('items') or []
@@ -4335,6 +4441,13 @@ class GoogleFormsService:
                 }
                 continue
 
+            if 'questionGroupItem' in item:
+                grid_questions = (
+                    GoogleFormsService._normalize_question_group(item)
+                )
+                current['questions'].extend(grid_questions)
+                continue
+
             question = GoogleFormsService._normalize_question(item)
             if question is not None:
                 current['questions'].append(question)
@@ -4354,10 +4467,7 @@ class GoogleFormsService:
 
     @staticmethod
     def _normalize_question(item: dict) -> Optional[dict]:
-        """
-        Converte um item do Google Forms em uma pergunta do Clivo,
-        ou None se o item não é uma pergunta.
-        """
+        """Converte um item de pergunta em uma pergunta do Clivo."""
         qi = item.get('questionItem')
         if not qi:
             return None
@@ -4370,61 +4480,175 @@ class GoogleFormsService:
             return None
 
         is_required = bool(question.get('required', False))
-
         question_type, options = GoogleFormsService._map_question_type(
             question,
+        )
+
+        raw_q_image = (
+            qi.get('image') if isinstance(qi.get('image'), dict)
+            else None
         )
 
         return {
             'text': title,
             'instructions': description,
             'question_type': question_type,
-            'allowed_response_formats': GoogleFormsService._formats_for_type(
-                question_type,
+            'allowed_response_formats': (
+                GoogleFormsService._formats_for_type(question_type)
             ),
             'options': options,
             'is_required': is_required,
+            '_raw_question_image': raw_q_image,
+            '_is_grid': False,
         }
 
     @staticmethod
-    def _map_question_type(question: dict) -> tuple[str, list]:
+    def _normalize_question_group(item: dict) -> list:
+        """
+        Converte um QuestionGroupItem em perguntas do Clivo.
+
+        Caso A — GRID: gera UMA pergunta `grid_single` ou
+                 `grid_multiple` com options {rows, columns}.
+        Caso B — agrupamento visual: processa cada pergunta
+                 interna individualmente.
+        """
+        qgi = item.get('questionGroupItem') or {}
+        group_title = (item.get('title') or '').strip()
+        group_description = (item.get('description') or '').strip()
+
+        # -------- CASO A: GRID --------
+        if 'grid' in qgi:
+            grid = qgi['grid'] or {}
+            columns = grid.get('columns') or {}
+            col_type = columns.get('type', 'RADIO')
+            raw_col_options = columns.get('options') or []
+
+            clean_columns = []
+            for opt in raw_col_options:
+                text = (opt.get('value') or '').strip()
+                if not text:
+                    continue
+                clean_columns.append({
+                    'text': text,
+                    '_raw_image': (
+                        opt.get('image')
+                        if isinstance(opt.get('image'), dict)
+                        else None
+                    ),
+                })
+
+            clean_rows = []
+            for row in (qgi.get('questions') or []):
+                row_title = (
+                    (row.get('rowQuestion') or {}).get('title') or ''
+                ).strip()
+                if row_title:
+                    clean_rows.append(row_title)
+
+            clivo_type = (
+                'grid_multiple' if col_type == 'CHECKBOX'
+                else 'grid_single'
+            )
+
+            return [{
+                'text': group_title or 'Grade',
+                'instructions': group_description,
+                'question_type': clivo_type,
+                'allowed_response_formats': ['text'],
+                'options': {
+                    'rows': clean_rows,
+                    'columns': clean_columns,
+                },
+                'is_required': False,
+                '_raw_question_image': None,
+                '_is_grid': True,
+            }]
+
+        # -------- CASO B: agrupamento visual --------
+        result = []
+        for question in (qgi.get('questions') or []):
+            q_type, q_opts = GoogleFormsService._map_question_type(question)
+            title = (
+                (question.get('rowQuestion') or {}).get('title')
+                or group_title
+            )
+            if not title:
+                continue
+            result.append({
+                'text': title,
+                'instructions': group_description,
+                'question_type': q_type,
+                'allowed_response_formats': (
+                    GoogleFormsService._formats_for_type(q_type)
+                ),
+                'options': q_opts,
+                'is_required': bool(question.get('required', False)),
+                '_raw_question_image': None,
+                '_is_grid': False,
+            })
+        return result
+
+    @staticmethod
+    def _map_question_type(question: dict) -> tuple:
         """
         Mapeia o tipo do Google Forms para (question_type, options).
+
+        Referência:
+            textQuestion (paragraph=false) → short_text
+            textQuestion (paragraph=true)  → long_text
+            choiceQuestion RADIO           → single_choice
+            choiceQuestion CHECKBOX        → multiple_choice
+            choiceQuestion DROP_DOWN       → dropdown
+            scaleQuestion                  → scale
+            ratingQuestion                 → rating
+            dateQuestion                   → date
+            timeQuestion                   → time
+            fileUploadQuestion             → file_upload
+            rowQuestion                    → text (pergunta interna)
         """
-        if 'choiceQuestion' in question:
-            cq = question['choiceQuestion']
-            g_type = cq.get('type', 'RADIO')
-            options = []
-            for opt in cq.get('options') or []:
-                text = (opt.get('value') or '').strip()
-                if text:
-                    options.append({'text': text})
-            if g_type == 'CHECKBOX':
-                return 'multiple_choice', options
-            if g_type == 'DROP_DOWN':
-                return 'single_choice', options
-            return 'single_choice', options
-
-        if 'textQuestion' in question:
-            tq = question['textQuestion']
-            if tq.get('paragraph'):
-                return 'long_text', []
-            return 'long_text', []
-
         if 'scaleQuestion' in question:
             return 'scale', []
 
         if 'dateQuestion' in question:
             return 'date', []
 
+        if 'timeQuestion' in question:
+            return 'time', []
+
+        if 'fileUploadQuestion' in question:
+            return 'file_upload', []
+
         if 'ratingQuestion' in question:
             return 'rating', []
 
-        if 'timeQuestion' in question:
-            return 'text', []
+        if 'choiceQuestion' in question:
+            cq = question['choiceQuestion']
+            g_type = cq.get('type', 'RADIO')
+            options = []
+            for opt in (cq.get('options') or []):
+                text = (opt.get('value') or '').strip()
+                if not text:
+                    continue
+                options.append({
+                    'text': text,
+                    '_raw_image': (
+                        opt.get('image')
+                        if isinstance(opt.get('image'), dict)
+                        else None
+                    ),
+                })
 
-        if 'fileUploadQuestion' in question:
-            return 'text', []
+            if g_type == 'CHECKBOX':
+                return 'multiple_choice', options
+            if g_type == 'DROP_DOWN':
+                return 'dropdown', options
+            return 'single_choice', options
+
+        if 'textQuestion' in question:
+            tq = question['textQuestion']
+            if tq.get('paragraph'):
+                return 'long_text', []
+            return 'short_text', []
 
         if 'rowQuestion' in question:
             return 'text', []
@@ -4434,18 +4658,30 @@ class GoogleFormsService:
     @staticmethod
     def _formats_for_type(question_type: str) -> list:
         """
-        Define os formatos de resposta aceitos para cada tipo.
+        Formatos de resposta aceitos por tipo.
+
+        Tipos ESTRUTURADOS (escolha, escala, classificação, data,
+        horário, número, sim/não, URL, upload, grid) só aceitam
+        `text`. Tipos ABERTOS (texto curto, texto longo, texto
+        livre) aceitam texto, áudio e imagem.
         """
-        if question_type in (
+        structured = {
             'single_choice',
             'multiple_choice',
+            'dropdown',
+            'choice',
             'scale',
             'rating',
-            'date',
             'number',
+            'grid_single',
+            'grid_multiple',
+            'date',
+            'time',
             'yes_no',
             'url',
-        ):
+            'file_upload',
+        }
+        if question_type in structured:
             return ['text']
         return ['text', 'audio', 'image']
 
@@ -4460,26 +4696,14 @@ class GoogleFormsService:
         normalized_form: dict,
         template_name: str,
         actor=None,
+        access_token: str = '',
     ) -> dict:
         """
-        Cria um novo BriefingTemplate no workspace e o popula
-        com sessões e perguntas do formulário normalizado.
-
-        Usa os services do módulo briefings — não reimplementa.
-
-        Retorna:
-            {
-                'template_id': UUID,
-                'template_name': str,
-                'sections_created': int,
-                'questions_created': int,
-            }
+        Cria um novo BriefingTemplate no workspace e o popula com
+        sessões, perguntas e imagens das opções.
         """
         from apps.briefings.services import BriefingTemplateService
 
-        # ------------------------------------------------------------------
-        # 1. Cria o template vazio
-        # ------------------------------------------------------------------
         template = BriefingTemplateService.create_template(
             workspace=workspace,
             name=template_name,
@@ -4490,10 +4714,8 @@ class GoogleFormsService:
 
         sections_created = 0
         questions_created = 0
+        images_imported = 0
 
-        # ------------------------------------------------------------------
-        # 2. Cria as sessões e perguntas
-        # ------------------------------------------------------------------
         for section_spec in normalized_form.get('sections', []):
             section = BriefingTemplateService.add_section(
                 template=template,
@@ -4504,6 +4726,117 @@ class GoogleFormsService:
             sections_created += 1
 
             for question_spec in section_spec.get('questions', []):
+                is_grid = bool(question_spec.get('_is_grid'))
+                raw_options = question_spec.get('options')
+
+                # --------------------------------------------------
+                # GRID: options é dict {rows, columns}.
+                # Precisa baixar imagens das COLUNAS.
+                # --------------------------------------------------
+                if is_grid and isinstance(raw_options, dict):
+                    clean_columns = []
+                    for col in (raw_options.get('columns') or []):
+                        col_text = (col.get('text') or '').strip()
+                        if not col_text:
+                            continue
+                        col_doc_id = None
+                        raw_image = col.get('_raw_image')
+                        if raw_image and access_token:
+                            col_doc_id = (
+                                GoogleFormsService._import_image_as_document(
+                                    access_token=access_token,
+                                    image_payload=raw_image,
+                                    workspace=workspace,
+                                    actor=actor,
+                                    fallback_name=(
+                                        f'{template.name} — coluna '
+                                        f'"{col_text[:40]}"'
+                                    ),
+                                )
+                            )
+                            if col_doc_id:
+                                images_imported += 1
+                        clean_columns.append({
+                            'text': col_text,
+                            'image_document_id': col_doc_id,
+                        })
+
+                    grid_options = {
+                        'rows': list(raw_options.get('rows') or []),
+                        'columns': clean_columns,
+                    }
+
+                    BriefingTemplateService.add_question(
+                        section=section,
+                        text=question_spec.get('text') or '',
+                        instructions=question_spec.get('instructions') or '',
+                        question_type=question_spec.get(
+                            'question_type', 'grid_single',
+                        ),
+                        allowed_response_formats=question_spec.get(
+                            'allowed_response_formats',
+                        ),
+                        options=grid_options,
+                        is_required=question_spec.get('is_required', True),
+                        reference_document_ids=None,
+                        actor=actor,
+                    )
+                    questions_created += 1
+                    continue
+
+                # --------------------------------------------------
+                # Escolha / outros: options é list.
+                # --------------------------------------------------
+                clean_options = []
+                for raw_opt in (raw_options or []):
+                    opt_text = (raw_opt.get('text') or '').strip()
+                    if not opt_text:
+                        continue
+                    doc_id = None
+                    raw_image = raw_opt.get('_raw_image')
+                    if raw_image and access_token:
+                        doc_id = (
+                            GoogleFormsService._import_image_as_document(
+                                access_token=access_token,
+                                image_payload=raw_image,
+                                workspace=workspace,
+                                actor=actor,
+                                fallback_name=(
+                                    f'{template.name} — opção '
+                                    f'"{opt_text[:40]}"'
+                                ),
+                            )
+                        )
+                        if doc_id:
+                            images_imported += 1
+                    clean_options.append({
+                        'text': opt_text,
+                        'image_document_id': doc_id,
+                    })
+
+                # Baixa imagem da pergunta em si (se houver).
+                raw_q_image = question_spec.get('_raw_question_image')
+                question_image_doc_id = None
+                if raw_q_image and access_token:
+                    question_image_doc_id = (
+                        GoogleFormsService._import_image_as_document(
+                            access_token=access_token,
+                            image_payload=raw_q_image,
+                            workspace=workspace,
+                            actor=actor,
+                            fallback_name=(
+                                f'{template.name} — pergunta '
+                                f'"{(question_spec.get("text") or "")[:40]}"'
+                            ),
+                        )
+                    )
+                    if question_image_doc_id:
+                        images_imported += 1
+
+                ref_ids = (
+                    [question_image_doc_id] if question_image_doc_id else None
+                )
+
                 BriefingTemplateService.add_question(
                     section=section,
                     text=question_spec.get('text') or '',
@@ -4514,18 +4847,88 @@ class GoogleFormsService:
                     allowed_response_formats=question_spec.get(
                         'allowed_response_formats',
                     ),
-                    options=question_spec.get('options'),
+                    options=clean_options,
                     is_required=question_spec.get('is_required', True),
+                    reference_document_ids=ref_ids,
                     actor=actor,
                 )
                 questions_created += 1
+
+        logger.info(
+            'Template importado do Forms | template=%s | sections=%d | '
+            'questions=%d | images=%d',
+            template.id, sections_created, questions_created,
+            images_imported,
+        )
 
         return {
             'template_id': template.id,
             'template_name': template.name,
             'sections_created': sections_created,
             'questions_created': questions_created,
+            'images_imported': images_imported,
         }
+
+    @staticmethod
+    def _import_image_as_document(
+        *,
+        access_token: str,
+        image_payload: dict,
+        workspace,
+        actor=None,
+        fallback_name: str = 'Imagem importada do Forms',
+    ) -> Optional[str]:
+        """
+        Baixa uma imagem do Google Forms e a salva como Document
+        no workspace. Retorna o ID (str) do Document, ou None se
+        falhar. Nunca levanta exceção — uma imagem que falha não
+        deve interromper a importação do template.
+        """
+        from apps.documents.models import Document
+        from django.core.files.base import ContentFile
+
+        downloaded = GoogleFormsService._download_image_bytes(
+            access_token=access_token,
+            image_payload=image_payload,
+        )
+        if downloaded is None:
+            return None
+
+        image_bytes, mime_type = downloaded
+
+        ext_map = {
+            'image/png': 'png',
+            'image/jpeg': 'jpg',
+            'image/jpg': 'jpg',
+            'image/gif': 'gif',
+            'image/webp': 'webp',
+            'image/bmp': 'bmp',
+        }
+        extension = ext_map.get(mime_type, 'png')
+
+        safe_name = re.sub(r'[^A-Za-z0-9._-]+', '-', fallback_name)[:80]
+        file_name = f'{safe_name}.{extension}'
+
+        try:
+            document = Document.objects.create(
+                workspace=workspace,
+                name=fallback_name[:200],
+                file=ContentFile(image_bytes, name=file_name),
+                extension=extension,
+                mime_type=mime_type,
+                size=len(image_bytes),
+                created_by=actor if (
+                    actor and getattr(actor, 'is_authenticated', False)
+                ) else None,
+            )
+        except Exception:
+            logger.exception(
+                'Falha ao salvar imagem como Document (name=%s)',
+                fallback_name,
+            )
+            return None
+
+        return str(document.id)
 
     # =====================================================================
     # VALIDAÇÕES
@@ -4533,11 +4936,6 @@ class GoogleFormsService:
 
     @staticmethod
     def _assert_forms_scope(integration: WorkspaceIntegration) -> None:
-        """
-        Verifica se a integração tem o escopo do Forms concedido.
-
-        Lança FormsScopeMissingError se não tiver.
-        """
         granted = set(integration.granted_scopes or [])
         if REQUIRED_SCOPE not in granted:
             raise FormsScopeMissingError(
@@ -4551,7 +4949,7 @@ class GoogleFormsService:
             )
 
 ================================================================================
-ARQUIVO 37 DE 58
+ARQUIVO 38 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\services
 ARQUIVO: integration_service.py
@@ -5341,7 +5739,7 @@ class IntegrationService:
         return rt if rt else None
 
 ================================================================================
-ARQUIVO 38 DE 58
+ARQUIVO 39 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\services
 ARQUIVO: oauth_state.py
@@ -5516,7 +5914,7 @@ class OAuthStateService:
             return None
 
 ================================================================================
-ARQUIVO 39 DE 58
+ARQUIVO 40 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\services
 ARQUIVO: redirects.py
@@ -5643,7 +6041,7 @@ def safe_redirect_or_fallback(target: str) -> str:
     return DEFAULT_FALLBACK
 
 ================================================================================
-ARQUIVO 40 DE 58
+ARQUIVO 41 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\tests
 ARQUIVO: __init__.py
@@ -5654,7 +6052,7 @@ LINHAS: 0
 
 
 ================================================================================
-ARQUIVO 41 DE 58
+ARQUIVO 42 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\tests
 ARQUIVO: conftest.py
@@ -5728,7 +6126,7 @@ def workspace_for_integrations(db):
     )
 
 ================================================================================
-ARQUIVO 42 DE 58
+ARQUIVO 43 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\tests
 ARQUIVO: test_architectural_boundaries.py
@@ -5876,7 +6274,7 @@ def test_walker_finds_files(repo_root):
     )
 
 ================================================================================
-ARQUIVO 43 DE 58
+ARQUIVO 44 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\tests
 ARQUIVO: test_encryption_service.py
@@ -5950,7 +6348,7 @@ class TestEncryptionService:
             assert EncryptionService.decrypt(old_ciphertext) == b'legacy'
 
 ================================================================================
-ARQUIVO 44 DE 58
+ARQUIVO 45 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\tests
 ARQUIVO: test_exception_sanitization.py
@@ -6021,7 +6419,7 @@ class TestExceptionSanitization:
         assert exc.context['missing_resources'] == ['drive.file.read']
 
 ================================================================================
-ARQUIVO 45 DE 58
+ARQUIVO 46 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\tests
 ARQUIVO: test_google_connector_refresh_revoke.py
@@ -6318,7 +6716,7 @@ class TestRevoke:
         mock_post.assert_not_called()
 
 ================================================================================
-ARQUIVO 46 DE 58
+ARQUIVO 47 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\tests
 ARQUIVO: test_google_connector.py
@@ -6753,7 +7151,7 @@ class TestMissingCredentials:
             )
 
 ================================================================================
-ARQUIVO 47 DE 58
+ARQUIVO 48 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\tests
 ARQUIVO: test_google_forms_service.py
@@ -7010,7 +7408,7 @@ class TestImportFlow:
             )
 
 ================================================================================
-ARQUIVO 48 DE 58
+ARQUIVO 49 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\tests
 ARQUIVO: test_integration_service_refresh.py
@@ -7402,7 +7800,7 @@ class TestRevokeIntegration:
         assert integration.status == WorkspaceIntegration.STATUS_REVOKED
 
 ================================================================================
-ARQUIVO 49 DE 58
+ARQUIVO 50 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\tests
 ARQUIVO: test_integration_service.py
@@ -7687,7 +8085,7 @@ class TestPersistence:
         assert creds['schema_version'] == 1
 
 ================================================================================
-ARQUIVO 50 DE 58
+ARQUIVO 51 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\tests
 ARQUIVO: test_oauth_flow_with_next.py
@@ -7957,7 +8355,7 @@ class TestCallbackWithNext:
         assert 'google_connected=1' in response.url
 
 ================================================================================
-ARQUIVO 51 DE 58
+ARQUIVO 52 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\tests
 ARQUIVO: test_oauth_state_service.py
@@ -8085,7 +8483,7 @@ class TestContextIntegrity:
         assert ctx.provider_key == 'microsoft'
 
 ================================================================================
-ARQUIVO 52 DE 58
+ARQUIVO 53 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\tests
 ARQUIVO: test_oauth_views.py
@@ -8553,7 +8951,7 @@ class TestGoogleOAuthCallbackView:
         assert response.url.startswith('/workspaces/entrar/')
 
 ================================================================================
-ARQUIVO 53 DE 58
+ARQUIVO 54 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\tests
 ARQUIVO: test_redirects.py
@@ -8641,7 +9039,7 @@ class TestSafeRedirectOrFallback:
         assert safe_redirect_or_fallback('/w/abc/../../../admin') == DEFAULT_FALLBACK
 
 ================================================================================
-ARQUIVO 54 DE 58
+ARQUIVO 55 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\tests
 ARQUIVO: test_registry.py
@@ -8704,7 +9102,7 @@ class TestProviderRegistry:
         assert set(ProviderRegistry.all_keys()) == {'a', 'b'}
 
 ================================================================================
-ARQUIVO 55 DE 58
+ARQUIVO 56 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\tests
 ARQUIVO: test_workspace_integration_concurrency.py
@@ -8890,7 +9288,7 @@ class TestWorkspaceIntegrationConcurrency(TransactionTestCase):
         )
 
 ================================================================================
-ARQUIVO 56 DE 58
+ARQUIVO 57 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations\tests
 ARQUIVO: test_workspace_integration_model.py
@@ -8984,7 +9382,7 @@ class TestWorkspaceIntegrationConstraints:
         _make_integration(ws_b, provider, external_account_id='shared')
 
 ================================================================================
-ARQUIVO 57 DE 58
+ARQUIVO 58 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations
 ARQUIVO: urls.py
@@ -9032,13 +9430,13 @@ urlpatterns = [
 ]
 
 ================================================================================
-ARQUIVO 58 DE 58
+ARQUIVO 59 DE 59
 ================================================================================
 PASTA: C:\clivo-v1\apps\integrations
 ARQUIVO: views.py
-TAMANHO: 14,17 KB
+TAMANHO: 15,85 KB
 EXTENSAO: .py
-LINHAS: 407
+LINHAS: 444
 ================================================================================
 
 """
@@ -9067,6 +9465,15 @@ deve voltar DEPOIS de conectar com sucesso. É validado por
 No retorno, o backend acrescenta `?google_connected=1` na URL.
 O frontend usa esse sinal para reabrir a ação que estava em
 andamento (por exemplo, o modal de Importar Forms).
+
+SOBRE `login_hint`
+------------------
+Passamos `request.user.email` como `login_hint` para o Google.
+Isso pré-seleciona a conta correta na tela de consentimento,
+evitando mostrar outras contas logadas no navegador.
+
+Isso NÃO cria acoplamento com `accounts`: apenas lemos
+`request.user.email`, que é campo padrão do Django.
 """
 
 import logging
@@ -9159,7 +9566,8 @@ class GoogleOAuthStartView(View):
         1. Valida pré-requisitos.
         2. Lê `next` da query string e valida.
         3. Gera state no Redis via OAuthStateService (com `next_path`).
-        4. Chama GoogleConnector.build_auth_url.
+        4. Chama GoogleConnector.build_auth_url, passando o email do
+           usuário como `login_hint`.
         5. Redireciona (302) para o Google.
 
     NOTA sobre capability:
@@ -9196,6 +9604,10 @@ class GoogleOAuthStartView(View):
                 key='google', is_active=True,
             )
         except IntegrationProvider.DoesNotExist:
+            logger.warning(
+                'Provider Google não encontrado ou inativo | user=%s',
+                request.user.pk,
+            )
             messages.error(
                 request,
                 'O provider Google não está disponível neste '
@@ -9221,6 +9633,16 @@ class GoogleOAuthStartView(View):
                 redirect_uri=redirect_uri,
                 resources=DEFAULT_GOOGLE_RESOURCES,
                 state=state,
+                # ─────────────────────────────────────────────────
+                # login_hint: usa o email do usuário logado na Clivo
+                # para pré-selecionar a conta correta no Google.
+                #
+                # O `accounts` continua sendo a única autoridade
+                # sobre "quem é o usuário". Aqui apenas LEMOS
+                # `request.user.email`, um campo padrão do Django —
+                # sem importar nada de `apps.accounts`.
+                # ─────────────────────────────────────────────────
+                login_hint=request.user.email,
             )
         except IntegrationConfigurationError:
             logger.exception(
@@ -9243,6 +9665,13 @@ class GoogleOAuthStartView(View):
                 'inconsistente. Contate o suporte.',
             )
             return redirect(final_redirect)
+
+        logger.info(
+            'Iniciando OAuth Google | user=%s | workspace=%s | login_hint=%s',
+            request.user.email,
+            workspace.pk,
+            request.user.email,
+        )
 
         return HttpResponseRedirect(auth_url)
 
@@ -9441,6 +9870,12 @@ class GoogleOAuthCallbackView(View):
         messages.success(
             request,
             'Google conectado com sucesso.',
+        )
+
+        logger.info(
+            'Google conectado com sucesso | user=%s | workspace=%s',
+            request.user.email,
+            workspace.pk,
         )
 
         # Redireciona para `next_path` com o sinal `?google_connected=1`.

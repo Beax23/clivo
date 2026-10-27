@@ -21,6 +21,7 @@ class BriefingNoteSerializer(serializers.ModelSerializer):
             'author_email',
             'author_name',
             'content',
+            'is_pinned',
             'created_at',
             'updated_at',
         ]
@@ -43,9 +44,8 @@ class BriefingNoteSerializer(serializers.ModelSerializer):
 
 class BriefingNoteCreateSerializer(serializers.Serializer):
     content = serializers.CharField(allow_blank=False, max_length=20000)
-    question_id = serializers.UUIDField(
-        required=False, allow_null=True,
-    )
+    question_id = serializers.UUIDField(required=False, allow_null=True)
+    is_pinned = serializers.BooleanField(required=False, default=False)
 
     def validate_content(self, value):
         value = (value or '').strip()
@@ -55,7 +55,16 @@ class BriefingNoteCreateSerializer(serializers.Serializer):
 
 
 class BriefingNoteUpdateSerializer(serializers.Serializer):
-    content = serializers.CharField(allow_blank=False, max_length=20000)
+    """
+    Body de PATCH em uma nota.
+
+    Aceita `content` (opcional) e/ou `is_pinned` (opcional).
+    """
+
+    content = serializers.CharField(
+        allow_blank=False, max_length=20000, required=False,
+    )
+    is_pinned = serializers.BooleanField(required=False)
 
     def validate_content(self, value):
         value = (value or '').strip()

@@ -9,6 +9,34 @@ reutilizável.
 
 Ela NÃO substitui `BriefingQuestion` (que é do template). Ela é um
 complemento local — vive dentro da execução.
+
+DUAS FASES
+----------
+Uma instância pode estar em uma de duas fases:
+
+    1. ANTES do briefing ter respostas
+       A instância é copiada para o `structure_snapshot` no primeiro
+       `submit_answer` (comportamento antigo, via
+       `freeze_custom_questions_into_snapshot`). A pergunta vira
+       parte do bloco original.
+
+    2. DEPOIS do briefing ter respostas
+       A instância é copiada para o `supplementary_snapshot`
+       (comportamento novo, via
+       `freeze_supplementary_questions_into_snapshot`). A pergunta
+       vira parte do bloco complementar.
+
+O campo `frozen_in_supplementary_snapshot_at` marca quando a instância
+entrou na fase 2. Antes disso, NULL.
+
+REMOÇÃO
+-------
+Não existe soft delete. A remoção é DELETE real.
+
+Perguntas JÁ RESPONDIDAS não podem ser removidas (regra de negócio
+aplicada em `BriefingQuestionInstanceService`). Perguntas ainda não
+respondidas podem ser removidas; o evento `custom_question_removed`
+guarda o snapshot completo da pergunta removida no `content`.
 """
 
 import uuid
@@ -107,6 +135,16 @@ class BriefingQuestionInstance(models.Model):
         help_text=_('Se a pergunta é obrigatória'),
     )
 
+    frozen_in_supplementary_snapshot_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=_(
+            'Momento em que esta pergunta foi copiada para o '
+            'supplementary_snapshot do Briefing. NULL = ainda não '
+            'congelada no bloco complementar.'
+        ),
+    )
+
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -139,7 +177,11 @@ class BriefingQuestionInstance(models.Model):
     def to_snapshot_dict(self) -> dict:
         """
         Serializa esta instância no formato usado dentro do
-        `structure_snapshot` do Briefing.
+        `supplementary_snapshot` do Briefing.
+
+        Idêntico ao formato do `structure_snapshot` para que o
+        `PortalBriefingSerializer` consiga serializar os dois blocos
+        com o mesmo código.
         """
         return {
             'id': str(self.id),
@@ -154,4 +196,32 @@ class BriefingQuestionInstance(models.Model):
             'is_required': bool(self.is_required),
             'reference_document_ids': [],
             'is_custom': True,
+        }
+
+    def to_removal_event_payload(self) -> dict:
+        """
+        Snapshot completo da pergunta para o evento
+        `custom_question_removed`.
+
+        Necessário porque a remoção é DELETE real. Sem isso, apagar a
+        linha perderia a informação da pergunta e do histórico.
+        """
+        return {
+            'instance_id': str(self.id),
+            'section_ref': self.section_ref,
+            'text': self.text,
+            'instructions': self.instructions,
+            'question_type': self.question_type,
+            'allowed_response_formats': list(
+                self.allowed_response_formats or []
+            ),
+            'options': self.options if self.options else [],
+            'position': self.position,
+            'is_required': bool(self.is_required),
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'created_by_email': (
+                self.created_by.email
+                if self.created_by_id and self.created_by
+                else None
+            ),
         }

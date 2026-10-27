@@ -9,11 +9,11 @@ class BriefingsConfig(AppConfig):
 
     def ready(self):
         """
-        Inicializa o módulo briefings.
+        Registra os signals do módulo.
 
-        Signals não são registrados por padrão. O módulo emite eventos
-        internamente via services. Integrações com `timeline` ou
-        `intelligence` serão conectadas quando esses módulos existirem.
+        SEM este import, os receivers `post_save(BriefingEvent)` e
+        `pre_delete(Briefing)` NUNCA são conectados, e a ponte
+        `briefings → intelligence` fica inativa em runtime — os
+        eventos são criados, mas nunca chegam ao `IngestService`.
         """
-        # import apps.briefings.signals  # noqa: F401
-        pass
+        import apps.briefings.signals  # noqa: F401

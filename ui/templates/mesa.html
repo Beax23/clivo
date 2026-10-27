@@ -5,7 +5,7 @@
 {% block page_name %}mesa{% endblock %}
 
 {% block page_css %}
-<link rel="stylesheet" href="{% static 'css/mesa.css' %}?v=25">
+<link rel="stylesheet" href="{% static 'css/mesa.css' %}?v=42">
 {% endblock %}
 
 {% block content %}
@@ -17,7 +17,6 @@
 
     <div hidden>{% csrf_token %}</div>
 
-    <!-- HEADER -->
     <header class="fx-header" id="msTopbar">
         <div class="fx-header-left">
             <div class="fx-header-title-row">
@@ -27,35 +26,26 @@
                 <i id="msGreetingIcon" data-lucide="sun" class="fx-greeting-icon"></i>
             </div>
         </div>
+        <div class="fx-header-right">
+            <button type="button" class="ms-reanalyze-btn" id="msReanalyzeBtn" title="Gerar nova análise do briefing selecionado">
+                <span class="ms-reanalyze-icon"><i data-lucide="sparkles"></i></span>
+                <span class="ms-reanalyze-label">Nova análise</span>
+                <span class="ms-reanalyze-spinner"></span>
+            </button>
+        </div>
     </header>
 
     <div class="cl-body" id="msBody">
 
-        <!-- COLUNA 1: KPIs + LISTA -->
         <aside class="cl-col cl-col--list" id="msBriefings">
-
-            <section class="ms-kpis" id="msKpis" aria-label="Indicadores">
-                <button type="button" class="ms-kpi" data-kpi="done">
-                    <span class="ms-kpi-value" id="msKpiDone">0</span>
-                    <span class="ms-kpi-label">Concluídos</span>
-                </button>
-                <button type="button" class="ms-kpi" data-kpi="open">
-                    <span class="ms-kpi-value" id="msKpiOpen">0</span>
-                    <span class="ms-kpi-label">Andamento</span>
-                </button>
-                <button type="button" class="ms-kpi" data-kpi="doubts">
-                    <span class="ms-kpi-value" id="msKpiDoubts">0</span>
-                    <span class="ms-kpi-label">Dúvidas</span>
-                </button>
-                <button type="button" class="ms-kpi" data-kpi="attention">
-                    <span class="ms-kpi-value" id="msKpiAttention">0</span>
-                    <span class="ms-kpi-label">Atenção</span>
-                </button>
-            </section>
 
             <header class="cl-col-head">
                 <div class="cl-col-head-row">
                     <h2 class="cl-col-title">Briefings</h2>
+                    <button type="button" class="ms-filter-all is-active" id="msFilterAllBtn" role="tab" data-kpi="all" aria-selected="true" title="Todos os briefings">
+                        <i data-lucide="layers"></i>
+                        <span class="ms-filter-count" id="msKpiAll">0</span>
+                    </button>
                 </div>
                 <div class="cl-toolbar">
                     <div class="cl-search">
@@ -63,6 +53,20 @@
                         <input type="search" id="msBriefingsSearch" placeholder="Buscar briefings…" autocomplete="off">
                     </div>
                 </div>
+                <nav class="ms-filters" id="msKpis" role="tablist" aria-label="Filtrar briefings">
+                    <button type="button" class="ms-filter" role="tab" data-kpi="open" aria-selected="false">
+                        <span>Andamento</span>
+                        <span class="ms-filter-count" id="msKpiOpen">0</span>
+                    </button>
+                    <button type="button" class="ms-filter" role="tab" data-kpi="pending" aria-selected="false">
+                        <span>Pendências</span>
+                        <span class="ms-filter-count" id="msKpiPending">0</span>
+                    </button>
+                    <button type="button" class="ms-filter" role="tab" data-kpi="done" aria-selected="false">
+                        <span>Concluídos</span>
+                        <span class="ms-filter-count" id="msKpiDone">0</span>
+                    </button>
+                </nav>
             </header>
 
             <div class="cl-col-scroll">
@@ -71,7 +75,6 @@
                 </ul>
             </div>
 
-            <!-- v25 — card reorganizado -->
             <template id="msBriefItemTpl">
                 <li class="ms-brief" data-id="">
                     <span class="ms-brief-thumb"><img src="" alt=""></span>
@@ -86,39 +89,61 @@
                         <span class="ms-brief-client"><span class="ms-brief-client-name">—</span></span>
                         <div class="ms-brief-foot">
                             <span class="ms-brief-questions">— perguntas</span>
-                            <span class="ms-brief-when">—</span>
                             <span class="ms-brief-progress-pct">0%</span>
                         </div>
                         <div class="ms-brief-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
                             <span class="ms-brief-bar-fill" style="width: 0%"></span>
+                        </div>
+                        <div class="ms-brief-supp hidden" data-supp="0">
+                            <i data-lucide="message-square-plus"></i>
+                            <span class="ms-brief-supp-label">Perguntas complementares</span>
+                            <span class="ms-brief-supp-count">0</span>
                         </div>
                     </div>
                 </li>
             </template>
         </aside>
 
-        <!-- COLUNA 2: DETALHE -->
         <section class="cl-col cl-col--detail" id="msDetail">
             <div class="cl-detail" id="msDetailContent">
 
-                <div class="cl-center">
+                <div class="ms-detail-view" data-view="detail">
 
-                    <div class="ms-detail-top">
-                        <nav class="ms-crumbs" aria-label="Navegação">
-                            <button type="button" class="ms-crumbs-back" id="msBack" aria-label="Voltar"><i data-lucide="arrow-left"></i></button>
-                            <span>Briefings</span>
-                            <i data-lucide="chevron-right"></i>
-                            <span id="msCrumbCurrent" aria-current="page">—</span>
-                        </nav>
-                        <div class="cl-head-actions">
-                            <button type="button" class="cl-btn cl-btn--sm" id="msViewBtn">
-                                <i data-lucide="external-link"></i>
-                                <span>Ver briefing</span>
-                            </button>
+                    <header class="ms-detail-head">
+                        <div class="ms-detail-top">
+                            <nav class="ms-crumbs" aria-label="Navegação">
+                                <button type="button" class="ms-crumbs-back" id="msBack" aria-label="Voltar"><i data-lucide="arrow-left"></i></button>
+                                <span>Briefings</span>
+                                <i data-lucide="chevron-right"></i>
+                                <span id="msCrumbCurrent" aria-current="page">—</span>
+                            </nav>
+                            <div class="cl-head-actions">
+                                <button type="button" class="cl-btn cl-btn--sm" id="msViewBtn">
+                                    <i data-lucide="external-link"></i>
+                                    <span>Ver briefing</span>
+                                </button>
+                                <div class="ms-kebab-wrap">
+                                    <button type="button" class="cl-icon-btn ms-kebab-btn" id="msKebabBtn" aria-haspopup="true" aria-expanded="false" aria-label="Mais ações">
+                                        <i data-lucide="more-vertical"></i>
+                                    </button>
+                                    <div class="ms-kebab-menu" id="msKebabMenu" hidden>
+                                        <button type="button" class="ms-kebab-item" id="msEditBtn">
+                                            <i data-lucide="pencil"></i>
+                                            <span>Editar briefing</span>
+                                        </button>
+                                        <button type="button" class="ms-kebab-item" id="msReopenBtn">
+                                            <i data-lucide="rotate-ccw"></i>
+                                            <span>Reabrir briefing</span>
+                                        </button>
+                                        <button type="button" class="ms-kebab-item ms-kebab-item--danger" id="msDeleteBtn">
+                                            <i data-lucide="trash-2"></i>
+                                            <span>Excluir briefing</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                    </div>
 
-                    <header class="cl-head">
                         <div class="cl-head-info">
                             <div class="cl-head-title-row">
                                 <h1 class="cl-head-name" id="msDetailTitle">—</h1>
@@ -126,43 +151,42 @@
                                     <span class="ms-status-pill-dot"></span>
                                     <span id="msDetailStatusLabel">—</span>
                                 </span>
+                                <span class="ms-status-pill ms-status-pill--supp hidden" id="msDetailSuppPill" data-status="pending">
+                                    <i data-lucide="message-square-plus"></i>
+                                    <span id="msDetailSuppLabel">0 complementares</span>
+                                </span>
                             </div>
                             <div class="cl-head-meta">
                                 <span><i data-lucide="user"></i><span id="msDetailClient">—</span></span>
                                 <span><i data-lucide="calendar-plus"></i>Criado em <span id="msDetailCreated">—</span></span>
-                                <span><i data-lucide="calendar-clock"></i>Vence em <span id="msDetailExpires">—</span></span>
+                                <span class="ms-meta-expires"><i data-lucide="calendar-clock"></i>Vence em <span id="msDetailExpires">—</span></span>
                                 <span><i data-lucide="clock"></i>Última atividade: <span id="msDetailActivity">—</span></span>
                             </div>
                         </div>
+
+                        <nav class="cl-tabs" id="msTabs" role="tablist">
+                            <button type="button" class="cl-tab is-active" role="tab" data-tab="summary" aria-selected="true">Resumo</button>
+                            <button type="button" class="cl-tab" role="tab" data-tab="questions" aria-selected="false">Perguntas adicionais</button>
+                            <button type="button" class="cl-tab" role="tab" data-tab="history" aria-selected="false">Histórico</button>
+                        </nav>
                     </header>
 
-                    <nav class="cl-tabs" id="msTabs" role="tablist">
-                        <button type="button" class="cl-tab is-active" role="tab" data-tab="summary" aria-selected="true">Resumo</button>
-                        <button type="button" class="cl-tab" role="tab" data-tab="questions" aria-selected="false">Perguntas adicionais</button>
-                        <button type="button" class="cl-tab" role="tab" data-tab="history" aria-selected="false">Histórico</button>
-                    </nav>
-
-                    <div class="cl-center-stack" id="msDetailScroll">
+                    <div class="ms-tabpanel-wrap">
 
                         <div class="ms-tabpanel ms-tabpanel--summary" data-panel="summary">
-
                             <section class="ms-notes" id="msOfficeNotes">
                                 <header class="ms-notes-header">
-                                    <h3 class="cl-card-title">Notas</h3>
-                                    <button type="button" class="ms-notes-add" id="msNoteAdd" aria-expanded="true">
-                                        <i data-lucide="plus"></i>
-                                        <span>Nova nota</span>
-                                    </button>
+                                    <h3 class="cl-card-title">Observações</h3>
                                 </header>
 
-                                <div class="ms-compose" id="msNoteComposer">
+                                <div class="ms-compose">
                                     <div class="ms-note-box">
-                                        <textarea id="msBriefNoteInput" rows="3" placeholder="Escreva uma nota…"></textarea>
+                                        <textarea id="msBriefNoteInput" rows="2" placeholder="Escreva uma nota…"></textarea>
                                         <div class="ms-note-toolbar">
-                                            <button type="button" class="ms-note-tool" id="msNoteAttach" title="Anexar arquivo" aria-label="Anexar arquivo"><i data-lucide="paperclip"></i></button>
-                                            <button type="button" class="ms-note-tool" id="msNoteImage" title="Adicionar imagem" aria-label="Adicionar imagem"><i data-lucide="image"></i></button>
-                                            <button type="button" class="ms-note-tool" id="msNoteMention" title="Mencionar alguém" aria-label="Mencionar alguém"><i data-lucide="at-sign"></i></button>
-                                            <button type="button" class="cl-btn cl-btn--sm cl-btn--primary" id="msBriefNoteSave">Salvar</button>
+                                            <button type="button" class="cl-btn cl-btn--sm cl-btn--primary" id="msBriefNoteSave">
+                                                <span class="ms-btn-label">Salvar</span>
+                                                <span class="ms-btn-spinner"></span>
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
@@ -175,51 +199,266 @@
 
                                 <template id="msNoteItemTpl">
                                     <li class="ms-note-item" data-id="">
-                                        <span class="ms-note-type" data-type="observation">—</span>
-                                        <span class="ms-avatar"><span class="ms-avatar-initials">—</span></span>
-                                        <div class="ms-note-body">
-                                            <div class="ms-note-who"><span class="ms-note-author">—</span><small class="ms-note-when">—</small></div>
-                                            <p class="ms-note-text">—</p>
-                                        </div>
-                                        <div class="ms-note-actions">
-                                            <button type="button" class="cl-icon-btn" data-note-action="edit" aria-label="Editar nota"><i data-lucide="pencil"></i></button>
-                                            <button type="button" class="cl-icon-btn" data-note-action="delete" aria-label="Excluir nota"><i data-lucide="trash-2"></i></button>
+                                        <div class="ms-note-line">
+                                            <span class="ms-note-type" data-type="observation">Observação</span>
+                                            <span class="ms-note-sep">—</span>
+                                            <span class="ms-note-text">—</span>
+                                            <span class="ms-note-sep">—</span>
+                                            <span class="ms-note-when">agora</span>
+                                            <span class="ms-note-sep">—</span>
+                                            <span class="ms-note-author">—</span>
+                                            <div class="ms-note-actions">
+                                                <button type="button" class="cl-icon-btn" data-note-action="edit" aria-label="Editar nota"><i data-lucide="pencil"></i></button>
+                                                <button type="button" class="cl-icon-btn" data-note-action="delete" aria-label="Excluir nota"><i data-lucide="trash-2"></i></button>
+                                            </div>
                                         </div>
                                     </li>
                                 </template>
                             </section>
-
                         </div>
 
-                        <div class="ms-tabpanel" data-panel="questions" hidden>
-                            <section class="cl-card">
-                                <header class="cl-card-head">
-                                    <h3 class="cl-card-title">Perguntas adicionais</h3>
+                        <div class="ms-tabpanel ms-tabpanel--fixed" data-panel="questions" hidden>
+                            <section class="ms-fixed-list-card">
+                                <header class="ms-fixed-list-head">
+                                    <h3 class="ms-fixed-list-title">Perguntas adicionais</h3>
+                                    <button type="button" class="ms-fixed-list-add" id="msAddCustomQuestionBtn" title="Adicionar pergunta">
+                                        <i data-lucide="plus"></i>
+                                        <span>Adicionar</span>
+                                    </button>
                                 </header>
-                                <ul class="ms-questions-list" id="msQuestionsList">
-                                    <li class="cl-empty">Nenhuma pergunta adicional.</li>
-                                </ul>
+                                <div class="ms-fixed-list-scroll">
+                                    <ul class="ms-questions-list" id="msQuestionsList">
+                                        <li class="cl-empty">Nenhuma pergunta adicional.</li>
+                                    </ul>
+                                </div>
                             </section>
                         </div>
 
-                        <div class="ms-tabpanel" data-panel="history" hidden>
-                            <section class="cl-card">
-                                <header class="cl-card-head">
-                                    <h3 class="cl-card-title">Histórico</h3>
+                        <div class="ms-tabpanel ms-tabpanel--fixed" data-panel="history" hidden>
+                            <section class="ms-fixed-list-card">
+                                <header class="ms-fixed-list-head">
+                                    <h3 class="ms-fixed-list-title">Histórico</h3>
                                 </header>
-                                <ul class="ms-history-list" id="msHistoryList">
-                                    <li class="cl-empty">Sem eventos registrados.</li>
-                                </ul>
+                                <div class="ms-fixed-list-scroll">
+                                    <ul class="ms-history-list" id="msHistoryList">
+                                        <li class="cl-empty">Sem eventos registrados.</li>
+                                    </ul>
+                                </div>
                             </section>
                         </div>
 
                     </div>
+
+                    <footer class="ms-detail-footer">
+                        <section class="ms-moodboard" id="msMoodboard">
+                            <header class="ms-moodboard-head">
+                                <h3 class="ms-moodboard-title">Moodboard</h3>
+                                <span class="ms-moodboard-count" id="msMoodboardCount"></span>
+                            </header>
+                            <div class="ms-moodboard-grid" id="msMoodboardGrid">
+                                <div class="ms-moodboard-empty">
+                                    <i data-lucide="images"></i>
+                                    <span>Nenhuma imagem enviada pelo cliente.</span>
+                                </div>
+                            </div>
+                        </section>
+                    </footer>
+
+                </div>
+
+                <div class="ms-detail-view ms-detail-view--edit" data-view="edit" hidden>
+                    <form class="ms-edit-form" id="msEditForm" autocomplete="off">
+                        <header class="ms-detail-head">
+                            <div class="ms-detail-top">
+                                <nav class="ms-crumbs" aria-label="Navegação">
+                                    <button type="button" class="ms-crumbs-back" id="msEditBack" aria-label="Voltar"><i data-lucide="arrow-left"></i></button>
+                                    <span>Briefings</span>
+                                    <i data-lucide="chevron-right"></i>
+                                    <span aria-current="page">Editar</span>
+                                </nav>
+                                <div class="cl-head-actions">
+                                    <button type="button" class="cl-btn cl-btn--sm" id="msEditCancel">Cancelar</button>
+                                    <button type="submit" class="cl-btn cl-btn--sm cl-btn--primary" id="msEditSubmit">
+                                        <i data-lucide="check"></i>
+                                        <span>Salvar</span>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="cl-head-info">
+                                <div class="cl-head-title-row">
+                                    <h1 class="cl-head-name" id="msEditTitle">Editar briefing</h1>
+                                </div>
+                                <div class="cl-head-meta">
+                                    <span><i data-lucide="info"></i>Alterações estruturais (perguntas/sessões) devem ser feitas no "Ver briefing".</span>
+                                </div>
+                            </div>
+                        </header>
+
+                        <div class="ms-edit-body">
+                            <div class="ms-edit-field">
+                                <label for="msEditTitleInput">Título</label>
+                                <input type="text" id="msEditTitleInput" maxlength="200" required>
+                            </div>
+                            <div class="ms-edit-field">
+                                <label for="msEditExpiresInput">Vencimento</label>
+                                <input type="datetime-local" id="msEditExpiresInput">
+                            </div>
+                            <div class="ms-edit-field">
+                                <label for="msEditStatusInput">Status</label>
+                                <select id="msEditStatusInput">
+                                    <option value="in_progress">Em andamento</option>
+                                    <option value="paused">Pausado</option>
+                                    <option value="completed">Concluído</option>
+                                    <option value="cancelled">Cancelado</option>
+                                </select>
+                            </div>
+                            <div class="ms-edit-field">
+                                <label for="msEditIntroInput">Mensagem inicial</label>
+                                <textarea id="msEditIntroInput" rows="4" placeholder="Texto de boas-vindas ao cliente…"></textarea>
+                            </div>
+                            <div class="ms-edit-field">
+                                <label>Cliente</label>
+                                <input type="text" id="msEditClientInput" disabled>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="ms-detail-view ms-detail-view--new-question" data-view="new-question" hidden>
+                    <form class="ms-edit-form" id="msNewQuestionForm" autocomplete="off">
+                        <header class="ms-detail-head">
+                            <div class="ms-detail-top">
+                                <nav class="ms-crumbs" aria-label="Navegação">
+                                    <button type="button" class="ms-crumbs-back" id="msNewQBack" aria-label="Voltar"><i data-lucide="arrow-left"></i></button>
+                                    <span>Briefings</span>
+                                    <i data-lucide="chevron-right"></i>
+                                    <span aria-current="page">Nova pergunta</span>
+                                </nav>
+                                <div class="cl-head-actions">
+                                    <button type="button" class="cl-btn cl-btn--sm" id="msNewQCancel">Cancelar</button>
+                                    <button type="submit" class="cl-btn cl-btn--sm cl-btn--primary" id="msNewQSubmit">
+                                        <i data-lucide="check"></i>
+                                        <span>Criar pergunta</span>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="cl-head-info">
+                                <div class="cl-head-title-row">
+                                    <h1 class="cl-head-name">Nova pergunta adicional</h1>
+                                </div>
+                                <div class="cl-head-meta">
+                                    <span><i data-lucide="info"></i>Perguntas adicionadas após respostas existentes viram complementares e são sinalizadas ao cliente.</span>
+                                </div>
+                            </div>
+                        </header>
+
+                        <div class="ms-edit-body ms-nq-body">
+
+                            <div class="ms-nq-section">
+                                <div class="ms-nq-section-label">
+                                    <i data-lucide="message-square"></i>
+                                    <span>Conteúdo</span>
+                                </div>
+                                <div class="ms-edit-field">
+                                    <label for="msNewQText">Enunciado</label>
+                                    <textarea id="msNewQText" rows="3" placeholder="Como você descreveria…" required></textarea>
+                                </div>
+                                <div class="ms-edit-field">
+                                    <label for="msNewQInstructions">Instruções <span class="ms-edit-opt">(opcional)</span></label>
+                                    <textarea id="msNewQInstructions" rows="2" placeholder="Contexto adicional…"></textarea>
+                                </div>
+                            </div>
+
+                            <div class="ms-nq-section">
+                                <div class="ms-nq-section-label">
+                                    <i data-lucide="folder"></i>
+                                    <span>Sessão</span>
+                                </div>
+                                <div class="ms-edit-field">
+                                    <select id="msNewQSection" required></select>
+                                </div>
+                            </div>
+
+                            <div class="ms-nq-section">
+                                <div class="ms-nq-section-label">
+                                    <i data-lucide="layout-list"></i>
+                                    <span>Tipo da pergunta</span>
+                                </div>
+                                <input type="hidden" id="msNewQType" value="text">
+                                <div class="ms-nq-type-grid">
+                                    <button type="button" class="ms-nq-type-btn is-active" data-type="text"><i data-lucide="type"></i><span>Texto livre</span></button>
+                                    <button type="button" class="ms-nq-type-btn" data-type="short_text"><i data-lucide="minus"></i><span>Resposta curta</span></button>
+                                    <button type="button" class="ms-nq-type-btn" data-type="single_choice"><i data-lucide="circle-dot"></i><span>Escolha única</span></button>
+                                    <button type="button" class="ms-nq-type-btn" data-type="multiple_choice"><i data-lucide="check-square"></i><span>Múltipla escolha</span></button>
+                                    <button type="button" class="ms-nq-type-btn" data-type="dropdown"><i data-lucide="chevron-down-square"></i><span>Lista suspensa</span></button>
+                                    <button type="button" class="ms-nq-type-btn" data-type="rating"><i data-lucide="star"></i><span>Classificação</span></button>
+                                    <button type="button" class="ms-nq-type-btn" data-type="date"><i data-lucide="calendar"></i><span>Data</span></button>
+                                    <button type="button" class="ms-nq-type-btn" data-type="time"><i data-lucide="clock"></i><span>Horário</span></button>
+                                    <button type="button" class="ms-nq-type-btn" data-type="yes_no"><i data-lucide="toggle-left"></i><span>Sim / Não</span></button>
+                                    <button type="button" class="ms-nq-type-btn" data-type="number"><i data-lucide="hash"></i><span>Número</span></button>
+                                    <button type="button" class="ms-nq-type-btn" data-type="url"><i data-lucide="link"></i><span>Link</span></button>
+                                    <button type="button" class="ms-nq-type-btn" data-type="file_upload"><i data-lucide="upload"></i><span>Upload de arquivo</span></button>
+                                </div>
+                            </div>
+
+                            <div class="ms-nq-section ms-nq-section--options is-hidden" id="msNewQOptionsSection">
+                                <div class="ms-nq-section-label">
+                                    <i data-lucide="list"></i>
+                                    <span>Opções</span>
+                                    <button type="button" class="ms-nq-add-option" id="msNewQAddOptionBtn">
+                                        <i data-lucide="plus"></i>
+                                        <span>Adicionar</span>
+                                    </button>
+                                </div>
+                                <div class="ms-nq-options" id="msNewQOptionsList"></div>
+                                <p class="ms-nq-hint">Cada opção pode ter uma imagem de referência.</p>
+                            </div>
+
+                            <div class="ms-nq-section">
+                                <div class="ms-nq-section-label">
+                                    <i data-lucide="check-circle-2"></i>
+                                    <span>Formatos de resposta aceitos</span>
+                                </div>
+                                <div class="ms-nq-formats">
+                                    <label class="ms-nq-format-chip">
+                                        <input type="checkbox" name="msNewQFormat" value="text" checked>
+                                        <span class="ms-nq-format-body">
+                                            <i data-lucide="type"></i>
+                                            <span>Texto</span>
+                                        </span>
+                                    </label>
+                                    <label class="ms-nq-format-chip">
+                                        <input type="checkbox" name="msNewQFormat" value="audio" checked>
+                                        <span class="ms-nq-format-body">
+                                            <i data-lucide="mic"></i>
+                                            <span>Áudio</span>
+                                        </span>
+                                    </label>
+                                    <label class="ms-nq-format-chip">
+                                        <input type="checkbox" name="msNewQFormat" value="image" checked>
+                                        <span class="ms-nq-format-body">
+                                            <i data-lucide="image"></i>
+                                            <span>Imagem</span>
+                                        </span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="ms-nq-section">
+                                <label class="ms-edit-switch">
+                                    <input type="checkbox" id="msNewQRequired" checked>
+                                    <span class="ms-edit-switch-track"><span class="ms-edit-switch-thumb"></span></span>
+                                    <span class="ms-edit-switch-label">Obrigatória</span>
+                                </label>
+                            </div>
+
+                        </div>
+                    </form>
                 </div>
 
             </div>
         </section>
 
-        <!-- COLUNA 3: INSIGHT -->
         <aside class="cl-side" id="msAside">
 
             <header class="cl-side-head" id="msInsightHead">
@@ -241,7 +480,6 @@
                     <header class="ms-side-header">
                         <span class="ms-side-icon"><i data-lucide="heart"></i></span>
                         <h3 class="ms-side-title">Desejos</h3>
-                        <span class="ms-side-count"><b id="msWishesCount">0</b></span>
                     </header>
                     <ul class="ms-checks ms-checks--wishes" id="msWishesList">
                         <li class="ms-check-slot is-empty" data-slot="1"><span class="ms-check-bullet"><i class="ms-dot"></i></span><span class="ms-check-text"><strong>—</strong><small></small></span></li>
@@ -255,7 +493,6 @@
                     <header class="ms-side-header">
                         <span class="ms-side-icon"><i data-lucide="triangle-alert"></i></span>
                         <h3 class="ms-side-title">Atenção</h3>
-                        <span class="ms-side-count"><b id="msAttentionCount">0</b></span>
                     </header>
                     <ul class="ms-checks ms-checks--attention" id="msAttentionList">
                         <li class="ms-check-slot is-empty" data-slot="1"><span class="ms-check-bullet"></span><span class="ms-check-text"><strong>—</strong><small></small></span></li>
@@ -278,9 +515,114 @@
         </aside>
 
     </div>
+
+    <div class="ms-modal-overlay" id="msModalConfirm">
+        <div class="ms-modal ms-modal--sm" role="dialog" aria-modal="true">
+            <div class="ms-modal-body ms-modal-body--center">
+                <div class="ms-confirm-icon" id="msConfirmIcon">
+                    <i data-lucide="alert-triangle"></i>
+                </div>
+                <h3 class="ms-danger-title" id="msConfirmTitle">Confirmar?</h3>
+                <p class="ms-danger-sub" id="msConfirmSub">Esta ação não pode ser desfeita.</p>
+                <div class="ms-modal-actions ms-modal-actions--center">
+                    <button type="button" class="ms-btn" data-ms-close="msModalConfirm">Cancelar</button>
+                    <button type="button" class="ms-btn ms-btn--danger" id="msConfirmBtn">
+                        <span class="ms-btn-label">Confirmar</span>
+                        <span class="ms-btn-spinner"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="ms-modal-overlay" id="msModalPrompt">
+        <div class="ms-modal ms-modal--sm" role="dialog" aria-modal="true">
+            <header class="ms-modal-head">
+                <h3 class="ms-modal-title" id="msPromptTitle">Editar</h3>
+                <button class="ms-modal-close" data-ms-close="msModalPrompt" type="button" aria-label="Fechar">
+                    <i data-lucide="x"></i>
+                </button>
+            </header>
+            <div class="ms-modal-body">
+                <div class="ms-field">
+                    <label for="msPromptInput" id="msPromptLabel">Conteúdo</label>
+                    <textarea id="msPromptInput" rows="5" placeholder="Digite…"></textarea>
+                </div>
+            </div>
+            <div class="ms-modal-actions">
+                <button type="button" class="ms-btn" data-ms-close="msModalPrompt">Cancelar</button>
+                <button type="button" class="ms-btn ms-btn--primary" id="msPromptConfirm">
+                    <span class="ms-btn-label">Salvar</span>
+                    <span class="ms-btn-spinner"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="ms-modal-overlay" id="msModalNoteEditor">
+        <div class="ms-modal ms-modal--note-editor" role="dialog" aria-modal="true" aria-labelledby="msNoteEditorTitle">
+            <header class="ms-note-editor-head">
+                <div class="ms-note-editor-title-wrap">
+                    <span class="ms-note-editor-eyebrow">Observação</span>
+                    <h3 class="ms-note-editor-title" id="msNoteEditorTitle">Editar nota</h3>
+                </div>
+                <button type="button" class="ms-note-editor-close" data-ms-close="msModalNoteEditor" aria-label="Fechar">
+                    <i data-lucide="x"></i>
+                </button>
+            </header>
+
+            <div class="ms-note-editor-body">
+                <textarea
+                    id="msNoteEditorInput"
+                    class="ms-note-editor-input"
+                    rows="8"
+                    placeholder="Escreva sua nota…"
+                    spellcheck="false"
+                ></textarea>
+            </div>
+
+            <footer class="ms-note-editor-footer">
+                <span class="ms-note-editor-hint">
+                    <kbd>⌘</kbd><kbd>Enter</kbd> salva · <kbd>Esc</kbd> fecha
+                </span>
+                <div class="ms-note-editor-actions">
+                    <button type="button" class="cl-btn cl-btn--sm" data-ms-close="msModalNoteEditor">Cancelar</button>
+                    <button type="button" class="cl-btn cl-btn--sm cl-btn--primary" id="msNoteEditorSave">
+                        <span class="ms-btn-label">Salvar</span>
+                        <span class="ms-btn-spinner"></span>
+                    </button>
+                </div>
+            </footer>
+        </div>
+    </div>
+
+    <div class="ms-modal-overlay" id="msModalAlert">
+        <div class="ms-modal ms-modal--sm" role="dialog" aria-modal="true">
+            <div class="ms-modal-body ms-modal-body--center">
+                <div class="ms-confirm-icon" id="msAlertIcon">
+                    <i data-lucide="info"></i>
+                </div>
+                <h3 class="ms-danger-title" id="msAlertTitle">Aviso</h3>
+                <p class="ms-danger-sub" id="msAlertMessage">—</p>
+                <div class="ms-modal-actions ms-modal-actions--center">
+                    <button type="button" class="ms-btn ms-btn--primary" data-ms-close="msModalAlert">OK</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="ms-modal-overlay ms-modal-overlay--image" id="msModalImageViewer">
+        <div class="ms-image-viewer" role="dialog" aria-modal="true">
+            <button type="button" class="ms-image-viewer-close" id="msImageViewerClose" title="Fechar (Esc)">
+                <i data-lucide="x"></i>
+            </button>
+            <img id="msImageViewerImg" src="" alt="Pré-visualização">
+        </div>
+    </div>
+
 </div>
 {% endblock %}
 
 {% block page_js %}
-<script src="{% static 'js/mesa.js' %}?v=25"></script>
+<script src="{% static 'js/mesa.js' %}?v=42"></script>
 {% endblock %}

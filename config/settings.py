@@ -268,12 +268,9 @@ MIDDLEWARE = [
     'core.middleware.correlation_id.CorrelationIdMiddleware',
     'apps.accounts.middleware.SessionTrackingMiddleware',
 
-    # ── Portal do Cliente ──────────────────────────────────────────
-    # Resolve a sessão do portal a partir do cookie `clivo_portal`
-    # e popula request.portal_session / request.portal_client.
-    #
-    # DEVE vir depois de SessionMiddleware (precisa dos cookies
-    # disponíveis) e pode ser o último da lista.
+    # ▼ ADICIONE ESTA LINHA
+    'apps.workspaces.middleware.WorkspaceContextMiddleware',
+
     'apps.clients.middleware.ClientPortalMiddleware',
 ]
 
