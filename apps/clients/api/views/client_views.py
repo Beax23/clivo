@@ -324,7 +324,7 @@ class ClientViewSet(viewsets.ModelViewSet):
         )
         return Response(ClientDetailSerializer(client).data)
 
-            # ==================================================================
+    # ==================================================================
     # CONTACTS
     # ==================================================================
 
@@ -646,4 +646,3 @@ class ClientViewSet(viewsets.ModelViewSet):
             {'detail': 'Código enviado com sucesso'},
             status=status.HTTP_200_OK,
         )
-        
