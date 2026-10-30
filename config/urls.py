@@ -35,10 +35,7 @@ urlpatterns = [
     path('', include('apps.console.urls')),
     path('', include('apps.clients.urls')),
     path('', include('apps.documents.urls')),
-    path('', include('apps.references.urls')),
     path('', include('apps.briefings.urls')),
-    path('', include('apps.projects.urls')),
-    path('', include('apps.timeline.urls')),
     path('', include('apps.intelligence.urls')),
     path('', include('apps.integrations.urls')),
 ]

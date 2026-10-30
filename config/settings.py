@@ -111,10 +111,7 @@ INSTALLED_APPS = [
     'apps.workspaces',
     'apps.clients',
     'apps.documents',
-    'apps.references',
     'apps.briefings',
-    'apps.projects',
-    'apps.timeline',
     'apps.intelligence',
     'apps.integrations',
 ]
