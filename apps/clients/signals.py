@@ -11,18 +11,16 @@ Eventos operacionais (`portal.invitation_sent`, `portal.opened`,
 `portal.feedback_received`) NÃO são encaminhados — não mudam o
 conhecimento do cliente.
 
-`occurrence_id` para `client.updated` = `updated_at` do cliente.
-Para eventos de nota de CLIENTE = `note_id:updated_at`. Isso
-distingue edições legítimas da mesma nota.
+`occurrence_id` para `client.updated` = `signal_name:occurred_at`.
+Para eventos de nota de CLIENTE = `note_id:occurred_at`. Para
+`portal.context_edited` = `client_id:context_hash` (SEM occurred_at,
+porque o `occurred_at` muda a cada save mesmo sem mudar o conteúdo
+— sem essa correção, cada save do cliente gera um evento duplicado).
 
 NOTAS DE CLIENTE vs NOTAS DE BRIEFING
 -------------------------------------
 `ClientNote` (este módulo) NÃO é `BriefingNote` (do app `briefings`).
 Notas de cliente usam `SOURCE_KIND_CLIENT_NOTE_*` no `InsightEvent`.
-Antes deste ajuste, `note.deleted` era mapeado erroneamente para
-`SOURCE_KIND_BRIEFING_NOTE_DELETED` — o `insight` do cliente
-acabava interpretado como origem de briefing, o que corrompia a
-reconciliação.
 
 EXCLUSÃO DE CLIENTE
 -------------------
@@ -31,8 +29,14 @@ etc. O `InsightItem` do cliente tem `on_delete=CASCADE` no FK
 `client` — excluir o cliente DESTRÓI os insights. Este signal
 publica um evento de invalidação `pre_delete`, mas a preservação
 histórica real exigiria mudar o FK em `intelligence`. Documentado
-como pendência — não corrigido aqui porque o FK vive em
-`intelligence`.
+como pendência.
+
+CAPTURA IMUTÁVEL ANTES DO COMMIT
+--------------------------------
+O `on_commit` roda DEPOIS que a transação fecha. Se o `Client` foi
+apagado em CASCADE antes do callback rodar, `Client.objects.filter`
+retorna `None` — o callback trata sem fazer nada. Os IDs
+(`client_id`, `workspace_id`) são capturados ANTES do `on_commit`.
 """
 
 import logging
@@ -91,22 +95,28 @@ def forward_client_event_to_intelligence(
         return
 
     # occurrence_id: distinguir edições legítimas sucessivas.
-    #   - note.*: usa note_id + updated_at (enviados no payload pelo
-    #     ClientEventEmitter).
-    #   - demais: usa occurred_at (timestamp do signal).
+    #
+    #   - note.*: usa note_id + occurred_at. Cada edição da nota
+    #     tem um occurred_at diferente — correto.
+    #
+    #   - portal.context_edited: usa client_id + context_hash,
+    #     SEM occurred_at. O `occurred_at` muda a cada save, então
+    #     incluí-lo geraria evento duplicado mesmo sem mudar o
+    #     contexto. O hash muda apenas quando o conteúdo muda —
+    #     que é o que queremos.
+    #
+    #   - demais (client.updated): usa signal_name + occurred_at.
+    #     Cada save do cliente é um fato atômico legítimo.
     note_id = kwargs.get('note_id') or ''
     if signal_name.startswith('note.') and note_id:
-        occurrence_id = f'{note_id}:{occurred_at.isoformat() if occurred_at else ""}'
+        occurrence_id = (
+            f'{note_id}:{occurred_at.isoformat() if occurred_at else ""}'
+        )
         source_ref = str(note_id)
     elif signal_name == 'portal.context_edited':
-        # Hash do contexto é semanticamente mais preciso que o
-        # updated_at do cliente: só muda quando o CONTEÚDO muda.
         from apps.clients.public import get_client_context_hash
         context_hash = get_client_context_hash(client_id) or ''
-        occurrence_id = (
-            f'{occurred_at.isoformat() if occurred_at else ""}:'
-            f'{context_hash}'
-        )
+        occurrence_id = f'{client_id}:{context_hash}'
         source_ref = ''
     else:
         occurrence_id = (
@@ -153,8 +163,7 @@ def publish_client_deletion_invalidation(sender, instance, **kwargs):
     AVISO: o `InsightItem.client` FK é `on_delete=CASCADE`. Neste
     momento, excluir o `Client` DESTRÓI os insights do cliente.
     Este evento serve para o `intelligence` reagir (se um dia o FK
-    virar PROTECT ou SET_NULL), mas não previne a perda. A
-    preservação real exigiria mudar o FK em `intelligence`.
+    virar PROTECT ou SET_NULL), mas não previne a perda.
     """
     client_id = instance.id
     workspace_id = instance.workspace_id

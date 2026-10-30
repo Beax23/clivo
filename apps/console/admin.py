@@ -17,6 +17,7 @@ from apps.console.models import (
     PlanFeatureLimit,
     Feature,
     StorageProviderSnapshot,
+    AIProviderConfig,
 )
 
 
@@ -218,7 +219,6 @@ class UsageRecordAdmin(admin.ModelAdmin):
     ordering = ['-occurred_at']
 
     def has_add_permission(self, request):
-        # Bloqueia criação manual — só via UsageRecordService
         return False
 
     def has_change_permission(self, request, obj=None):
@@ -247,7 +247,6 @@ class ProviderLogAdmin(admin.ModelAdmin):
     ordering = ['-occurred_at']
 
     def has_add_permission(self, request):
-        # Bloqueia criação manual — só via ProviderLogService
         return False
 
     def has_change_permission(self, request, obj=None):
@@ -260,14 +259,6 @@ class ProviderLogAdmin(admin.ModelAdmin):
 
 @admin.register(StorageProviderSnapshot)
 class StorageProviderSnapshotAdmin(admin.ModelAdmin):
-    """
-    Admin read-only do snapshot.
-
-    Snapshot é histórico — não faz sentido editar. Se um snapshot foi
-    gravado errado, o correto é apagar a linha (auditoria) e rodar
-    a sincronização de novo.
-    """
-
     list_display = [
         'provider_key', 'status', 'plan_name',
         'storage_usage_bytes', 'credits_usage', 'credits_limit',
@@ -289,12 +280,26 @@ class StorageProviderSnapshotAdmin(admin.ModelAdmin):
     date_hierarchy = 'fetched_at'
 
     def has_add_permission(self, request):
-        # Snapshot só é criado via service.
         return False
 
     def has_change_permission(self, request, obj=None):
         return False
 
-    # Permite apagar linhas antigas/erradas — auditoria
     def has_delete_permission(self, request, obj=None):
         return True
+
+
+# =========================================================================
+# CONSOLE V1 — IA
+# =========================================================================
+
+@admin.register(AIProviderConfig)
+class AIProviderConfigAdmin(admin.ModelAdmin):
+    list_display = [
+        'provider', 'model', 'is_active', 'updated_at', 'updated_by',
+    ]
+    list_filter = ['provider', 'is_active']
+    search_fields = ['provider__key', 'provider__name', 'model', 'notes']
+    readonly_fields = ['id', 'singleton_key', 'updated_at']
+    autocomplete_fields = ['provider', 'updated_by']
+    ordering = ['-updated_at']

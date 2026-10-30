@@ -212,6 +212,13 @@
         return { value: parts[0], unit: parts[1] || '' };
     }
 
+    function formatNumber(n) {
+        if (n === null || n === undefined) return '—';
+        const num = Number(n);
+        if (isNaN(num)) return String(n);
+        return num.toLocaleString('pt-BR');
+    }
+
     // =========================================================================
     // SESSION & USER
     // =========================================================================
@@ -352,6 +359,10 @@
     let activeBudget = null;
     let activeBreakdown = null;
     let activeBudgetHistory = [];
+
+    // IA
+    let aiState = null;
+    let aiModelsByProvider = {};
 
     // =========================================================================
     // GOVERNANÇAS
@@ -1569,6 +1580,370 @@
     });
 
     // =========================================================================
+    // IA
+    // =========================================================================
+    async function loadAiView() {
+        await loadAiState();
+        await loadAiCosts();
+        await loadAiLogs();
+    }
+
+    async function loadAiState() {
+        try {
+            const data = await apiRequest('/api/console/ai/', 'GET');
+            aiState = data;
+            renderAiState();
+            if (aiState && aiState.config) {
+                await loadAiModels(aiState.config.provider_key, aiState.config.model);
+            }
+        } catch (e) {
+            console.error('Erro ao carregar estado da IA:', e);
+            const stateEl = document.getElementById('aiConfigState');
+            if (stateEl) {
+                stateEl.className = 'ai-config-state is-inactive';
+                stateEl.innerHTML =
+                    '<i class="lucide" data-lucide="alert-triangle" style="width:14px; height:14px;"></i>' +
+                    '<span>Erro ao carregar configuração: ' + escapeHtml(e.message) + '</span>';
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+            }
+        }
+    }
+
+    async function loadAiModels(providerKey, currentModel) {
+        const selectEl = document.getElementById('aiModelSelect');
+        const customInput = document.getElementById('aiModelCustom');
+        const customLabel = document.getElementById('aiModelCustomLabel');
+        if (!selectEl) return;
+
+        if (!providerKey) {
+            selectEl.innerHTML = '<option value="">Selecione um provider primeiro</option>';
+            selectEl.disabled = true;
+            if (customInput) { customInput.style.display = 'none'; customInput.value = ''; customInput.required = false; }
+            if (customLabel) customLabel.style.display = 'none';
+            return;
+        }
+
+        selectEl.disabled = true;
+        selectEl.innerHTML = '<option value="">Carregando modelos…</option>';
+
+        try {
+            const data = await apiRequest(
+                '/api/console/ai/models/?provider=' + encodeURIComponent(providerKey),
+                'GET'
+            );
+            aiModelsByProvider[providerKey] = data.models || [];
+            renderModelSelect(providerKey, currentModel, data.source, data.warning);
+        } catch (e) {
+            console.warn('Falha ao carregar modelos:', e);
+            aiModelsByProvider[providerKey] = [];
+            renderModelSelect(providerKey, currentModel, 'static', e.message);
+        }
+    }
+
+    function renderModelSelect(providerKey, currentModel, source, warning) {
+        const selectEl = document.getElementById('aiModelSelect');
+        const customInput = document.getElementById('aiModelCustom');
+        const customLabel = document.getElementById('aiModelCustomLabel');
+        if (!selectEl) return;
+
+        const models = aiModelsByProvider[providerKey] || [];
+        const CUSTOM_VALUE = '__custom__';
+
+        selectEl.innerHTML = '';
+
+        if (!models.length) {
+            const opt = document.createElement('option');
+            opt.value = '';
+            opt.textContent = 'Nenhum modelo disponível';
+            opt.disabled = true;
+            selectEl.appendChild(opt);
+        } else {
+            models.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m.id;
+                opt.textContent = m.label || m.id;
+                selectEl.appendChild(opt);
+            });
+        }
+
+        const customOpt = document.createElement('option');
+        customOpt.value = CUSTOM_VALUE;
+        customOpt.textContent = 'Outro (digitar)';
+        selectEl.appendChild(customOpt);
+
+        const found = models.some(m => m.id === currentModel);
+        const isCustom = !found && !!currentModel;
+
+        if (isCustom) {
+            selectEl.value = CUSTOM_VALUE;
+            if (customInput) {
+                customInput.style.display = 'block';
+                customInput.value = currentModel || '';
+                customInput.required = true;
+            }
+            if (customLabel) customLabel.style.display = 'block';
+        } else if (found) {
+            selectEl.value = currentModel;
+            if (customInput) {
+                customInput.style.display = 'none';
+                customInput.value = '';
+                customInput.required = false;
+            }
+            if (customLabel) customLabel.style.display = 'none';
+        } else {
+            selectEl.selectedIndex = 0;
+            if (customInput) {
+                customInput.style.display = 'none';
+                customInput.value = '';
+                customInput.required = false;
+            }
+            if (customLabel) customLabel.style.display = 'none';
+        }
+
+        selectEl.disabled = false;
+
+        if (source === 'static' && warning) {
+            console.info('[ai] modelos estáticos:', warning);
+        }
+
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+
+    function onAiModelSelectChange() {
+        const selectEl = document.getElementById('aiModelSelect');
+        const customInput = document.getElementById('aiModelCustom');
+        const customLabel = document.getElementById('aiModelCustomLabel');
+        if (!selectEl || !customInput) return;
+
+        const isCustom = selectEl.value === '__custom__';
+        if (isCustom) {
+            customInput.style.display = 'block';
+            customInput.required = true;
+            if (customLabel) customLabel.style.display = 'block';
+            customInput.focus();
+        } else {
+            customInput.style.display = 'none';
+            customInput.value = '';
+            customInput.required = false;
+            if (customLabel) customLabel.style.display = 'none';
+        }
+    }
+
+    function renderAiState() {
+        const stateEl = document.getElementById('aiConfigState');
+        const subEl = document.getElementById('aiStateSub');
+        const selectEl = document.getElementById('aiProviderSelect');
+        const modelSelect = document.getElementById('aiModelSelect');
+        const modelCustom = document.getElementById('aiModelCustom');
+        const modelCustomLabel = document.getElementById('aiModelCustomLabel');
+
+        const requestsEl = document.getElementById('aiStatRequests');
+        const failedEl = document.getElementById('aiStatFailed');
+        const failedHint = document.getElementById('aiStatFailedHint');
+        const costEl = document.getElementById('aiStatCost');
+
+        if (aiState && aiState.usage_30d) {
+            if (requestsEl) requestsEl.textContent = formatNumber(aiState.usage_30d.requests);
+            if (failedEl) failedEl.textContent = formatNumber(aiState.usage_30d.failed);
+            if (failedHint) failedHint.textContent = aiState.usage_30d.error_rate_pct + '% de erro';
+            if (costEl) costEl.textContent = aiState.usage_30d.total_cost;
+        }
+
+        if (selectEl && aiState) {
+            selectEl.innerHTML = '';
+            (aiState.available_providers || []).forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p.key;
+                opt.textContent = p.name + (p.is_active ? '' : ' (inativo)');
+                if (!p.is_active) opt.disabled = true;
+                selectEl.appendChild(opt);
+            });
+        }
+
+        if (!aiState || !aiState.config) {
+            if (stateEl) {
+                stateEl.className = 'ai-config-state is-inactive';
+                stateEl.innerHTML =
+                    '<i class="lucide" data-lucide="alert-triangle" style="width:14px; height:14px;"></i>' +
+                    '<span>Nenhuma config de IA. ' +
+                    escapeHtml((aiState && aiState.config_error) || 'Escolha um provider e salve.') +
+                    '</span>';
+            }
+            if (subEl) subEl.textContent = 'Não configurada';
+            if (modelSelect) {
+                modelSelect.innerHTML = '<option value="">Selecione um provider primeiro</option>';
+                modelSelect.disabled = true;
+            }
+            if (modelCustom) {
+                modelCustom.style.display = 'none';
+                modelCustom.value = '';
+                modelCustom.required = false;
+            }
+            if (modelCustomLabel) modelCustomLabel.style.display = 'none';
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            return;
+        }
+
+        const cfg = aiState.config;
+
+        if (selectEl) selectEl.value = cfg.provider_key;
+        if (subEl) subEl.textContent = cfg.provider_name + ' · ' + cfg.model;
+
+        if (stateEl) {
+            if (cfg.is_active) {
+                stateEl.className = 'ai-config-state is-active';
+                stateEl.innerHTML =
+                    '<i class="lucide" data-lucide="check-circle" style="width:14px; height:14px;"></i>' +
+                    '<span>Config ativa: <strong>' +
+                    escapeHtml(cfg.provider_name) + ' / ' + escapeHtml(cfg.model) +
+                    '</strong>' +
+                    (cfg.updated_by_email
+                        ? ' · atualizada por ' + escapeHtml(cfg.updated_by_email)
+                        : '') +
+                    '</span>';
+            } else {
+                stateEl.className = 'ai-config-state is-inactive';
+                stateEl.innerHTML =
+                    '<i class="lucide" data-lucide="pause-circle" style="width:14px; height:14px;"></i>' +
+                    '<span><strong>IA pausada.</strong> Chamadas sem provider_key caem no fallback do settings.</span>';
+            }
+        }
+
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+
+    async function loadAiCosts() {
+        const days = document.getElementById('aiCostDays')?.value || '30';
+        const tbody = document.getElementById('aiCostsTableBody');
+        if (!tbody) return;
+
+        tbody.innerHTML =
+            '<tr><td colspan="5" style="text-align:center; padding:30px 0; font-size:12.5px; color:var(--text-tertiary);">Carregando…</td></tr>';
+
+        try {
+            const data = await apiRequest(
+                '/api/console/ai/costs/by-operation/?days=' + days,
+                'GET'
+            );
+            const rows = data.results || [];
+
+            if (!rows.length) {
+                tbody.innerHTML =
+                    '<tr><td colspan="5" style="text-align:center; padding:30px 0; font-size:12.5px; color:var(--text-tertiary);">Nenhuma chamada registrada no período</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = rows.map(r => `
+                <tr>
+                    <td style="font-size:12px;color:var(--text-primary);">${escapeHtml(r.operation)}</td>
+                    <td style="font-size:12px;color:var(--text-secondary);">${escapeHtml(r.provider_name)}</td>
+                    <td style="font-size:12px;text-align:right;color:var(--text-secondary);">${r.count}</td>
+                    <td style="font-size:12px;text-align:right;color:var(--text-tertiary);font-variant-numeric:tabular-nums;">${formatNumber(r.tokens)}</td>
+                    <td style="font-size:12px;text-align:right;color:var(--text-primary);font-variant-numeric:tabular-nums;">${escapeHtml(r.total_cost)}</td>
+                </tr>
+            `).join('');
+        } catch (e) {
+            tbody.innerHTML =
+                '<tr><td colspan="5" style="text-align:center; padding:30px 0; color:var(--red);">Erro ao carregar custos: ' + escapeHtml(e.message) + '</td></tr>';
+        }
+    }
+
+    async function loadAiLogs() {
+        const days = document.getElementById('aiLogsDays')?.value || '30';
+        const status = document.getElementById('aiLogsStatus')?.value || '';
+        const tbody = document.getElementById('aiLogsTableBody');
+        const countEl = document.getElementById('aiLogsCount');
+        if (!tbody) return;
+
+        tbody.innerHTML =
+            '<tr><td colspan="10" style="text-align:center; padding:30px 0; font-size:12.5px; color:var(--text-tertiary);">Carregando…</td></tr>';
+
+        let url = '/api/console/ai/logs/?days=' + days + '&limit=200';
+        if (status) url += '&status=' + encodeURIComponent(status);
+
+        try {
+            const data = await apiRequest(url, 'GET');
+            const rows = data.results || [];
+
+            if (countEl) countEl.textContent = String(data.count || rows.length);
+
+            if (!rows.length) {
+                tbody.innerHTML =
+                    '<tr><td colspan="10" style="text-align:center; padding:30px 0; font-size:12.5px; color:var(--text-tertiary);">Nenhuma chamada no período</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = rows.map(log => {
+                const statusCls = 'is-' + (log.status || 'failed');
+                const statusLabel = ({
+                    'success': 'OK',
+                    'failed': 'Falha',
+                    'timeout': 'Timeout',
+                    'rate_limited': 'Rate limit',
+                })[log.status] || log.status;
+                return `
+                    <tr class="ai-log-row">
+                        <td class="cell-mono">${formatDateTime(log.occurred_at)}</td>
+                        <td>${escapeHtml(log.provider_key)}</td>
+                        <td class="cell-mono">${escapeHtml(log.model || '—')}</td>
+                        <td>${escapeHtml(log.operation || '—')}</td>
+                        <td style="text-align:center;"><span class="ai-status-badge ${statusCls}">${escapeHtml(statusLabel)}</span></td>
+                        <td class="cell-num">${log.latency_ms !== null && log.latency_ms !== undefined ? log.latency_ms + ' ms' : '—'}</td>
+                        <td class="cell-num">${log.input_units !== null && log.input_units !== undefined ? formatNumber(log.input_units) : '—'}</td>
+                        <td class="cell-num">${log.output_units !== null && log.output_units !== undefined ? formatNumber(log.output_units) : '—'}</td>
+                        <td class="cell-num">${log.estimated_cost || '—'}</td>
+                        <td class="cell-error" title="${escapeHtml(log.error_message || '')}">${escapeHtml(log.error_message || '')}</td>
+                    </tr>
+                `;
+            }).join('');
+        } catch (e) {
+            tbody.innerHTML =
+                '<tr><td colspan="10" style="text-align:center; padding:30px 0; color:var(--red);">Erro ao carregar logs: ' + escapeHtml(e.message) + '</td></tr>';
+        }
+    }
+
+    document.getElementById('aiProviderSelect').addEventListener('change', async function() {
+        const providerKey = this.value;
+        await loadAiModels(providerKey, null);
+    });
+
+    document.getElementById('aiModelSelect').addEventListener('change', onAiModelSelectChange);
+
+    document.getElementById('aiConfigForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const providerKey = document.getElementById('aiProviderSelect').value;
+        const modelSelect = document.getElementById('aiModelSelect');
+        const modelCustom = document.getElementById('aiModelCustom');
+
+        let model = modelSelect ? modelSelect.value : '';
+        if (model === '__custom__') {
+            model = (modelCustom ? modelCustom.value : '').trim();
+        }
+
+        if (!providerKey) { showToast('Selecione um provider', 'error'); return; }
+        if (!model || model === '__custom__') { showToast('Informe o modelo', 'error'); return; }
+
+        const btn = document.getElementById('aiConfigSaveBtn');
+        setLoading(btn, true);
+        try {
+            await apiRequest('/api/console/ai/set-provider/', 'POST', {
+                provider_key: providerKey,
+                model: model,
+            });
+            showToast('Config de IA atualizada', 'success');
+            await loadAiState();
+        } catch (e) {
+            showToast(e.message || 'Erro ao salvar config', 'error');
+        } finally {
+            setLoading(btn, false);
+        }
+    });
+
+    document.getElementById('aiCostDays').addEventListener('change', loadAiCosts);
+    document.getElementById('aiLogsDays').addEventListener('change', loadAiLogs);
+    document.getElementById('aiLogsStatus').addEventListener('change', loadAiLogs);
+
+    // =========================================================================
     // ARMAZENAMENTO
     // =========================================================================
 
@@ -1751,7 +2126,6 @@
         if (typeof lucide !== 'undefined') lucide.createIcons();
     }
 
-    // ---- PAINEL ÚNICO EXPANDIDO ----
     function renderStorageCapSection(provider) {
         const el = document.getElementById('storageCapSection');
         if (!el) return;
@@ -1769,7 +2143,6 @@
         const includedHuman = humanizeBytes(includedRaw);
         const usageHuman = humanizeBytes(usageBytes);
 
-        // Coluna do teto
         let capFigureHtml;
         if (!isConfigured) {
             capFigureHtml = `<span class="storage-hero-figure-value muted">Não cadastrado</span>`;
@@ -1778,7 +2151,6 @@
             capFigureHtml = `<span class="storage-hero-figure-value">${escapeHtml(capSplit.value)}<span class="unit">${escapeHtml(capSplit.unit)}</span></span>`;
         }
 
-        // Coluna do uso
         let usageFigureHtml;
         if (usageBytes === null || usageBytes === undefined) {
             usageFigureHtml = `<span class="storage-hero-figure-value muted">Desconhecido</span>`;
@@ -1787,7 +2159,6 @@
             usageFigureHtml = `<span class="storage-hero-figure-value">${escapeHtml(usageSplit.value)}<span class="unit">${escapeHtml(usageSplit.unit)}</span></span>`;
         }
 
-        // Barra de uso — só quando temos teto E uso
         let usageBarHtml = '';
         if (isConfigured && includedRaw && includedRaw > 0 && usageBytes !== null && usageBytes !== undefined) {
             const pct = Math.min(100, (usageBytes / includedRaw) * 100);
@@ -1810,7 +2181,6 @@
             `;
         }
 
-        // Aviso de sincronização
         let syncNoteHtml = '';
         if (cap && cap.last_snapshot_fetched_at) {
             const isStale = !!cap.usage_is_stale;
@@ -1832,8 +2202,6 @@
             }
         }
 
-        // Nota quando há versões antigas contabilizadas
-        // (a API do B2 cobra por todas as versões, não só a ativa)
         let versionsNoteHtml = '';
         if (cap && cap.last_snapshot_payload) {
             const totalVersions = cap.last_snapshot_payload.total_versions_count;
@@ -1857,7 +2225,6 @@
             }
         }
 
-        // Nota quando o teto não foi cadastrado
         let notConfiguredNote = '';
         if (!isConfigured) {
             notConfiguredNote = `
@@ -1872,7 +2239,6 @@
             `;
         }
 
-        // Última sincronização (texto auxiliar embaixo do "Em uso")
         let lastSyncHint = '';
         if (cap && cap.last_snapshot_fetched_at) {
             const when = formatDateTime(cap.last_snapshot_fetched_at);
@@ -1885,7 +2251,6 @@
             lastSyncHint = 'Nunca sincronizado';
         }
 
-        // Botão de contrato
         const contract = activeProviderContracts
             .filter(c => c.is_active)
             .sort((a, b) => (b.started_at || '').localeCompare(a.started_at || ''))[0];
@@ -2487,7 +2852,7 @@
     // NAVEGAÇÃO
     // =========================================================================
     function switchView(viewName) {
-        const views = ['governances', 'plans', 'features', 'storage', 'workspaces', 'users', 'team'];
+        const views = ['governances', 'plans', 'features', 'storage', 'workspaces', 'users', 'team', 'ai'];
         const titles = {
             governances: 'Governanças',
             plans: 'Planos',
@@ -2496,6 +2861,7 @@
             workspaces: 'Workspaces',
             users: 'Usuários',
             team: 'Equipe',
+            ai: 'IA',
         };
 
         views.forEach(v => {
@@ -2520,6 +2886,7 @@
         }
         if (viewName === 'users') { loadUsersAdmin(); }
         if (viewName === 'team') { loadTeamData(); }
+        if (viewName === 'ai') { loadAiView(); }
     }
 
     // =========================================================================
@@ -2664,6 +3031,13 @@
             const provider = storageProviders.find(p => p.key === activeProviderKey);
             return openContractModal(contract || null, provider);
         },
+        // IA
+        getAiState: function() { return aiState; },
+        getAiModels: function(providerKey) { return aiModelsByProvider[providerKey] || []; },
+        reloadAi: function() { return loadAiView(); },
+        reloadAiState: function() { return loadAiState(); },
+        reloadAiCosts: function() { return loadAiCosts(); },
+        reloadAiLogs: function() { return loadAiLogs(); },
     };
     console.log('[console.js] Debug disponível em window.__clivo');
 

@@ -1,8 +1,13 @@
+import logging
+from typing import Optional, Union, List
+
 from django.core.mail import EmailMultiAlternatives, send_mail
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
 from django.conf import settings
-from typing import Optional, Union, List
+
+
+logger = logging.getLogger('accounts')
 
 
 class EmailService:
@@ -190,15 +195,27 @@ class EmailService:
         *,
         briefing,
         client_portal_url: str,
-        architect_email: str,
+        architect_briefing_url: str = '',
+        architect_email: Optional[str] = None,
         client_pdf_bytes: bytes = None,
         client_pdf_filename: str = None,
     ):
         """
         Envia e-mail de conclusão para o arquiteto e o cliente.
 
-        - Para o arquiteto: link para o painel + notificação.
-        - Para o cliente: PDF anexado (moodboard) + link do portal.
+        Para o ARQUITETO:
+            - link direto para o briefing respondido no painel
+              (`architect_briefing_url`);
+            - fallback para `{FRONTEND_URL}/fluxo/` quando o link
+              específico não puder ser montado (briefing sem
+              workspace público, FRONTEND_URL vazio, etc.);
+            - o envio é OMITIDO quando `architect_email` é vazio
+              (caso `created_by` tenha sido SET_NULL). Um warning
+              é logado, nunca uma exceção.
+
+        Para o CLIENTE:
+            - PDF anexado (modo cliente, sem notas internas),
+            - link do portal.
 
         `fail_silently=False` de propósito: quem chama precisa
         tratar falha de envio. A idempotência é responsabilidade
@@ -209,32 +226,56 @@ class EmailService:
         ).rstrip('/')
         site_name = getattr(settings, 'SITE_NAME', 'Clivo')
 
-        # --- Para o arquiteto ---
-        subject_arch = f'Briefing "{briefing.title}" concluído'
-        text_arch = (
-            f'Olá,\n\n'
-            f'O cliente {briefing.client.name} concluiu o briefing '
-            f'"{briefing.title}".\n\n'
-            f'Abra no Clivo: {frontend_url}/fluxo/\n\n'
-            f'— {site_name}'
-        )
-        html_arch = (
-            f'<p>Olá,</p>'
-            f'<p>O cliente <strong>{briefing.client.name}</strong> '
-            f'concluiu o briefing <strong>{briefing.title}</strong>.</p>'
-            f'<p><a href="{frontend_url}/fluxo/">Abrir no Clivo</a></p>'
-            f'<p>— {site_name}</p>'
-        )
+        # ------------------------------------------------------------------
+        # 1. Para o ARQUITETO
+        # ------------------------------------------------------------------
+        # Fallback gracioso: se `architect_briefing_url` não foi
+        # passado ou está vazio, cai na Mesa. NUNCA inventamos link.
+        # ------------------------------------------------------------------
+        if architect_email:
+            resolved_arch_url = (
+                architect_briefing_url
+                or f'{frontend_url}/fluxo/'
+            )
 
-        EmailService.send(
-            to=architect_email,
-            subject=subject_arch,
-            text=text_arch,
-            html=html_arch,
-        )
+            subject_arch = f'Briefing "{briefing.title}" concluído'
+            text_arch = (
+                f'Olá,\n\n'
+                f'O cliente {briefing.client.name} concluiu o briefing '
+                f'"{briefing.title}".\n\n'
+                f'Abra no Clivo: {resolved_arch_url}\n\n'
+                f'— {site_name}'
+            )
+            html_arch = (
+                f'<p>Olá,</p>'
+                f'<p>O cliente <strong>{briefing.client.name}</strong> '
+                f'concluiu o briefing <strong>{briefing.title}</strong>.</p>'
+                f'<p><a href="{resolved_arch_url}">Abrir no Clivo</a></p>'
+                f'<p>— {site_name}</p>'
+            )
 
-        # --- Para o cliente ---
+            EmailService.send(
+                to=architect_email,
+                subject=subject_arch,
+                text=text_arch,
+                html=html_arch,
+            )
+        else:
+            logger.warning(
+                'Briefing %s concluído sem `created_by.email`. '
+                'Nenhum e-mail será enviado ao arquiteto.',
+                briefing.id,
+            )
+
+        # ------------------------------------------------------------------
+        # 2. Para o CLIENTE
+        # ------------------------------------------------------------------
         if not briefing.client.email:
+            logger.info(
+                'Briefing %s concluído; cliente %s sem e-mail. '
+                'Nenhum e-mail será enviado ao cliente.',
+                briefing.id, briefing.client.id,
+            )
             return
 
         subject_client = f'Seu briefing foi registrado — {briefing.title}'
@@ -244,7 +285,10 @@ class EmailService:
             f'Em anexo está uma cópia para você guardar.\n\n'
         )
         if client_portal_url:
-            text_client += f'Você também pode voltar ao portal: {client_portal_url}\n\n'
+            text_client += (
+                f'Você também pode voltar ao portal: '
+                f'{client_portal_url}\n\n'
+            )
         text_client += f'— {site_name}'
 
         html_client = (

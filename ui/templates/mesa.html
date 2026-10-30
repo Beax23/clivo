@@ -5,7 +5,7 @@
 {% block page_name %}mesa{% endblock %}
 
 {% block page_css %}
-<link rel="stylesheet" href="{% static 'css/mesa.css' %}?v=42">
+<link rel="stylesheet" href="{% static 'css/mesa.css' %}?v=54">
 {% endblock %}
 
 {% block content %}
@@ -25,13 +25,6 @@
                 </h1>
                 <i id="msGreetingIcon" data-lucide="sun" class="fx-greeting-icon"></i>
             </div>
-        </div>
-        <div class="fx-header-right">
-            <button type="button" class="ms-reanalyze-btn" id="msReanalyzeBtn" title="Gerar nova análise do briefing selecionado">
-                <span class="ms-reanalyze-icon"><i data-lucide="sparkles"></i></span>
-                <span class="ms-reanalyze-label">Nova análise</span>
-                <span class="ms-reanalyze-spinner"></span>
-            </button>
         </div>
     </header>
 
@@ -468,46 +461,61 @@
 
             <div class="cl-side-body" id="msSideBody">
 
+                <!-- 1. RESUMO -->
                 <section class="ms-side-section ms-side-section--resumo" id="msBriefSummaryCard">
-                    <header class="ms-side-header">
+                    <header class="ms-side-header ms-side-header--resumo">
                         <span class="ms-side-icon"><i data-lucide="file-text"></i></span>
                         <h3 class="ms-side-title">Resumo</h3>
                     </header>
-                    <p class="ms-summary-lead" id="msBriefSummary">—</p>
+                    <div class="ms-side-content">
+                        <ul class="ms-bullets ms-bullets--resumo" id="msBriefSummary">
+                            <li class="ms-bullet is-empty">
+                                <span class="ms-bullet-dot"></span>
+                                <span class="ms-bullet-text">Ainda sem resumo gerado.</span>
+                            </li>
+                        </ul>
+                    </div>
                 </section>
 
+                <!-- 2. DESEJOS -->
                 <section class="ms-side-section ms-side-section--wishes" id="msWishesCard">
-                    <header class="ms-side-header">
+                    <header class="ms-side-header ms-side-header--wishes">
                         <span class="ms-side-icon"><i data-lucide="heart"></i></span>
                         <h3 class="ms-side-title">Desejos</h3>
+                        <span class="ms-side-count" id="msWishesCount">0/8</span>
                     </header>
-                    <ul class="ms-checks ms-checks--wishes" id="msWishesList">
-                        <li class="ms-check-slot is-empty" data-slot="1"><span class="ms-check-bullet"><i class="ms-dot"></i></span><span class="ms-check-text"><strong>—</strong><small></small></span></li>
-                        <li class="ms-check-slot is-empty" data-slot="2"><span class="ms-check-bullet"><i class="ms-dot"></i></span><span class="ms-check-text"><strong>—</strong><small></small></span></li>
-                        <li class="ms-check-slot is-empty" data-slot="3"><span class="ms-check-bullet"><i class="ms-dot"></i></span><span class="ms-check-text"><strong>—</strong><small></small></span></li>
-                        <li class="ms-check-slot is-empty" data-slot="4"><span class="ms-check-bullet"><i class="ms-dot"></i></span><span class="ms-check-text"><strong>—</strong><small></small></span></li>
-                    </ul>
+                    <div class="ms-side-content">
+                        <ul class="ms-bullets ms-bullets--wishes" id="msWishesList">
+                            <li class="ms-bullet is-empty" data-slot="1"><span class="ms-bullet-dot"></span><span class="ms-bullet-text">—</span></li>
+                            <li class="ms-bullet is-empty" data-slot="2"><span class="ms-bullet-dot"></span><span class="ms-bullet-text">—</span></li>
+                            <li class="ms-bullet is-empty" data-slot="3"><span class="ms-bullet-dot"></span><span class="ms-bullet-text">—</span></li>
+                            <li class="ms-bullet is-empty" data-slot="4"><span class="ms-bullet-dot"></span><span class="ms-bullet-text">—</span></li>
+                            <li class="ms-bullet is-empty" data-slot="5"><span class="ms-bullet-dot"></span><span class="ms-bullet-text">—</span></li>
+                            <li class="ms-bullet is-empty" data-slot="6"><span class="ms-bullet-dot"></span><span class="ms-bullet-text">—</span></li>
+                            <li class="ms-bullet is-empty" data-slot="7"><span class="ms-bullet-dot"></span><span class="ms-bullet-text">—</span></li>
+                            <li class="ms-bullet is-empty" data-slot="8"><span class="ms-bullet-dot"></span><span class="ms-bullet-text">—</span></li>
+                        </ul>
+                    </div>
                 </section>
 
+                <!-- 3. PONTOS DE ATENÇÃO -->
                 <section class="ms-side-section ms-side-section--attention" id="msAttentionCard">
-                    <header class="ms-side-header">
+                    <header class="ms-side-header ms-side-header--attention">
                         <span class="ms-side-icon"><i data-lucide="triangle-alert"></i></span>
-                        <h3 class="ms-side-title">Atenção</h3>
+                        <h3 class="ms-side-title">Pontos de Atenção</h3>
+                        <span class="ms-side-count" id="msAttentionCount">0/8</span>
                     </header>
-                    <ul class="ms-checks ms-checks--attention" id="msAttentionList">
-                        <li class="ms-check-slot is-empty" data-slot="1"><span class="ms-check-bullet"></span><span class="ms-check-text"><strong>—</strong><small></small></span></li>
-                        <li class="ms-check-slot is-empty" data-slot="2"><span class="ms-check-bullet"></span><span class="ms-check-text"><strong>—</strong><small></small></span></li>
-                        <li class="ms-check-slot is-empty" data-slot="3"><span class="ms-check-bullet"></span><span class="ms-check-text"><strong>—</strong><small></small></span></li>
-                    </ul>
-                </section>
-
-                <section class="ms-side-section ms-side-section--tags" id="msTagsCard">
-                    <header class="ms-side-header">
-                        <span class="ms-side-icon"><i data-lucide="tag"></i></span>
-                        <h3 class="ms-side-title">Tags</h3>
-                    </header>
-                    <div class="ms-tags" id="msTagsList">
-                        <span class="ms-tag ms-tag--empty">—</span>
+                    <div class="ms-side-content">
+                        <ul class="ms-bullets ms-bullets--attention" id="msAttentionList">
+                            <li class="ms-bullet is-empty" data-slot="1"><span class="ms-bullet-dot"></span><span class="ms-bullet-text">—</span></li>
+                            <li class="ms-bullet is-empty" data-slot="2"><span class="ms-bullet-dot"></span><span class="ms-bullet-text">—</span></li>
+                            <li class="ms-bullet is-empty" data-slot="3"><span class="ms-bullet-dot"></span><span class="ms-bullet-text">—</span></li>
+                            <li class="ms-bullet is-empty" data-slot="4"><span class="ms-bullet-dot"></span><span class="ms-bullet-text">—</span></li>
+                            <li class="ms-bullet is-empty" data-slot="5"><span class="ms-bullet-dot"></span><span class="ms-bullet-text">—</span></li>
+                            <li class="ms-bullet is-empty" data-slot="6"><span class="ms-bullet-dot"></span><span class="ms-bullet-text">—</span></li>
+                            <li class="ms-bullet is-empty" data-slot="7"><span class="ms-bullet-dot"></span><span class="ms-bullet-text">—</span></li>
+                            <li class="ms-bullet is-empty" data-slot="8"><span class="ms-bullet-dot"></span><span class="ms-bullet-text">—</span></li>
+                        </ul>
                     </div>
                 </section>
 
@@ -624,5 +632,5 @@
 {% endblock %}
 
 {% block page_js %}
-<script src="{% static 'js/mesa.js' %}?v=42"></script>
+<script src="{% static 'js/mesa.js' %}?v=54"></script>
 {% endblock %}

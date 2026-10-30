@@ -1,10 +1,10 @@
 ================================================================================
 LISTAGEM COMPLETA DO MÓDULO briefings
-Gerado em: 27/10/2026 12:03:11
-Total de arquivos: 75
+Gerado em: 30/10/2026 11:53:52
+Total de arquivos: 77
 ================================================================================
 ================================================================================
-ARQUIVO 1 DE 75
+ARQUIVO 1 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings
 ARQUIVO: __init__.py
@@ -96,7 +96,7 @@ FRONTEIRA CONGELADA (V1)
 default_app_config = 'apps.briefings.apps.BriefingsConfig'
 
 ================================================================================
-ARQUIVO 2 DE 75
+ARQUIVO 2 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings
 ARQUIVO: admin.py
@@ -353,7 +353,7 @@ class BriefingNoteAdmin(admin.ModelAdmin):
     question_short.short_description = 'Pergunta'
 
 ================================================================================
-ARQUIVO 3 DE 75
+ARQUIVO 3 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\api
 ARQUIVO: __init__.py
@@ -364,7 +364,7 @@ LINHAS: 0
 
 
 ================================================================================
-ARQUIVO 4 DE 75
+ARQUIVO 4 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\api\serializers
 ARQUIVO: __init__.py
@@ -454,14 +454,16 @@ __all__ = [
 ]
 
 ================================================================================
-ARQUIVO 5 DE 75
+ARQUIVO 5 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\api\serializers
 ARQUIVO: briefing_serializers.py
-TAMANHO: 8,30 KB
+TAMANHO: 15,61 KB
 EXTENSAO: .py
-LINHAS: 274
+LINHAS: 492
 ================================================================================
+
+# apps/briefings/api/serializers/briefing_serializers.py
 
 """
 Serializers de Briefing (execução), BriefingAnswer e BriefingEvent.
@@ -482,13 +484,6 @@ from apps.briefings.services.briefing_service import BriefingService
 # =========================================================================
 
 def _absolute_url(request, url):
-    """
-    Retorna URL absoluta quando possível.
-
-    B2/R2 com `AWS_QUERYSTRING_AUTH=True` já devolvem URLs assinadas
-    absolutas. Local devolve `/media/...` — precisa do request para
-    virar absoluta.
-    """
     if not url:
         return ''
     if url.startswith(('http://', 'https://')):
@@ -502,13 +497,6 @@ def _absolute_url(request, url):
 
 
 def _briefing_cover_url(briefing, request=None):
-    """
-    Resolve a URL da capa de um briefing.
-
-    A capa vive em `template.cover`. O briefing é uma execução — só
-    referencia o template. Se o template foi excluído ou não tem
-    capa, devolve string vazia.
-    """
     template = briefing.template
     if template is None:
         return ''
@@ -519,6 +507,120 @@ def _briefing_cover_url(briefing, request=None):
     except Exception:
         return ''
     return _absolute_url(request, url)
+
+
+def _doc_url(doc, request=None):
+    if not doc or not doc.file:
+        return ''
+    try:
+        url = doc.file.url
+    except Exception:
+        return ''
+    if not url:
+        return ''
+    if request is not None and not url.startswith(('http://', 'https://')):
+        try:
+            url = request.build_absolute_uri(url)
+        except Exception:
+            pass
+    return url
+
+
+def _load_docs_map(doc_ids, request=None):
+    ids = [str(x) for x in (doc_ids or []) if x]
+    if not ids:
+        return {}
+    from apps.documents.models import Document
+    docs = Document.objects.filter(id__in=ids).only(
+        'id', 'name', 'mime_type', 'file',
+    )
+    result = {}
+    for d in docs:
+        url = _doc_url(d, request)
+        if not url:
+            continue
+        result[str(d.id)] = {
+            'id': str(d.id),
+            'name': d.name or '',
+            'mime_type': d.mime_type or '',
+            'file_url': url,
+        }
+    return result
+
+
+def _expand_options(options, request=None):
+    """
+    Expande `options` de uma pergunta, resolvendo `image_document_id`
+    para `image_url` / `image_name`.
+    """
+    if not options:
+        return options
+
+    if isinstance(options, dict):
+        columns = options.get('columns') or []
+        ids = [
+            c.get('image_document_id')
+            for c in columns
+            if isinstance(c, dict) and c.get('image_document_id')
+        ]
+        docs = _load_docs_map(ids, request)
+        new_columns = []
+        for c in columns:
+            if not isinstance(c, dict):
+                continue
+            entry = {
+                'text': c.get('text', ''),
+                'image_document_id': c.get('image_document_id'),
+                'image_url': None,
+                'image_name': None,
+            }
+            doc_id = c.get('image_document_id')
+            if doc_id and str(doc_id) in docs:
+                entry['image_url'] = docs[str(doc_id)]['file_url']
+                entry['image_name'] = docs[str(doc_id)]['name']
+            new_columns.append(entry)
+        return {'rows': list(options.get('rows') or []), 'columns': new_columns}
+
+    if isinstance(options, list):
+        ids = [
+            o.get('image_document_id')
+            for o in options
+            if isinstance(o, dict) and o.get('image_document_id')
+        ]
+        docs = _load_docs_map(ids, request)
+        result = []
+        for o in options:
+            if not isinstance(o, dict):
+                continue
+            entry = {
+                'text': o.get('text', ''),
+                'image_document_id': o.get('image_document_id'),
+                'image_url': None,
+                'image_name': None,
+            }
+            doc_id = o.get('image_document_id')
+            if doc_id and str(doc_id) in docs:
+                entry['image_url'] = docs[str(doc_id)]['file_url']
+                entry['image_name'] = docs[str(doc_id)]['name']
+            result.append(entry)
+        return result
+
+    return options
+
+
+def _expand_structure_snapshot(snapshot, request=None):
+    """
+    Devolve uma cópia do snapshot com as `options` expandidas
+    (image_url resolvida). Não persiste nada.
+    """
+    if not isinstance(snapshot, dict):
+        return snapshot
+    import copy
+    data = copy.deepcopy(snapshot)
+    for section in data.get('sections', []):
+        for q in section.get('questions', []):
+            q['options'] = _expand_options(q.get('options'), request)
+    return data
 
 
 # =========================================================================
@@ -534,6 +636,7 @@ class BriefingAnswerSerializer(serializers.ModelSerializer):
     )
     latest_audio_url = serializers.SerializerMethodField()
     attachment_ids = serializers.SerializerMethodField()
+    attachments = serializers.SerializerMethodField()
 
     class Meta:
         model = BriefingAnswer
@@ -550,6 +653,7 @@ class BriefingAnswerSerializer(serializers.ModelSerializer):
             'transcription_status_display',
             'latest_event',
             'attachment_ids',
+            'attachments',
             'created_at',
             'updated_at',
         ]
@@ -565,6 +669,21 @@ class BriefingAnswerSerializer(serializers.ModelSerializer):
 
     def get_attachment_ids(self, obj):
         return [str(d.id) for d in obj.attachments.all()]
+
+    def get_attachments(self, obj):
+        request = self.context.get('request') if self.context else None
+        result = []
+        for doc in obj.attachments.all():
+            url = _doc_url(doc, request)
+            if not url:
+                continue
+            result.append({
+                'id': str(doc.id),
+                'name': doc.name or '',
+                'mime_type': doc.mime_type or '',
+                'file_url': url,
+            })
+        return result
 
 
 # =========================================================================
@@ -668,6 +787,8 @@ class BriefingDetailSerializer(serializers.ModelSerializer):
     cover_url = serializers.SerializerMethodField()
     progress = serializers.SerializerMethodField()
     answers = serializers.SerializerMethodField()
+    structure_snapshot = serializers.SerializerMethodField()
+    moodboard_images = serializers.SerializerMethodField()
     workspace_id = serializers.UUIDField(
         source='workspace.id', read_only=True,
     )
@@ -686,6 +807,7 @@ class BriefingDetailSerializer(serializers.ModelSerializer):
             'template_name',
             'cover_url',
             'structure_snapshot',
+            'moodboard_images',
             'expires_at',
             'started_at',
             'completed_at',
@@ -704,11 +826,107 @@ class BriefingDetailSerializer(serializers.ModelSerializer):
     def get_progress(self, obj):
         return BriefingService.compute_progress(obj)
 
+    def get_structure_snapshot(self, obj):
+        request = self.context.get('request') if self.context else None
+        return _expand_structure_snapshot(obj.structure_snapshot, request)
+
     def get_answers(self, obj):
+        request = self.context.get('request') if self.context else None
         qs = obj.answers.select_related(
             'latest_event', 'latest_audio',
         ).prefetch_related('attachments').order_by('created_at')
-        return BriefingAnswerSerializer(qs, many=True).data
+        return BriefingAnswerSerializer(
+            qs, many=True, context={'request': request},
+        ).data
+
+    def get_moodboard_images(self, obj):
+        """
+        Monta a lista de imagens que o CLIENTE enviou/escolheu,
+        já com URLs resolvidas.
+
+        Fontes:
+            1. Attachments da resposta (uploads do cliente).
+            2. Opções escolhidas (single_choice / multiple_choice)
+               cuja `image_document_id` aponta para um Document.
+        """
+        request = self.context.get('request') if self.context else None
+        result = []
+        seen = set()
+
+        answers = obj.answers.prefetch_related('attachments')
+        answers_by_qid = {str(a.question_id): a for a in answers}
+
+        # 1) Attachments (uploads)
+        for answer in answers_by_qid.values():
+            for doc in answer.attachments.all():
+                url = _doc_url(doc, request)
+                if not url:
+                    continue
+                key = f'upload:{doc.id}'
+                if key in seen:
+                    continue
+                seen.add(key)
+                result.append({
+                    'id': str(doc.id),
+                    'kind': 'upload',
+                    'url': url,
+                    'name': doc.name or '',
+                    'mime_type': doc.mime_type or '',
+                    'question_id': str(answer.question_id),
+                })
+
+        # 2) Opções escolhidas (com imagem)
+        for q in obj.snapshot_questions():
+            qid = str(q['id'])
+            answer = answers_by_qid.get(qid)
+            if answer is None:
+                continue
+            content = (answer.latest_content or '').strip()
+            if not content:
+                continue
+            options = q.get('options') or []
+            if not isinstance(options, list):
+                continue
+
+            chosen_texts = {
+                t.strip() for t in content.split(',') if t.strip()
+            }
+            doc_ids = [
+                str(o.get('image_document_id'))
+                for o in options
+                if isinstance(o, dict) and o.get('image_document_id')
+            ]
+            if not doc_ids:
+                continue
+            docs = _load_docs_map(doc_ids, request)
+
+            for opt in options:
+                if not isinstance(opt, dict):
+                    continue
+                opt_text = (opt.get('text') or '').strip()
+                if opt_text not in chosen_texts:
+                    continue
+                doc_id = opt.get('image_document_id')
+                if not doc_id:
+                    continue
+                doc = docs.get(str(doc_id))
+                if not doc:
+                    continue
+                key = f'chosen:{doc_id}'
+                if key in seen:
+                    continue
+                seen.add(key)
+                result.append({
+                    'id': str(doc_id),
+                    'kind': 'chosen',
+                    'url': doc['file_url'],
+                    'name': doc['name'] or opt_text,
+                    'mime_type': doc['mime_type'] or '',
+                    'question_id': qid,
+                    'option_text': opt_text,
+                })
+
+        return result
 
 
 # =========================================================================
@@ -739,13 +957,13 @@ class BriefingReopenSerializer(serializers.Serializer):
     )
 
 ================================================================================
-ARQUIVO 6 DE 75
+ARQUIVO 6 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\api\serializers
 ARQUIVO: note_serializers.py
-TAMANHO: 1,80 KB
+TAMANHO: 2,08 KB
 EXTENSAO: .py
-LINHAS: 64
+LINHAS: 73
 ================================================================================
 
 """
@@ -771,6 +989,7 @@ class BriefingNoteSerializer(serializers.ModelSerializer):
             'author_email',
             'author_name',
             'content',
+            'is_pinned',
             'created_at',
             'updated_at',
         ]
@@ -793,9 +1012,8 @@ class BriefingNoteSerializer(serializers.ModelSerializer):
 
 class BriefingNoteCreateSerializer(serializers.Serializer):
     content = serializers.CharField(allow_blank=False, max_length=20000)
-    question_id = serializers.UUIDField(
-        required=False, allow_null=True,
-    )
+    question_id = serializers.UUIDField(required=False, allow_null=True)
+    is_pinned = serializers.BooleanField(required=False, default=False)
 
     def validate_content(self, value):
         value = (value or '').strip()
@@ -805,7 +1023,16 @@ class BriefingNoteCreateSerializer(serializers.Serializer):
 
 
 class BriefingNoteUpdateSerializer(serializers.Serializer):
-    content = serializers.CharField(allow_blank=False, max_length=20000)
+    """
+    Body de PATCH em uma nota.
+
+    Aceita `content` (opcional) e/ou `is_pinned` (opcional).
+    """
+
+    content = serializers.CharField(
+        allow_blank=False, max_length=20000, required=False,
+    )
+    is_pinned = serializers.BooleanField(required=False)
 
     def validate_content(self, value):
         value = (value or '').strip()
@@ -814,13 +1041,13 @@ class BriefingNoteUpdateSerializer(serializers.Serializer):
         return value
 
 ================================================================================
-ARQUIVO 7 DE 75
+ARQUIVO 7 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\api\serializers
 ARQUIVO: portal_serializers.py
-TAMANHO: 14,17 KB
+TAMANHO: 16,59 KB
 EXTENSAO: .py
-LINHAS: 413
+LINHAS: 497
 ================================================================================
 
 """
@@ -830,6 +1057,14 @@ REGRA ARQUITETURAL
 ------------------
 O serializer serve DADO BRUTO. Não resume, não cura, não analisa.
 A análise pertence ao `intelligence` (futuro).
+
+DOIS BLOCOS
+-----------
+`sections`              → bloco original (structure_snapshot)
+`supplementary_sections`→ bloco complementar (supplementary_snapshot)
+
+O cliente vê os dois blocos no portal. O bloco complementar aparece
+no final da conversa, identificado como "Perguntas complementares".
 
 LINKS:
     portal_url                  → URL do chat do briefing (cliente).
@@ -1036,6 +1271,73 @@ def _architect_pdf_url(briefing, request=None):
     return f'{base}/api/briefings/{briefing.id}/export-pdf/'
 
 
+def _serialize_question(
+    q: dict,
+    answer,
+    request,
+) -> dict:
+    """
+    Serializa uma pergunta (original ou complementar) com o mesmo
+    formato. Usado pelos dois blocos.
+    """
+    latest_audio_url = ''
+    if answer and answer.latest_audio and answer.latest_audio.file:
+        try:
+            latest_audio_url = answer.latest_audio.file.url
+        except Exception:
+            latest_audio_url = ''
+
+    ref_docs = []
+    ref_ids = list(q.get('reference_document_ids') or [])
+    if ref_ids:
+        docs = _load_docs_map(ref_ids)
+        for rid in ref_ids:
+            d = docs.get(str(rid))
+            if d is None:
+                continue
+            payload = _doc_public(d, request)
+            if payload:
+                ref_docs.append(payload)
+
+    attachments = []
+    if answer is not None:
+        for doc in answer.attachments.all():
+            payload = _doc_public(doc, request)
+            if payload:
+                attachments.append(payload)
+
+    expanded_options = _expand_options(q.get('options'), request)
+
+    return {
+        'id': str(q['id']),
+        'text': q.get('text', ''),
+        'instructions': q.get('instructions', ''),
+        'question_type': q.get('question_type', 'text'),
+        'allowed_response_formats': list(
+            q.get('allowed_response_formats', [])
+        ),
+        'is_required': bool(q.get('is_required', True)),
+        'position': q.get('position', 0),
+        'is_custom': bool(q.get('is_custom', False)),
+        'reference_documents': ref_docs,
+        'options': expanded_options,
+        'state': (
+            answer.state if answer
+            else BriefingAnswer.STATE_PENDING
+        ),
+        'latest_content': answer.latest_content if answer else '',
+        'latest_audio_url': latest_audio_url,
+        'latest_transcription': (
+            answer.latest_transcription if answer else ''
+        ),
+        'transcription_status': (
+            answer.transcription_status if answer
+            else BriefingAnswer.TRANSCRIPTION_NOT_APPLICABLE
+        ),
+        'attachments': attachments,
+    }
+
+
 class PortalBriefingSerializer(serializers.Serializer):
     """Envelope do briefing para o portal. Dado bruto, sem análise."""
 
@@ -1051,6 +1353,7 @@ class PortalBriefingSerializer(serializers.Serializer):
             ).prefetch_related('attachments')
         }
 
+        # ----- Bloco original -----
         sections = []
         ordered_sections = sorted(
             briefing.structure_snapshot.get('sections', []),
@@ -1065,65 +1368,9 @@ class PortalBriefingSerializer(serializers.Serializer):
             for q in ordered_questions:
                 qid = str(q['id'])
                 answer = answers.get(qid)
-
-                latest_audio_url = ''
-                if answer and answer.latest_audio and answer.latest_audio.file:
-                    try:
-                        latest_audio_url = answer.latest_audio.file.url
-                    except Exception:
-                        latest_audio_url = ''
-
-                ref_docs = []
-                ref_ids = list(q.get('reference_document_ids') or [])
-                if ref_ids:
-                    docs = _load_docs_map(ref_ids)
-                    for rid in ref_ids:
-                        d = docs.get(str(rid))
-                        if d is None:
-                            continue
-                        payload = _doc_public(d, request)
-                        if payload:
-                            ref_docs.append(payload)
-
-                attachments = []
-                if answer is not None:
-                    for doc in answer.attachments.all():
-                        payload = _doc_public(doc, request)
-                        if payload:
-                            attachments.append(payload)
-
-                expanded_options = _expand_options(
-                    q.get('options'), request,
+                questions_payload.append(
+                    _serialize_question(q, answer, request)
                 )
-
-                questions_payload.append({
-                    'id': qid,
-                    'text': q.get('text', ''),
-                    'instructions': q.get('instructions', ''),
-                    'question_type': q.get('question_type', 'text'),
-                    'allowed_response_formats': list(
-                        q.get('allowed_response_formats', [])
-                    ),
-                    'is_required': bool(q.get('is_required', True)),
-                    'position': q.get('position', 0),
-                    'is_custom': bool(q.get('is_custom', False)),
-                    'reference_documents': ref_docs,
-                    'options': expanded_options,
-                    'state': (
-                        answer.state if answer
-                        else BriefingAnswer.STATE_PENDING
-                    ),
-                    'latest_content': answer.latest_content if answer else '',
-                    'latest_audio_url': latest_audio_url,
-                    'latest_transcription': (
-                        answer.latest_transcription if answer else ''
-                    ),
-                    'transcription_status': (
-                        answer.transcription_status if answer
-                        else BriefingAnswer.TRANSCRIPTION_NOT_APPLICABLE
-                    ),
-                    'attachments': attachments,
-                })
             sections.append({
                 'id': section.get('id'),
                 'title': section.get('title', ''),
@@ -1132,7 +1379,41 @@ class PortalBriefingSerializer(serializers.Serializer):
                 'questions': questions_payload,
             })
 
+        # ----- Bloco complementar -----
+        supplementary_sections = []
+        ordered_supp_sections = sorted(
+            (briefing.supplementary_snapshot or {}).get('sections', []),
+            key=lambda s: s.get('position', 0),
+        )
+        for section in ordered_supp_sections:
+            questions_payload = []
+            ordered_questions = sorted(
+                section.get('questions', []),
+                key=lambda q: q.get('position', 0),
+            )
+            for q in ordered_questions:
+                qid = str(q['id'])
+                answer = answers.get(qid)
+                questions_payload.append(
+                    _serialize_question(q, answer, request)
+                )
+            supplementary_sections.append({
+                'id': section.get('id'),
+                'title': section.get('title', ''),
+                'description': section.get('description', ''),
+                'position': section.get('position', 0),
+                'questions': questions_payload,
+            })
+
+        # ----- Próxima pergunta e estado -----
         next_q = BriefingService.get_next_eligible_question(briefing)
+
+        progress = BriefingService.compute_progress(briefing)
+        supplementary_state = briefing.supplementary_state()
+
+        has_new_custom_questions = self._has_new_custom_questions(
+            briefing,
+        )
 
         workspace_name = ''
         if briefing.workspace is not None:
@@ -1173,11 +1454,37 @@ class PortalBriefingSerializer(serializers.Serializer):
                 briefing.first_opened_at.isoformat()
                 if briefing.first_opened_at else None
             ),
-            'progress': BriefingService.compute_progress(briefing),
+            'progress': progress,
             'next_question_id': str(next_q['id']) if next_q else None,
             'has_custom_questions': bool(briefing.has_custom_questions),
             'sections': sections,
+            'supplementary_sections': supplementary_sections,
+            'supplementary_state': supplementary_state,
+            'has_new_custom_questions': has_new_custom_questions,
         }
+
+    def _has_new_custom_questions(self, briefing: Briefing) -> bool:
+        """
+        True se existe evento `custom_question_added` mais recente que
+        `last_viewed_at` do briefing.
+
+        Um cliente que nunca abriu (`last_viewed_at is None`) conta
+        como "tem novas" se houver qualquer evento de adição.
+        """
+        from apps.briefings.models import BriefingEvent
+
+        last_event = BriefingEvent.objects.filter(
+            briefing=briefing,
+            kind=BriefingEvent.KIND_CUSTOM_QUESTION_ADDED,
+        ).order_by('-created_at').first()
+
+        if last_event is None:
+            return False
+
+        if briefing.last_viewed_at is None:
+            return True
+
+        return last_event.created_at > briefing.last_viewed_at
 
 
 class PortalBriefingListSerializer(serializers.Serializer):
@@ -1195,6 +1502,10 @@ class PortalBriefingListSerializer(serializers.Serializer):
                 if briefing.expires_at else None
             ),
             'progress': BriefingService.compute_progress(briefing),
+            'has_supplementary_questions': (
+                briefing.has_supplementary_questions()
+            ),
+            'supplementary_state': briefing.supplementary_state(),
         }
 
 
@@ -1238,7 +1549,7 @@ class PortalReviewRequestSerializer(serializers.Serializer):
     )
 
 ================================================================================
-ARQUIVO 8 DE 75
+ARQUIVO 8 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\api\serializers
 ARQUIVO: question_instance_serializers.py
@@ -1395,7 +1706,7 @@ class BriefingQuestionInstanceUpdateSerializer(serializers.Serializer):
         return attrs
 
 ================================================================================
-ARQUIVO 9 DE 75
+ARQUIVO 9 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\api\serializers
 ARQUIVO: template_serializers.py
@@ -1909,7 +2220,7 @@ class ReorderSerializer(serializers.Serializer):
     )
 
 ================================================================================
-ARQUIVO 10 DE 75
+ARQUIVO 10 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\api\serializers
 ARQUIVO: template_version_serializers.py
@@ -2061,7 +2372,7 @@ class BriefingTemplateVersionCreateSerializer(serializers.Serializer):
         return attrs
 
 ================================================================================
-ARQUIVO 11 DE 75
+ARQUIVO 11 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\api\views
 ARQUIVO: __init__.py
@@ -2095,13 +2406,13 @@ __all__ = [
 ]
 
 ================================================================================
-ARQUIVO 12 DE 75
+ARQUIVO 12 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\api\views
 ARQUIVO: briefing_views.py
-TAMANHO: 25,51 KB
+TAMANHO: 27,54 KB
 EXTENSAO: .py
-LINHAS: 669
+LINHAS: 726
 ================================================================================
 
 """
@@ -2124,6 +2435,7 @@ from apps.briefings.api.serializers import (
     BriefingEventSerializer,
     BriefingNoteSerializer,
     BriefingNoteCreateSerializer,
+    BriefingNoteUpdateSerializer,
     BriefingQuestionInstanceSerializer,
     BriefingQuestionInstanceCreateSerializer,
     BriefingQuestionInstanceUpdateSerializer,
@@ -2136,6 +2448,7 @@ from apps.briefings.services import (
     BriefingSendService,
     BriefingQuestionInstanceService,
     BriefingTemplateVersionService,
+    NotificationService,
 )
 from apps.briefings.services.export_service import BriefingExportService
 from apps.briefings.exceptions import (
@@ -2450,6 +2763,7 @@ class BriefingViewSet(viewsets.GenericViewSet):
                 author=request.user,
                 content=serializer.validated_data['content'],
                 question_id=serializer.validated_data.get('question_id'),
+                is_pinned=serializer.validated_data.get('is_pinned', False),
             )
         except Exception as exc:
             handled = self._handle_domain_error(exc)
@@ -2488,14 +2802,22 @@ class BriefingViewSet(viewsets.GenericViewSet):
             BriefingNoteService.delete_note(note=note)
             return Response(status=status.HTTP_204_NO_CONTENT)
 
-        serializer = BriefingNoteCreateSerializer(data=request.data)
+        serializer = BriefingNoteUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+
+        data = serializer.validated_data
+        if 'content' not in data and 'is_pinned' not in data:
+            return Response(
+                {'error': 'Envie "content" e/ou "is_pinned".'},
+                status=400,
+            )
 
         try:
             note = BriefingNoteService.update_note(
                 note=note,
                 author=request.user,
-                content=serializer.validated_data['content'],
+                content=data.get('content'),
+                is_pinned=data.get('is_pinned'),
             )
         except Exception as exc:
             handled = self._handle_domain_error(exc)
@@ -2562,7 +2884,7 @@ class BriefingViewSet(viewsets.GenericViewSet):
             handled = self._handle_domain_error(exc)
             if handled is not None:
                 return handled
-            logger.exception('Erro ao criar pergunta exclusiva')
+            logger.exception('Erro ao criar pergunta complementar')
             return Response({'error': 'Erro inesperado.'}, status=500)
 
         return Response(
@@ -2610,7 +2932,7 @@ class BriefingViewSet(viewsets.GenericViewSet):
                 handled = self._handle_domain_error(exc)
                 if handled is not None:
                     return handled
-                logger.exception('Erro ao remover pergunta exclusiva')
+                logger.exception('Erro ao remover pergunta complementar')
                 return Response({'error': 'Erro inesperado.'}, status=500)
             return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -2634,10 +2956,56 @@ class BriefingViewSet(viewsets.GenericViewSet):
             handled = self._handle_domain_error(exc)
             if handled is not None:
                 return handled
-            logger.exception('Erro ao editar pergunta exclusiva')
+            logger.exception('Erro ao editar pergunta complementar')
             return Response({'error': 'Erro inesperado.'}, status=500)
 
         return Response(BriefingQuestionInstanceSerializer(instance).data)
+
+    @action(
+        detail=True,
+        methods=['post'],
+        url_path='notify-supplementary',
+    )
+    def notify_supplementary(self, request, id=None):
+        """
+        Notifica o cliente sobre as perguntas complementares.
+
+        Chamado EXPLICITAMENTE pelo arquiteto, após adicionar as
+        perguntas que quiser. Nunca é automático por pergunta.
+        """
+        workspace = self._current_workspace()
+        if workspace is None:
+            return Response({'error': 'Nenhum workspace ativo'}, status=400)
+        err = self._require_capability(
+            workspace, 'briefings.briefing.send_to_client',
+        )
+        if err is not None:
+            return err
+
+        try:
+            briefing = BriefingService.get_or_raise(id, workspace)
+        except Exception as exc:
+            handled = self._handle_domain_error(exc)
+            if handled is not None:
+                return handled
+            return Response({'error': 'Erro'}, status=500)
+
+        try:
+            result = NotificationService.on_supplementary_questions_added(
+                briefing.id, actor=request.user,
+            )
+        except Exception:
+            logger.exception(
+                'Erro ao notificar complementares (briefing=%s)',
+                briefing.id,
+            )
+            return Response(
+                {'error': 'Erro inesperado.'}, status=500,
+            )
+
+        # Resultado inclui status honesto (requested/accepted/failed),
+        # NUNCA 'delivered' (não temos confirmação de entrega).
+        return Response(result, status=status.HTTP_200_OK)
 
     @action(
         detail=True,
@@ -2775,7 +3143,7 @@ class BriefingViewSet(viewsets.GenericViewSet):
         return Response(result, status=status.HTTP_200_OK)
 
 ================================================================================
-ARQUIVO 13 DE 75
+ARQUIVO 13 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\api\views
 ARQUIVO: category_views.py
@@ -2916,13 +3284,13 @@ class BriefingTemplateCategoryViewSet(viewsets.GenericViewSet):
         return Response({'ok': True})
 
 ================================================================================
-ARQUIVO 14 DE 75
+ARQUIVO 14 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\api\views
 ARQUIVO: portal_views.py
-TAMANHO: 14,17 KB
+TAMANHO: 14,09 KB
 EXTENSAO: .py
-LINHAS: 429
+LINHAS: 427
 ================================================================================
 
 """
@@ -3096,11 +3464,9 @@ class PortalBriefingView(APIView):
                 '(briefing=%s)', briefing.id,
             )
 
-        if briefing.first_opened_at is None:
-            briefing.first_opened_at = timezone.now()
-            briefing.save(update_fields=[
-                'first_opened_at', 'updated_at',
-            ])
+        # Marca visualização: first_opened_at (na primeira vez) e
+        # last_viewed_at (sempre).
+        briefing.mark_viewed()
 
         return Response(_serialize(briefing, request))
 
@@ -3356,7 +3722,7 @@ class PortalBriefingExportPdfView(APIView):
         )
 
 ================================================================================
-ARQUIVO 15 DE 75
+ARQUIVO 15 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\api\views
 ARQUIVO: template_views.py
@@ -4490,7 +4856,7 @@ class BriefingTemplateViewSet(viewsets.GenericViewSet):
         return Response(BriefingSectionSerializer(section).data)
 
 ================================================================================
-ARQUIVO 16 DE 75
+ARQUIVO 16 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings
 ARQUIVO: apps.py
@@ -4520,7 +4886,7 @@ class BriefingsConfig(AppConfig):
         import apps.briefings.signals  # noqa: F401
 
 ================================================================================
-ARQUIVO 17 DE 75
+ARQUIVO 17 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings
 ARQUIVO: capabilities.py
@@ -4621,7 +4987,7 @@ CAPABILITIES = [
 ]
 
 ================================================================================
-ARQUIVO 18 DE 75
+ARQUIVO 18 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\exceptions
 ARQUIVO: __init__.py
@@ -4681,7 +5047,7 @@ __all__ = [
 ]
 
 ================================================================================
-ARQUIVO 19 DE 75
+ARQUIVO 19 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\exceptions
 ARQUIVO: briefing_exceptions.py
@@ -4815,7 +5181,7 @@ class TranscriptionError(BriefingError):
     pass
 
 ================================================================================
-ARQUIVO 20 DE 75
+ARQUIVO 20 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\migrations
 ARQUIVO: __init__.py
@@ -4826,7 +5192,7 @@ LINHAS: 0
 
 
 ================================================================================
-ARQUIVO 21 DE 75
+ARQUIVO 21 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\migrations
 ARQUIVO: 0001_initial.py
@@ -5130,7 +5496,7 @@ class Migration(migrations.Migration):
 
 
 ================================================================================
-ARQUIVO 22 DE 75
+ARQUIVO 22 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\migrations
 ARQUIVO: 0002_remove_briefingevent_briefing_event_unique_author_and_more.py
@@ -5171,7 +5537,7 @@ class Migration(migrations.Migration):
 
 
 ================================================================================
-ARQUIVO 23 DE 75
+ARQUIVO 23 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\migrations
 ARQUIVO: 0003_briefingtemplatecategory.py
@@ -5217,7 +5583,7 @@ class Migration(migrations.Migration):
 
 
 ================================================================================
-ARQUIVO 24 DE 75
+ARQUIVO 24 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\migrations
 ARQUIVO: 0004_alter_briefingtemplate_options_and_more.py
@@ -5284,7 +5650,7 @@ class Migration(migrations.Migration):
 
 
 ================================================================================
-ARQUIVO 25 DE 75
+ARQUIVO 25 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\migrations
 ARQUIVO: 0005_alter_briefingquestion_options_and_more.py
@@ -5319,7 +5685,7 @@ class Migration(migrations.Migration):
 
 
 ================================================================================
-ARQUIVO 26 DE 75
+ARQUIVO 26 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\migrations
 ARQUIVO: 0006_remove_briefingtemplate_briefing_te_workspa_d12990_idx_and_more.py
@@ -5362,7 +5728,7 @@ class Migration(migrations.Migration):
 
 
 ================================================================================
-ARQUIVO 27 DE 75
+ARQUIVO 27 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\migrations
 ARQUIVO: 0007_briefing_has_custom_questions_and_more.py
@@ -5477,7 +5843,7 @@ class Migration(migrations.Migration):
 
 
 ================================================================================
-ARQUIVO 28 DE 75
+ARQUIVO 28 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\migrations
 ARQUIVO: 0008_alter_briefingquestion_options_and_more.py
@@ -5517,7 +5883,7 @@ class Migration(migrations.Migration):
 
 
 ================================================================================
-ARQUIVO 29 DE 75
+ARQUIVO 29 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\migrations
 ARQUIVO: 0009_remove_briefing_closed_at_briefing_cancelled_at_and_more.py
@@ -5569,7 +5935,7 @@ class Migration(migrations.Migration):
 
 
 ================================================================================
-ARQUIVO 30 DE 75
+ARQUIVO 30 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\migrations
 ARQUIVO: 0010_briefing_intro_message_briefing_intro_seen_at_and_more.py
@@ -5609,7 +5975,7 @@ class Migration(migrations.Migration):
 
 
 ================================================================================
-ARQUIVO 31 DE 75
+ARQUIVO 31 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\migrations
 ARQUIVO: 0011_alter_briefingevent_kind.py
@@ -5639,7 +6005,110 @@ class Migration(migrations.Migration):
 
 
 ================================================================================
-ARQUIVO 32 DE 75
+ARQUIVO 32 DE 77
+================================================================================
+PASTA: C:\clivo-v1\apps\briefings\migrations
+ARQUIVO: 0012_briefing_last_viewed_at_and_more.py
+TAMANHO: 3,55 KB
+EXTENSAO: .py
+LINHAS: 51
+================================================================================
+
+# Generated by Django 6.1.1 on 2026-10-27 15:27
+
+from django.conf import settings
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ('briefings', '0011_alter_briefingevent_kind'),
+        ('clients', '0003_remove_clienttask_client_task_client__4d55e6_idx_and_more'),
+        ('workspaces', '0004_workspacesubscription_changed_by_and_more'),
+        migrations.swappable_dependency(settings.AUTH_USER_MODEL),
+    ]
+
+    operations = [
+        migrations.AddField(
+            model_name='briefing',
+            name='last_viewed_at',
+            field=models.DateTimeField(blank=True, db_index=True, help_text='Última vez que o cliente abriu o portal deste briefing. Usado para detectar perguntas complementares ainda não vistas. Diferente de first_opened_at (que só registra a primeira abertura).', null=True),
+        ),
+        migrations.AddField(
+            model_name='briefing',
+            name='supplementary_completed_at',
+            field=models.DateTimeField(blank=True, help_text='Quando todas as perguntas complementares obrigatórias foram respondidas. NULL = ainda há pendência ou nunca houve complemento.', null=True),
+        ),
+        migrations.AddField(
+            model_name='briefing',
+            name='supplementary_snapshot',
+            field=models.JSONField(blank=True, default=dict, help_text='Estrutura das perguntas complementares, separada do structure_snapshot original. Nunca reescreve o snapshot original. Formato: {"snapshot_version": 1, "sections": [...]}.'),
+        ),
+        migrations.AddField(
+            model_name='briefingquestioninstance',
+            name='frozen_in_supplementary_snapshot_at',
+            field=models.DateTimeField(blank=True, help_text='Momento em que esta pergunta foi copiada para o supplementary_snapshot do Briefing. NULL = ainda não congelada no bloco complementar.', null=True),
+        ),
+        migrations.AlterField(
+            model_name='briefing',
+            name='structure_snapshot',
+            field=models.JSONField(default=dict, help_text='Snapshot imutável da estrutura (sessões e perguntas) copiado do template no momento da criação. NUNCA reescrito após o primeiro congelamento.'),
+        ),
+        migrations.AlterField(
+            model_name='briefingevent',
+            name='kind',
+            field=models.CharField(choices=[('answered', 'Resposta registrada'), ('clarification_requested', 'Dúvida solicitada pelo cliente'), ('review_requested', 'Revisão solicitada pelo cliente'), ('transcription_generated', 'Transcrição gerada'), ('analysis_generated', 'Análise gerada'), ('paused', 'Briefing pausado'), ('resumed', 'Briefing retomado'), ('reopened', 'Briefing reaberto'), ('completed', 'Briefing concluído'), ('closed', 'Briefing encerrado pelo arquiteto'), ('expired', 'Briefing expirado'), ('completion_email_sent', 'E-mail de conclusão enviado'), ('manual_send', 'Briefing enviado manualmente'), ('note.created', 'Nota criada'), ('note.updated', 'Nota editada'), ('note.deleted', 'Nota excluída'), ('custom_question_added', 'Pergunta complementar adicionada'), ('custom_question_removed', 'Pergunta complementar removida'), ('supplementary_completed', 'Perguntas complementares concluídas'), ('supplementary_notification_sent', 'Notificação de complementares enviada')], db_index=True, max_length=40),
+        ),
+        migrations.AddIndex(
+            model_name='briefing',
+            index=models.Index(fields=['last_viewed_at'], name='briefing_last_vi_397e8a_idx'),
+        ),
+    ]
+
+
+================================================================================
+ARQUIVO 33 DE 77
+================================================================================
+PASTA: C:\clivo-v1\apps\briefings\migrations
+ARQUIVO: 0013_alter_briefingnote_options_briefingnote_is_pinned_and_more.py
+TAMANHO: 1,02 KB
+EXTENSAO: .py
+LINHAS: 28
+================================================================================
+
+# Generated by Django 6.1.1 on 2026-10-27 17:08
+
+from django.conf import settings
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ('briefings', '0012_briefing_last_viewed_at_and_more'),
+        migrations.swappable_dependency(settings.AUTH_USER_MODEL),
+    ]
+
+    operations = [
+        migrations.AlterModelOptions(
+            name='briefingnote',
+            options={'ordering': ['-is_pinned', '-created_at'], 'verbose_name': 'Anotação de Briefing', 'verbose_name_plural': 'Anotações de Briefing'},
+        ),
+        migrations.AddField(
+            model_name='briefingnote',
+            name='is_pinned',
+            field=models.BooleanField(db_index=True, default=False, help_text='Se True, a nota aparece no topo da lista.'),
+        ),
+        migrations.AddIndex(
+            model_name='briefingnote',
+            index=models.Index(fields=['briefing', '-is_pinned', '-created_at'], name='briefing_no_briefin_fccf59_idx'),
+        ),
+    ]
+
+
+================================================================================
+ARQUIVO 34 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings
 ARQUIVO: models.py
@@ -5654,7 +6123,7 @@ from django.db import models
 
 
 ================================================================================
-ARQUIVO 33 DE 75
+ARQUIVO 35 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\models
 ARQUIVO: __init__.py
@@ -5692,7 +6161,7 @@ __all__ = [
 ]
 
 ================================================================================
-ARQUIVO 34 DE 75
+ARQUIVO 36 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\models
 ARQUIVO: briefing_answer.py
@@ -5857,13 +6326,13 @@ class BriefingAnswer(models.Model):
         return f"{self.briefing_id} · {self.question_id} · {self.state}"
 
 ================================================================================
-ARQUIVO 35 DE 75
+ARQUIVO 37 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\models
 ARQUIVO: briefing_event.py
-TAMANHO: 5,28 KB
+TAMANHO: 6,51 KB
 EXTENSAO: .py
-LINHAS: 163
+LINHAS: 197
 ================================================================================
 
 """
@@ -5893,6 +6362,18 @@ NOTAS
 -----
 Notas (`BriefingNote`) são do escritório, então todo evento
 `note.*` carrega `user=<autor>`. Nunca `portal_session`.
+
+PERGUNTAS COMPLEMENTARES
+------------------------
+Eventos `custom_question_added`, `custom_question_removed`,
+`supplementary_completed` e `supplementary_notification_sent` são
+emitidos pelo BriefingQuestionInstanceService e pelo
+NotificationService.
+
+Para `custom_question_removed`, o `content` carrega o snapshot
+COMPLETO da pergunta removida (via
+`BriefingQuestionInstance.to_removal_event_payload()`), porque a
+remoção é DELETE real e o evento é a única fonte histórica.
 
 NOTA SOBRE ANÁLISE
 ------------------
@@ -5926,10 +6407,16 @@ class BriefingEvent(models.Model):
     KIND_COMPLETION_EMAIL_SENT = 'completion_email_sent'
     KIND_MANUAL_SEND = 'manual_send'
 
-    # --- Notas (novos) ---
+    # --- Notas ---
     KIND_NOTE_CREATED = 'note.created'
     KIND_NOTE_UPDATED = 'note.updated'
     KIND_NOTE_DELETED = 'note.deleted'
+
+    # --- Perguntas complementares ---
+    KIND_CUSTOM_QUESTION_ADDED = 'custom_question_added'
+    KIND_CUSTOM_QUESTION_REMOVED = 'custom_question_removed'
+    KIND_SUPPLEMENTARY_COMPLETED = 'supplementary_completed'
+    KIND_SUPPLEMENTARY_NOTIFICATION_SENT = 'supplementary_notification_sent'
 
     KIND_CHOICES = [
         (KIND_ANSWERED, 'Resposta registrada'),
@@ -5948,6 +6435,22 @@ class BriefingEvent(models.Model):
         (KIND_NOTE_CREATED, 'Nota criada'),
         (KIND_NOTE_UPDATED, 'Nota editada'),
         (KIND_NOTE_DELETED, 'Nota excluída'),
+        (
+            KIND_CUSTOM_QUESTION_ADDED,
+            'Pergunta complementar adicionada',
+        ),
+        (
+            KIND_CUSTOM_QUESTION_REMOVED,
+            'Pergunta complementar removida',
+        ),
+        (
+            KIND_SUPPLEMENTARY_COMPLETED,
+            'Perguntas complementares concluídas',
+        ),
+        (
+            KIND_SUPPLEMENTARY_NOTIFICATION_SENT,
+            'Notificação de complementares enviada',
+        ),
     ]
 
     id = models.UUIDField(
@@ -6031,13 +6534,13 @@ class BriefingEvent(models.Model):
         return f"{self.briefing_id} · {self.kind} · {author}"
 
 ================================================================================
-ARQUIVO 36 DE 75
+ARQUIVO 38 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\models
 ARQUIVO: briefing.py
-TAMANHO: 11,49 KB
+TAMANHO: 19,56 KB
 EXTENSAO: .py
-LINHAS: 371
+LINHAS: 605
 ================================================================================
 
 """
@@ -6056,8 +6559,27 @@ Referências:
 
 CUSTOM QUESTIONS
 ----------------
-`custom_questions` (via BriefingQuestionInstance) só podem ser
-adicionadas/removidas enquanto o briefing NÃO tem nenhuma resposta.
+`custom_questions` (via BriefingQuestionInstance) podem ser adicionadas
+enquanto o briefing NÃO tem nenhuma resposta (comportamento antigo).
+
+PERGUNTAS COMPLEMENTARES
+------------------------
+A partir desta versão, perguntas adicionadas APÓS o briefing já ter
+respostas vão para um bloco separado, o `supplementary_snapshot`, e
+NÃO reescrevem o `structure_snapshot` original.
+
+O snapshot original permanece imutável. O bloco complementar é
+reconstruído a partir de `BriefingQuestionInstance` sempre que o
+arquiteto adiciona ou remove uma pergunta.
+
+REMOÇÃO
+-------
+Pergunta complementar NÃO respondida pode ser removida (DELETE real
++ evento com snapshot completo no `content`).
+
+Pergunta complementar JÁ respondida NÃO pode ser removida. Para
+corrigir, o arquiteto adiciona uma nova pergunta complementar. A
+`BriefingAnswer` e os eventos originais permanecem intactos.
 
 INTRO
 -----
@@ -6072,8 +6594,12 @@ ESTADOS
 -------
     in_progress   Em andamento (aceita resposta)
     paused        Arquiteto pausou (não aceita resposta)
-    completed     Cliente respondeu tudo
+    completed     Cliente respondeu tudo do bloco original
     cancelled     Encerrado manualmente ou prazo expirou
+
+`status` refere-se ao BLOCO ORIGINAL. O estado das perguntas
+complementares é controlado separadamente por
+`supplementary_completed_at`.
 """
 
 import uuid
@@ -6104,6 +6630,7 @@ class Briefing(models.Model):
     PORTAL_COMPLETED = 'completed'
     PORTAL_CANCELLED = 'cancelled'
     PORTAL_REOPENED = 'reopened'
+    PORTAL_SUPPLEMENTARY_PENDING = 'supplementary_pending'
 
     id = models.UUIDField(
         primary_key=True,
@@ -6153,8 +6680,29 @@ class Briefing(models.Model):
         default=dict,
         help_text=_(
             'Snapshot imutável da estrutura (sessões e perguntas) '
-            'copiado do template no momento da criação, incluindo '
-            'perguntas exclusivas adicionadas antes do congelamento.'
+            'copiado do template no momento da criação. '
+            'NUNCA reescrito após o primeiro congelamento.'
+        ),
+    )
+
+    supplementary_snapshot = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text=_(
+            'Estrutura das perguntas complementares, separada do '
+            'structure_snapshot original. Nunca reescreve o snapshot '
+            'original. Formato: '
+            '{"snapshot_version": 1, "sections": [...]}.'
+        ),
+    )
+
+    supplementary_completed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=_(
+            'Quando todas as perguntas complementares obrigatórias '
+            'foram respondidas. NULL = ainda há pendência ou nunca '
+            'houve complemento.'
         ),
     )
 
@@ -6207,6 +6755,18 @@ class Briefing(models.Model):
         ),
     )
 
+    last_viewed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=_(
+            'Última vez que o cliente abriu o portal deste briefing. '
+            'Usado para detectar perguntas complementares ainda não '
+            'vistas. Diferente de first_opened_at (que só registra a '
+            'primeira abertura).'
+        ),
+    )
+
     completed_at = models.DateTimeField(
         null=True,
         blank=True,
@@ -6253,6 +6813,7 @@ class Briefing(models.Model):
             models.Index(fields=['expires_at']),
             models.Index(fields=['template_version']),
             models.Index(fields=['first_opened_at']),
+            models.Index(fields=['last_viewed_at']),
         ]
 
     def __str__(self):
@@ -6276,6 +6837,19 @@ class Briefing(models.Model):
         if self.intro_seen_at is None:
             self.intro_seen_at = timezone.now()
             self.save(update_fields=['intro_seen_at', 'updated_at'])
+
+    def mark_viewed(self):
+        """
+        Registra a visualização atual. Atualiza SEMPRE, não só na
+        primeira vez. Diferente de `first_opened_at`.
+        """
+        now = timezone.now()
+        fields = ['last_viewed_at', 'updated_at']
+        self.last_viewed_at = now
+        if self.first_opened_at is None:
+            self.first_opened_at = now
+            fields.append('first_opened_at')
+        self.save(update_fields=fields)
 
     # ------------------------------------------------------------------
     # ESTADO
@@ -6310,6 +6884,14 @@ class Briefing(models.Model):
         return False
 
     def is_snapshot_locked(self) -> bool:
+        """
+        Retorna True se o snapshot ORIGINAL não pode mais ser alterado.
+
+        Nota: esta guarda continua válida para `structure_snapshot`.
+        Perguntas complementares NÃO dependem desta guarda — vão para
+        `supplementary_snapshot` e são gerenciadas por
+        BriefingQuestionInstanceService.
+        """
         return self.answers.exists()
 
     def has_available_origin(self) -> bool:
@@ -6318,6 +6900,134 @@ class Briefing(models.Model):
         if self.template_version is None:
             return False
         return True
+
+    # ------------------------------------------------------------------
+    # PERGUNTAS COMPLEMENTARES
+    # ------------------------------------------------------------------
+
+    def supplementary_questions(self) -> list:
+        """
+        Retorna a lista achatada de perguntas complementares do
+        `supplementary_snapshot`, com `section_id` e `section_title`
+        embutidos em cada item.
+        """
+        result = []
+        sections = sorted(
+            (self.supplementary_snapshot or {}).get('sections', []),
+            key=lambda s: s.get('position', 0),
+        )
+        for section in sections:
+            questions = sorted(
+                section.get('questions', []),
+                key=lambda q: q.get('position', 0),
+            )
+            for q in questions:
+                result.append({
+                    **q,
+                    'section_id': section.get('id'),
+                    'section_title': section.get('title'),
+                })
+        return result
+
+    def has_supplementary_questions(self) -> bool:
+        return bool(self.supplementary_questions())
+
+    def has_pending_supplementary(self) -> bool:
+        """
+        True se existe pelo menos uma pergunta complementar OBRIGATÓRIA
+        sem resposta em estado ANSWERED. Perguntas opcionais não contam.
+        """
+        from apps.briefings.models.briefing_answer import BriefingAnswer
+
+        questions = self.supplementary_questions()
+        if not questions:
+            return False
+
+        required_ids = {
+            str(q['id']) for q in questions if q.get('is_required')
+        }
+        if not required_ids:
+            return False
+
+        answered_ids = set(
+            str(a.question_id)
+            for a in BriefingAnswer.objects.filter(
+                briefing=self,
+                state=BriefingAnswer.STATE_ANSWERED,
+            )
+        )
+        return not required_ids.issubset(answered_ids)
+
+    def supplementary_state(self) -> dict:
+        """
+        Estado consolidado do complemento, para o portal.
+
+        Retorna:
+            {
+                'has_questions': bool,
+                'has_pending_required': bool,
+                'count_pending_required': int,
+                'count_pending_optional': int,
+                'is_complete': bool,
+            }
+        """
+        from apps.briefings.models.briefing_answer import BriefingAnswer
+
+        questions = self.supplementary_questions()
+        if not questions:
+            return {
+                'has_questions': False,
+                'has_pending_required': False,
+                'count_pending_required': 0,
+                'count_pending_optional': 0,
+                'is_complete': False,
+            }
+
+        answers = {
+            str(a.question_id): a
+            for a in BriefingAnswer.objects.filter(briefing=self)
+        }
+
+        count_pending_required = 0
+        count_pending_optional = 0
+        for q in questions:
+            qid = str(q['id'])
+            answer = answers.get(qid)
+            is_answered = (
+                answer is not None
+                and answer.state == BriefingAnswer.STATE_ANSWERED
+            )
+            if is_answered:
+                continue
+            if q.get('is_required'):
+                count_pending_required += 1
+            else:
+                count_pending_optional += 1
+
+        is_complete = (
+            count_pending_required == 0
+            and self.supplementary_completed_at is not None
+        )
+
+        return {
+            'has_questions': True,
+            'has_pending_required': count_pending_required > 0,
+            'count_pending_required': count_pending_required,
+            'count_pending_optional': count_pending_optional,
+            'is_complete': is_complete,
+        }
+
+    def mark_supplementary_completed(self):
+        """
+        Marca o complemento como concluído. Idempotente.
+        Não altera o `status` do briefing original.
+        """
+        if self.supplementary_completed_at is not None:
+            return
+        self.supplementary_completed_at = timezone.now()
+        self.save(update_fields=[
+            'supplementary_completed_at', 'updated_at',
+        ])
 
     # ------------------------------------------------------------------
     # STATUS DERIVADO PARA O PORTAL
@@ -6332,6 +7042,8 @@ class Briefing(models.Model):
                 self.completed_at,
             ):
                 return self.PORTAL_REOPENED
+            if self.has_pending_supplementary():
+                return self.PORTAL_SUPPLEMENTARY_PENDING
             return self.PORTAL_COMPLETED
 
         if self.status == self.STATUS_CANCELLED:
@@ -6351,11 +7063,21 @@ class Briefing(models.Model):
         return self.PORTAL_IN_PROGRESS
 
     def portal_can_answer(self) -> bool:
-        return self.portal_status() in (
+        """
+        Se o cliente pode enviar respostas agora.
+
+        Inclui o caso: briefing original concluído, mas complemento
+        pendente. Nesse caso, o cliente PODE responder as perguntas
+        complementares.
+        """
+        if self.portal_status() in (
             self.PORTAL_NOT_STARTED,
             self.PORTAL_IN_PROGRESS,
             self.PORTAL_REOPENED,
-        )
+            self.PORTAL_SUPPLEMENTARY_PENDING,
+        ):
+            return True
+        return False
 
     # ------------------------------------------------------------------
     # HELPERS "REOPENED"
@@ -6384,7 +7106,7 @@ class Briefing(models.Model):
         return self._was_reopened_since(terminal)
 
     # ------------------------------------------------------------------
-    # SNAPSHOT
+    # SNAPSHOT ORIGINAL
     # ------------------------------------------------------------------
 
     def snapshot_questions(self) -> list:
@@ -6412,14 +7134,29 @@ class Briefing(models.Model):
                 return q
         return None
 
+    def supplementary_question_by_id(self, question_id: str) -> dict:
+        for q in self.supplementary_questions():
+            if str(q.get('id')) == str(question_id):
+                return q
+        return None
+
+    def all_questions(self) -> list:
+        """
+        Concatena original + complementares, preservando a ordem de
+        resposta esperada: original primeiro, complementares depois.
+        """
+        return list(self.snapshot_questions()) + list(
+            self.supplementary_questions()
+        )
+
 ================================================================================
-ARQUIVO 37 DE 75
+ARQUIVO 39 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\models
 ARQUIVO: note.py
-TAMANHO: 2,34 KB
+TAMANHO: 2,64 KB
 EXTENSAO: .py
-LINHAS: 84
+LINHAS: 92
 ================================================================================
 
 """
@@ -6486,6 +7223,12 @@ class BriefingNote(models.Model):
         help_text=_('Conteúdo da anotação'),
     )
 
+    is_pinned = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text=_('Se True, a nota aparece no topo da lista.'),
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -6493,11 +7236,12 @@ class BriefingNote(models.Model):
         db_table = 'briefing_note'
         verbose_name = _('Anotação de Briefing')
         verbose_name_plural = _('Anotações de Briefing')
-        ordering = ['-created_at']
+        ordering = ['-is_pinned', '-created_at']
         indexes = [
             models.Index(fields=['briefing', '-created_at']),
             models.Index(fields=['briefing', 'question_id']),
             models.Index(fields=['author']),
+            models.Index(fields=['briefing', '-is_pinned', '-created_at']),
         ]
 
     def __str__(self):
@@ -6505,16 +7249,17 @@ class BriefingNote(models.Model):
             f'Q:{str(self.question_id)[:8]}' if self.question_id
             else 'geral'
         )
-        return f"Note {self.briefing_id} · {scope}"
+        pin = ' 📌' if self.is_pinned else ''
+        return f"Note {self.briefing_id} · {scope}{pin}"
 
 ================================================================================
-ARQUIVO 38 DE 75
+ARQUIVO 40 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\models
 ARQUIVO: question_instance.py
-TAMANHO: 4,67 KB
+TAMANHO: 7,26 KB
 EXTENSAO: .py
-LINHAS: 157
+LINHAS: 227
 ================================================================================
 
 """
@@ -6528,6 +7273,34 @@ reutilizável.
 
 Ela NÃO substitui `BriefingQuestion` (que é do template). Ela é um
 complemento local — vive dentro da execução.
+
+DUAS FASES
+----------
+Uma instância pode estar em uma de duas fases:
+
+    1. ANTES do briefing ter respostas
+       A instância é copiada para o `structure_snapshot` no primeiro
+       `submit_answer` (comportamento antigo, via
+       `freeze_custom_questions_into_snapshot`). A pergunta vira
+       parte do bloco original.
+
+    2. DEPOIS do briefing ter respostas
+       A instância é copiada para o `supplementary_snapshot`
+       (comportamento novo, via
+       `freeze_supplementary_questions_into_snapshot`). A pergunta
+       vira parte do bloco complementar.
+
+O campo `frozen_in_supplementary_snapshot_at` marca quando a instância
+entrou na fase 2. Antes disso, NULL.
+
+REMOÇÃO
+-------
+Não existe soft delete. A remoção é DELETE real.
+
+Perguntas JÁ RESPONDIDAS não podem ser removidas (regra de negócio
+aplicada em `BriefingQuestionInstanceService`). Perguntas ainda não
+respondidas podem ser removidas; o evento `custom_question_removed`
+guarda o snapshot completo da pergunta removida no `content`.
 """
 
 import uuid
@@ -6626,6 +7399,16 @@ class BriefingQuestionInstance(models.Model):
         help_text=_('Se a pergunta é obrigatória'),
     )
 
+    frozen_in_supplementary_snapshot_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=_(
+            'Momento em que esta pergunta foi copiada para o '
+            'supplementary_snapshot do Briefing. NULL = ainda não '
+            'congelada no bloco complementar.'
+        ),
+    )
+
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -6658,7 +7441,11 @@ class BriefingQuestionInstance(models.Model):
     def to_snapshot_dict(self) -> dict:
         """
         Serializa esta instância no formato usado dentro do
-        `structure_snapshot` do Briefing.
+        `supplementary_snapshot` do Briefing.
+
+        Idêntico ao formato do `structure_snapshot` para que o
+        `PortalBriefingSerializer` consiga serializar os dois blocos
+        com o mesmo código.
         """
         return {
             'id': str(self.id),
@@ -6675,8 +7462,36 @@ class BriefingQuestionInstance(models.Model):
             'is_custom': True,
         }
 
+    def to_removal_event_payload(self) -> dict:
+        """
+        Snapshot completo da pergunta para o evento
+        `custom_question_removed`.
+
+        Necessário porque a remoção é DELETE real. Sem isso, apagar a
+        linha perderia a informação da pergunta e do histórico.
+        """
+        return {
+            'instance_id': str(self.id),
+            'section_ref': self.section_ref,
+            'text': self.text,
+            'instructions': self.instructions,
+            'question_type': self.question_type,
+            'allowed_response_formats': list(
+                self.allowed_response_formats or []
+            ),
+            'options': self.options if self.options else [],
+            'position': self.position,
+            'is_required': bool(self.is_required),
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'created_by_email': (
+                self.created_by.email
+                if self.created_by_id and self.created_by
+                else None
+            ),
+        }
+
 ================================================================================
-ARQUIVO 39 DE 75
+ARQUIVO 41 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\models
 ARQUIVO: template_category.py
@@ -6736,7 +7551,7 @@ class BriefingTemplateCategory(models.Model):
         return self.name
 
 ================================================================================
-ARQUIVO 40 DE 75
+ARQUIVO 42 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\models
 ARQUIVO: template_event.py
@@ -6848,7 +7663,7 @@ class BriefingTemplateEvent(models.Model):
         return f"{self.template_id} · {self.kind}"
 
 ================================================================================
-ARQUIVO 41 DE 75
+ARQUIVO 43 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\models
 ARQUIVO: template_version.py
@@ -6982,7 +7797,7 @@ class BriefingTemplateVersion(models.Model):
         return self.status == self.STATUS_DRAFT
 
 ================================================================================
-ARQUIVO 42 DE 75
+ARQUIVO 44 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\models
 ARQUIVO: template.py
@@ -7399,7 +8214,7 @@ class BriefingQuestion(models.Model):
         super().save(*args, **kwargs)
 
 ================================================================================
-ARQUIVO 43 DE 75
+ARQUIVO 45 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings
 ARQUIVO: public.py
@@ -7707,7 +8522,7 @@ def get_briefing_ids_for_client(client_id, workspace_id) -> List[str]:
     return [str(bid) for bid in qs]
 
 ================================================================================
-ARQUIVO 44 DE 75
+ARQUIVO 46 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\queries
 ARQUIVO: __init__.py
@@ -7721,7 +8536,7 @@ from apps.briefings.queries.briefing_queries import BriefingQueries
 __all__ = ['BriefingQueries']
 
 ================================================================================
-ARQUIVO 45 DE 75
+ARQUIVO 47 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\queries
 ARQUIVO: briefing_queries.py
@@ -7853,7 +8668,7 @@ class BriefingQueries:
             return None
 
 ================================================================================
-ARQUIVO 46 DE 75
+ARQUIVO 48 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\services
 ARQUIVO: __init__.py
@@ -7889,13 +8704,13 @@ __all__ = [
 ]
 
 ================================================================================
-ARQUIVO 47 DE 75
+ARQUIVO 49 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\services
 ARQUIVO: briefing_service.py
-TAMANHO: 27,05 KB
+TAMANHO: 33,53 KB
 EXTENSAO: .py
-LINHAS: 794
+LINHAS: 968
 ================================================================================
 
 """
@@ -7904,6 +8719,19 @@ BriefingService — ciclo de vida da execução.
 REGRA ARQUITETURAL
 ------------------
 Toda mutação passa por este service.
+
+DOIS BLOCOS DE PERGUNTAS
+------------------------
+O briefing tem dois blocos independentes de perguntas:
+
+    1. structure_snapshot      → bloco original, congelado no primeiro
+                                 congelamento após primeira resposta.
+    2. supplementary_snapshot  → bloco complementar, reconstruído a
+                                 cada adição/remoção de
+                                 BriefingQuestionInstance.
+
+O `status` do Briefing refere-se ao BLOCO ORIGINAL. O estado do
+bloco complementar é controlado por `supplementary_completed_at`.
 
 INTRO
 -----
@@ -7959,12 +8787,6 @@ class BriefingService:
         title: Optional[str] = None,
         intro_message: Optional[str] = None,
     ) -> Briefing:
-        """
-        Cria uma execução a partir de um template publicado.
-
-        `intro_message`: se passado (mesmo que ''), sobrescreve a
-        intro herdada do template. Se `None`, herda do template.
-        """
         if template.workspace_id != workspace.id:
             raise BriefingError('Template não pertence a este workspace.')
         if client.workspace_id != workspace.id:
@@ -7991,7 +8813,6 @@ class BriefingService:
             template, version=current_version,
         )
 
-        # Resolve a intro: sobrescrita explícita > herdada do template.
         if intro_message is not None:
             resolved_intro = (intro_message or '').strip()
         else:
@@ -8004,6 +8825,7 @@ class BriefingService:
             template_version=current_version,
             title=(title or template.name).strip(),
             structure_snapshot=snapshot,
+            supplementary_snapshot={},
             intro_message=resolved_intro,
             status=Briefing.STATUS_IN_PROGRESS,
             expires_at=expires_at,
@@ -8091,22 +8913,31 @@ class BriefingService:
     @staticmethod
     @transaction.atomic
     def mark_intro_seen(briefing: Briefing) -> Briefing:
-        """
-        Marca que o cliente viu a apresentação. Idempotente.
-        Não faz nada se o briefing não tem intro.
-        """
         if not briefing.has_intro():
             return briefing
         briefing.mark_intro_seen()
         return briefing
 
+    @staticmethod
+    @transaction.atomic
+    def mark_viewed(briefing: Briefing) -> Briefing:
+        briefing.mark_viewed()
+        return briefing
+
     # ==================================================================
-    # CUSTOM QUESTIONS + REFERÊNCIAS
+    # SNAPSHOTS — CUSTOM QUESTIONS
     # ==================================================================
 
     @staticmethod
     @transaction.atomic
     def freeze_custom_questions_into_snapshot(briefing: Briefing) -> bool:
+        """
+        Congela custom questions no bloco ORIGINAL.
+
+        Só roda enquanto o briefing não tem respostas. Depois disso,
+        o bloco original está fechado e custom questions vão para o
+        bloco complementar.
+        """
         if briefing.answers.exists():
             return False
 
@@ -8142,6 +8973,61 @@ class BriefingService:
             'structure_snapshot', 'has_custom_questions', 'updated_at',
         ])
         return True
+
+    @staticmethod
+    @transaction.atomic
+    def freeze_supplementary_questions_into_snapshot(briefing: Briefing) -> bool:
+        """
+        Reconstrói o bloco COMPLEMENTAR a partir das
+        BriefingQuestionInstance.
+
+        Roda em qualquer momento. NÃO toca em structure_snapshot.
+
+        Marca `frozen_in_supplementary_snapshot_at` em cada instância
+        que entrou no snapshot complementar.
+        """
+        custom_qs = list(
+            BriefingQuestionInstance.objects
+            .filter(briefing=briefing)
+            .order_by('section_ref', 'position', 'created_at')
+        )
+
+        sections_by_ref = {}
+        for inst in custom_qs:
+            sections_by_ref.setdefault(str(inst.section_ref), []).append(inst)
+
+        snapshot_sections = []
+        for section_ref, instances in sections_by_ref.items():
+            question_payloads = [inst.to_snapshot_dict() for inst in instances]
+            snapshot_sections.append({
+                'id': str(section_ref),
+                'title': 'Perguntas complementares',
+                'description': '',
+                'position': 0,
+                'questions': question_payloads,
+            })
+
+        new_snapshot = {
+            'snapshot_version': 1,
+            'sections': snapshot_sections,
+        }
+
+        changed = briefing.supplementary_snapshot != new_snapshot
+        if changed:
+            briefing.supplementary_snapshot = new_snapshot
+            briefing.save(update_fields=[
+                'supplementary_snapshot', 'updated_at',
+            ])
+
+        now = timezone.now()
+        for inst in custom_qs:
+            if inst.frozen_in_supplementary_snapshot_at is None:
+                inst.frozen_in_supplementary_snapshot_at = now
+                inst.save(update_fields=[
+                    'frozen_in_supplementary_snapshot_at', 'updated_at',
+                ])
+
+        return changed
 
     @staticmethod
     @transaction.atomic
@@ -8216,7 +9102,55 @@ class BriefingService:
 
     @staticmethod
     def compute_progress(briefing: Briefing) -> dict:
-        questions = briefing.snapshot_questions()
+        """
+        Progresso em três blocos + campos planos por compatibilidade.
+
+        Os campos planos no topo (`total_required`, `answered`, etc.)
+        refletem o BLOCO ORIGINAL e são mantidos para não quebrar
+        consumidores existentes (export_service, BriefingListSerializer,
+        BriefingDetailSerializer, PortalBriefingSerializer).
+
+        Os blocos `original`, `supplementary` e `overall` são novos e
+        coexistem com os planos.
+        """
+        original = BriefingService._compute_progress_block(
+            briefing=briefing,
+            questions=briefing.snapshot_questions(),
+        )
+        supplementary = BriefingService._compute_progress_block(
+            briefing=briefing,
+            questions=briefing.supplementary_questions(),
+        )
+
+        overall_complete = (
+            original['percent'] >= 100.0
+            and supplementary.get('never_answered', 0) == 0
+            and supplementary.get('pending_review', 0) == 0
+        )
+
+        return {
+            'total_required': original['total_required'],
+            'answered': original['answered'],
+            'pending_review': original['pending_review'],
+            'never_answered': original['never_answered'],
+            'percent': original['percent'],
+            'needs_attention': (
+                original['needs_attention']
+                or supplementary['needs_attention']
+            ),
+            'original': original,
+            'supplementary': supplementary,
+            'overall': {
+                'is_fully_complete': overall_complete,
+                'has_supplementary_pending': (
+                    supplementary['never_answered'] > 0
+                    or supplementary['pending_review'] > 0
+                ),
+            },
+        }
+
+    @staticmethod
+    def _compute_progress_block(*, briefing, questions) -> dict:
         required_ids = [
             str(q['id']) for q in questions if q.get('is_required')
         ]
@@ -8303,13 +9237,24 @@ class BriefingService:
         if briefing.status == Briefing.STATUS_CANCELLED:
             raise BriefingClosedError('O briefing foi cancelado.')
 
-        if briefing.status == Briefing.STATUS_COMPLETED:
+        # Se está `completed` no bloco original, só aceita resposta
+        # se a pergunta alvo estiver no bloco COMPLEMENTAR.
+        target_in_supplementary = briefing.supplementary_question_by_id(
+            question_id,
+        ) is not None
+
+        if briefing.status == Briefing.STATUS_COMPLETED and not target_in_supplementary:
             raise BriefingError('O briefing já foi concluído.')
 
         BriefingService.freeze_custom_questions_into_snapshot(briefing)
+        BriefingService.freeze_supplementary_questions_into_snapshot(briefing)
         BriefingService.sync_snapshot_references(briefing)
         briefing.refresh_from_db(
-            fields=['structure_snapshot', 'has_custom_questions'],
+            fields=[
+                'structure_snapshot',
+                'supplementary_snapshot',
+                'has_custom_questions',
+            ],
         )
 
         next_question = BriefingService.get_next_eligible_question(briefing)
@@ -8359,6 +9304,7 @@ class BriefingService:
                 str(d.id) for d in (attachment_documents or [])
             ],
             'is_custom': bool(next_question.get('is_custom')),
+            'is_supplementary': bool(target_in_supplementary),
         }
 
         event = BriefingEventService.log(
@@ -8393,35 +9339,46 @@ class BriefingService:
 
         logger.info(
             'Answer saved | briefing=%s | q=%s | state=%s | '
-            'has_text=%s | has_audio=%s | attachments=%d',
+            'has_text=%s | has_audio=%s | attachments=%d | supplementary=%s',
             briefing.id, next_question['id'], answer.state,
             bool(content_text_clean), bool(audio_document),
             len(attachment_documents or []),
+            target_in_supplementary,
         )
 
         if attachment_documents:
             answer.attachments.set(attachment_documents)
 
-        if BriefingService._all_required_answered(briefing):
-            briefing.status = Briefing.STATUS_COMPLETED
-            briefing.completed_at = timezone.now()
-            briefing.save(update_fields=[
-                'status', 'completed_at', 'updated_at',
-            ])
-            BriefingEventService.log(
-                briefing=briefing,
-                kind=BriefingEvent.KIND_COMPLETED,
-                portal_session=portal_session,
-                content={'auto': True},
-            )
-
-            from django.db import transaction as _tx
-            _briefing_id = briefing.id
-            _tx.on_commit(
-                lambda: BriefingService._schedule_completion_notification(
-                    _briefing_id,
+        if target_in_supplementary:
+            if BriefingService._all_supplementary_required_answered(briefing):
+                briefing.mark_supplementary_completed()
+                BriefingEventService.log(
+                    briefing=briefing,
+                    kind=BriefingEvent.KIND_SUPPLEMENTARY_COMPLETED,
+                    portal_session=portal_session,
+                    content={'auto': True},
                 )
-            )
+        else:
+            if BriefingService._all_required_answered(briefing):
+                briefing.status = Briefing.STATUS_COMPLETED
+                briefing.completed_at = timezone.now()
+                briefing.save(update_fields=[
+                    'status', 'completed_at', 'updated_at',
+                ])
+                BriefingEventService.log(
+                    briefing=briefing,
+                    kind=BriefingEvent.KIND_COMPLETED,
+                    portal_session=portal_session,
+                    content={'auto': True},
+                )
+
+                from django.db import transaction as _tx
+                _briefing_id = briefing.id
+                _tx.on_commit(
+                    lambda: BriefingService._schedule_completion_notification(
+                        _briefing_id,
+                    )
+                )
 
         if audio_document is not None:
             try:
@@ -8442,13 +9399,13 @@ class BriefingService:
 
     @staticmethod
     def get_next_eligible_question(briefing: Briefing) -> Optional[dict]:
-        questions = briefing.snapshot_questions()
         answers = {
             str(a.question_id): a
             for a in BriefingAnswer.objects.filter(briefing=briefing)
         }
 
-        for q in questions:
+        # 1. Bloco original
+        for q in briefing.snapshot_questions():
             if not q.get('is_required'):
                 continue
             answer = answers.get(str(q['id']))
@@ -8460,11 +9417,43 @@ class BriefingService:
                 BriefingAnswer.STATE_PENDING_CLARIFICATION,
             ):
                 return q
+
+        # 2. Bloco complementar
+        for q in briefing.supplementary_questions():
+            if not q.get('is_required'):
+                continue
+            answer = answers.get(str(q['id']))
+            if answer is None:
+                return q
+            if answer.state in (
+                BriefingAnswer.STATE_PENDING,
+                BriefingAnswer.STATE_REVIEW_REQUESTED,
+                BriefingAnswer.STATE_PENDING_CLARIFICATION,
+            ):
+                return q
+
         return None
 
     @staticmethod
     def _all_required_answered(briefing: Briefing) -> bool:
         questions = briefing.snapshot_questions()
+        required_ids = {
+            str(q['id']) for q in questions if q.get('is_required')
+        }
+        if not required_ids:
+            return True
+        answered_ids = set(
+            str(a.question_id)
+            for a in BriefingAnswer.objects.filter(
+                briefing=briefing,
+                state=BriefingAnswer.STATE_ANSWERED,
+            )
+        )
+        return required_ids.issubset(answered_ids)
+
+    @staticmethod
+    def _all_supplementary_required_answered(briefing: Briefing) -> bool:
+        questions = briefing.supplementary_questions()
         required_ids = {
             str(q['id']) for q in questions if q.get('is_required')
         }
@@ -8694,7 +9683,7 @@ class BriefingService:
             )
 
 ================================================================================
-ARQUIVO 48 DE 75
+ARQUIVO 50 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\services
 ARQUIVO: event_service.py
@@ -8806,7 +9795,7 @@ class BriefingEventService:
         )
 
 ================================================================================
-ARQUIVO 49 DE 75
+ARQUIVO 51 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\services
 ARQUIVO: export_service.py
@@ -9179,13 +10168,13 @@ class BriefingExportService:
         }
 
 ================================================================================
-ARQUIVO 50 DE 75
+ARQUIVO 52 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\services
 ARQUIVO: note_service.py
-TAMANHO: 4,38 KB
+TAMANHO: 6,02 KB
 EXTENSAO: .py
-LINHAS: 147
+LINHAS: 203
 ================================================================================
 
 """
@@ -9201,6 +10190,11 @@ a evolução do conhecimento do cliente sobre o briefing.
 Esses eventos NUNCA são expostos ao portal. O portal serializer
 (`PortalBriefingSerializer`) filtra apenas respostas/perguntas e
 não consulta `BriefingNote`.
+
+PIN
+---
+`is_pinned` é organização, não conteúdo. Não emite evento de
+`note.updated` — apenas atualiza `updated_at` e a ordenação.
 """
 
 import logging
@@ -9227,6 +10221,7 @@ class BriefingNoteService:
         author,
         content: str,
         question_id=None,
+        is_pinned: bool = False,
     ) -> BriefingNote:
         content = (content or '').strip()
         if not content:
@@ -9244,6 +10239,7 @@ class BriefingNoteService:
             question_id=question_id,
             author=author,
             content=content,
+            is_pinned=bool(is_pinned),
         )
 
         BriefingEventService.log(
@@ -9261,28 +10257,77 @@ class BriefingNoteService:
     @staticmethod
     @transaction.atomic
     def update_note(
-        *, note: BriefingNote, author, content: str,
+        *,
+        note: BriefingNote,
+        author,
+        content: str = None,
+        is_pinned: bool = None,
     ) -> BriefingNote:
-        content = (content or '').strip()
-        if not content:
-            raise BriefingError('A anotação não pode ser vazia.')
+        """
+        Atualiza `content` e/ou `is_pinned`.
 
-        previous_length = len(note.content or '')
-        note.content = content
-        note.author = author
-        note.save(update_fields=['content', 'author', 'updated_at'])
+        Emite `note.updated` SOMENTE se `content` mudou. Fixar/desafixar
+        não emite evento de conteúdo.
+        """
+        fields = []
+        previous_length = None
+        new_length = None
+        content_changed = False
 
-        BriefingEventService.log(
-            briefing=note.briefing,
-            kind=BriefingEvent.KIND_NOTE_UPDATED,
-            user=author,
-            question_id=note.question_id,
-            content={
-                'note_id': str(note.id),
-                'previous_content_length': previous_length,
-                'new_content_length': len(content),
-            },
-        )
+        if content is not None:
+            content = (content or '').strip()
+            if not content:
+                raise BriefingError('A anotação não pode ser vazia.')
+            if content != (note.content or ''):
+                previous_length = len(note.content or '')
+                new_length = len(content)
+                note.content = content
+                note.author = author
+                fields.extend(['content', 'author'])
+                content_changed = True
+
+        if is_pinned is not None:
+            is_pinned = bool(is_pinned)
+            if is_pinned != note.is_pinned:
+                note.is_pinned = is_pinned
+                fields.append('is_pinned')
+
+        if not fields:
+            return note
+
+        fields.append('updated_at')
+        note.save(update_fields=list(set(fields)))
+
+        if content_changed:
+            BriefingEventService.log(
+                briefing=note.briefing,
+                kind=BriefingEvent.KIND_NOTE_UPDATED,
+                user=author,
+                question_id=note.question_id,
+                content={
+                    'note_id': str(note.id),
+                    'previous_content_length': previous_length,
+                    'new_content_length': new_length,
+                },
+            )
+
+        return note
+
+    @staticmethod
+    @transaction.atomic
+    def set_pinned(
+        *,
+        note: BriefingNote,
+        is_pinned: bool,
+    ) -> BriefingNote:
+        """
+        Fixa/desafixa uma nota. Idempotente.
+        """
+        is_pinned = bool(is_pinned)
+        if note.is_pinned == is_pinned:
+            return note
+        note.is_pinned = is_pinned
+        note.save(update_fields=['is_pinned', 'updated_at'])
         return note
 
     @staticmethod
@@ -9324,7 +10369,7 @@ class BriefingNoteService:
             BriefingNote.objects
             .filter(briefing=briefing)
             .select_related('author')
-            .order_by('-created_at')
+            .order_by('-is_pinned', '-created_at')
         )
 
     @staticmethod
@@ -9333,40 +10378,58 @@ class BriefingNoteService:
             BriefingNote.objects
             .filter(briefing=briefing, question_id=question_id)
             .select_related('author')
-            .order_by('-created_at')
+            .order_by('-is_pinned', '-created_at')
         )
 
 ================================================================================
-ARQUIVO 51 DE 75
+ARQUIVO 53 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\services
 ARQUIVO: notification_service.py
-TAMANHO: 6,28 KB
+TAMANHO: 15,59 KB
 EXTENSAO: .py
-LINHAS: 185
+LINHAS: 470
 ================================================================================
 
 """
-NotificationService — envio automático de e-mail ao concluir briefing.
+NotificationService — envio de e-mails de conclusão e de
+complementares.
 
 REGRA ARQUITETURAL
 ------------------
-Duas garantias:
+Duas notificações distintas:
 
-1. IDEMPOTÊNCIA: o envio de conclusão é disparado uma e apenas
-   uma vez por briefing. Um `BriefingEvent` com
-   `kind='completion_email_sent'` marca que o envio já ocorreu.
-   Se a função rodar de novo, ela verifica e sai.
+1. Conclusão do bloco ORIGINAL (on_briefing_completed)
+   Idempotência: `BriefingEvent(kind='completion_email_sent')`.
+   Já existia antes.
 
-2. NÃO BLOQUEIA: o envio é agendado via `transaction.on_commit`,
-   nunca dentro da transação de conclusão do briefing. Se o
-   provedor de e-mail estiver fora, o briefing continua concluído.
+2. Perguntas complementares (on_supplementary_questions_added)
+   Disparado EXPLICITAMENTE pelo arquiteto via endpoint
+   `POST /api/briefings/{id}/notify-supplementary/`. Não é
+   automático ao adicionar pergunta.
 
-Falha de envio NÃO grava o evento de idempotência. Isso permite
-retentativa (manual ou por cron futuro).
+NOTIFICAÇÃO ≠ ENTREGA
+---------------------
+O botão do arquiteto só mostra sucesso quando o SMTP ACEITOU o
+envio (resultado `1` do EmailService). Não temos confirmação de
+entrega (bounce). Gravamos 3 estados:
+
+    requested   → antes do envio
+    accepted    → SMTP aceitou (resultado > 0)
+    failed      → exceção ou resultado 0
+
+NUNCA gravamos 'delivered'. Confirmação de entrega exigiria webhook
+de bounce, fora do escopo desta versão.
+
+WHATSAPP
+--------
+No-op com log explícito. Não existe integração WhatsApp configurada
+em `integrations`. Se um dia existir, o gancho está preparado.
 """
 
 import logging
+
+from django.db import transaction
 
 from apps.briefings.models import Briefing, BriefingEvent
 from apps.briefings.services.event_service import BriefingEventService
@@ -9376,23 +10439,15 @@ logger = logging.getLogger('briefings')
 
 class NotificationService:
 
-    KIND_MARKER = BriefingEvent.KIND_COMPLETION_EMAIL_SENT
+    KIND_COMPLETION = BriefingEvent.KIND_COMPLETION_EMAIL_SENT
+    KIND_SUPPLEMENTARY = BriefingEvent.KIND_SUPPLEMENTARY_NOTIFICATION_SENT
 
     # ==================================================================
-    # API
+    # CONCLUSÃO DO BLOCO ORIGINAL
     # ==================================================================
 
     @staticmethod
     def on_briefing_completed(briefing_id) -> bool:
-        """
-        Chamado quando um briefing vira `completed`.
-
-        Retorna `True` se um e-mail foi disparado nesta chamada,
-        `False` se já havia sido disparado antes ou se a situação
-        não permite (ex.: briefing não existe).
-
-        Nunca levanta.
-        """
         try:
             briefing = Briefing.objects.select_related(
                 'client', 'workspace', 'template', 'created_by',
@@ -9411,7 +10466,9 @@ class NotificationService:
             )
             return False
 
-        if NotificationService._already_notified(briefing):
+        if NotificationService._already_notified(
+            briefing, NotificationService.KIND_COMPLETION,
+        ):
             logger.info(
                 'Briefing %s já teve e-mail de conclusão enviado, '
                 'ignorando', briefing_id,
@@ -9419,7 +10476,7 @@ class NotificationService:
             return False
 
         try:
-            NotificationService._send(briefing)
+            NotificationService._send_completion(briefing)
         except Exception:
             logger.exception(
                 'Falha ao enviar e-mail de conclusão '
@@ -9429,29 +10486,9 @@ class NotificationService:
             )
             return False
 
-        # Só marca como enviado após sucesso
-        NotificationService._mark_notified(briefing)
-        logger.info(
-            'E-mail de conclusão enviado (briefing=%s)', briefing_id,
-        )
-        return True
-
-    # ==================================================================
-    # INTERNO
-    # ==================================================================
-
-    @staticmethod
-    def _already_notified(briefing: Briefing) -> bool:
-        return BriefingEvent.objects.filter(
-            briefing=briefing,
-            kind=NotificationService.KIND_MARKER,
-        ).exists()
-
-    @staticmethod
-    def _mark_notified(briefing: Briefing) -> None:
         BriefingEventService.log(
             briefing=briefing,
-            kind=NotificationService.KIND_MARKER,
+            kind=NotificationService.KIND_COMPLETION,
             user=None,
             portal_session=None,
             content={
@@ -9460,9 +10497,226 @@ class NotificationService:
                 'client_email': briefing.client.email or None,
             },
         )
+        logger.info(
+            'E-mail de conclusão enviado (briefing=%s)', briefing_id,
+        )
+        return True
+
+    # ==================================================================
+    # COMPLEMENTARES — solicitação explícita do arquiteto
+    # ==================================================================
 
     @staticmethod
-    def _send(briefing: Briefing) -> None:
+    @transaction.atomic
+    def on_supplementary_questions_added(
+        briefing_id,
+        *,
+        actor=None,
+    ) -> dict:
+        """
+        Envia notificação ao cliente sobre perguntas complementares.
+
+        Retorna:
+            {
+                'sent': bool,
+                'to': str,
+                'event_id': str | None,
+                'status': 'requested' | 'accepted' | 'failed',
+                'error_message': str | None,
+            }
+
+        `status`:
+            requested  → event registrado, envio em curso
+            accepted   → SMTP aceitou
+            failed     → SMTP recusou (exceção ou retorno 0)
+
+        Nunca retorna 'delivered' — não temos confirmação de entrega.
+        """
+        try:
+            briefing = Briefing.objects.select_related(
+                'client', 'workspace', 'created_by',
+            ).get(id=briefing_id)
+        except Briefing.DoesNotExist:
+            logger.warning(
+                'Briefing %s não existe em '
+                'on_supplementary_questions_added',
+                briefing_id,
+            )
+            return {
+                'sent': False,
+                'to': '',
+                'event_id': None,
+                'status': 'failed',
+                'error_message': 'Briefing não encontrado.',
+            }
+
+        questions = briefing.supplementary_questions()
+        if not questions:
+            return {
+                'sent': False,
+                'to': '',
+                'event_id': None,
+                'status': 'failed',
+                'error_message': (
+                    'Este briefing não tem perguntas complementares.'
+                ),
+            }
+
+        target_email = (briefing.client.email or '').strip()
+        if not target_email:
+            return {
+                'sent': False,
+                'to': '',
+                'event_id': None,
+                'status': 'failed',
+                'error_message': 'Cliente sem e-mail cadastrado.',
+            }
+
+        active_instance_ids = set()
+        for q in questions:
+            qid = str(q.get('id') or '')
+            if qid:
+                active_instance_ids.add(qid)
+
+        already_sent = NotificationService._supplementary_already_sent(
+            briefing, active_instance_ids,
+        )
+        if already_sent:
+            logger.info(
+                'Briefing %s já teve complementares notificadas para o '
+                'batch atual. Ignorando.', briefing_id,
+            )
+            return {
+                'sent': False,
+                'to': target_email,
+                'event_id': None,
+                'status': 'accepted',
+                'error_message': None,
+            }
+
+        requested_event = BriefingEventService.log(
+            briefing=briefing,
+            kind=NotificationService.KIND_SUPPLEMENTARY,
+            user=actor if (
+                actor and getattr(actor, 'is_authenticated', False)
+            ) else None,
+            content={
+                'status': 'requested',
+                'instance_ids': sorted(active_instance_ids),
+                'to': target_email,
+            },
+        )
+
+        whatsapp_sent, whatsapp_reason = (
+            NotificationService._send_whatsapp_if_available(briefing)
+        )
+
+        try:
+            NotificationService._send_supplementary_email(
+                briefing, questions, target_email,
+            )
+        except Exception as exc:
+            logger.exception(
+                'Falha ao enviar e-mail de complementares '
+                '(briefing=%s)', briefing_id,
+            )
+            BriefingEventService.log(
+                briefing=briefing,
+                kind=NotificationService.KIND_SUPPLEMENTARY,
+                user=None,
+                content={
+                    'status': 'failed',
+                    'instance_ids': sorted(active_instance_ids),
+                    'to': target_email,
+                    'error_message': str(exc)[:1000],
+                    'whatsapp_status': (
+                        'sent' if whatsapp_sent else 'skipped'
+                    ),
+                    'whatsapp_reason': whatsapp_reason,
+                },
+            )
+            return {
+                'sent': False,
+                'to': target_email,
+                'event_id': str(requested_event.id),
+                'status': 'failed',
+                'error_message': str(exc),
+            }
+
+        BriefingEventService.log(
+            briefing=briefing,
+            kind=NotificationService.KIND_SUPPLEMENTARY,
+            user=None,
+            content={
+                'status': 'accepted',
+                'instance_ids': sorted(active_instance_ids),
+                'to': target_email,
+                'whatsapp_status': (
+                    'sent' if whatsapp_sent else 'skipped'
+                ),
+                'whatsapp_reason': whatsapp_reason,
+            },
+        )
+
+        logger.info(
+            'E-mail de complementares enviado (briefing=%s, to=%s)',
+            briefing_id, target_email,
+        )
+
+        return {
+            'sent': True,
+            'to': target_email,
+            'event_id': str(requested_event.id),
+            'status': 'accepted',
+            'error_message': None,
+        }
+
+    # ==================================================================
+    # INTERNO
+    # ==================================================================
+
+    @staticmethod
+    def _already_notified(briefing: Briefing, kind: str) -> bool:
+        return BriefingEvent.objects.filter(
+            briefing=briefing, kind=kind,
+        ).exists()
+
+    @staticmethod
+    def _supplementary_already_sent(
+        briefing: Briefing,
+        active_instance_ids: set,
+    ) -> bool:
+        """
+        Verifica se o batch atual (instance_ids ativos) já recebeu
+        notificação bem-sucedida (status='accepted').
+
+        A notificação é considerada "já enviada" quando existe um
+        evento `supplementary_notification_sent` com `status='accepted'`
+        cujos `instance_ids` são exatamente os mesmos do batch atual.
+
+        Se o batch mudou (pergunta adicionada/removida), a notificação
+        anterior não cobre o novo estado e o arquiteto pode reenviar.
+        """
+        if not active_instance_ids:
+            return False
+
+        events = BriefingEvent.objects.filter(
+            briefing=briefing,
+            kind=NotificationService.KIND_SUPPLEMENTARY,
+        ).order_by('-created_at')
+
+        for event in events:
+            content = event.content or {}
+            if content.get('status') != 'accepted':
+                continue
+            sent_ids = set(content.get('instance_ids') or [])
+            if sent_ids == active_instance_ids:
+                return True
+
+        return False
+
+    @staticmethod
+    def _send_completion(briefing: Briefing) -> None:
         from apps.accounts.services.email import EmailService
 
         architect_email = (
@@ -9470,8 +10724,6 @@ class NotificationService:
             if briefing.created_by else None
         )
 
-        # Gera PDF do cliente (sem notas internas).
-        # O `render_pdf` usa o template default `portal/briefing_raw_client_pdf.html`.
         client_pdf_bytes = None
         client_pdf_filename = None
         try:
@@ -9502,7 +10754,6 @@ class NotificationService:
                 client_pdf_filename=client_pdf_filename,
             )
         else:
-            # Sem e-mail do arquiteto: ainda envia para o cliente
             if briefing.client.email:
                 from django.conf import settings
                 site_name = getattr(settings, 'SITE_NAME', 'Clivo')
@@ -9520,10 +10771,79 @@ class NotificationService:
                 )
 
     @staticmethod
+    def _send_supplementary_email(
+        briefing: Briefing,
+        questions: list,
+        target_email: str,
+    ) -> None:
+        from apps.accounts.services.email import EmailService
+        from django.conf import settings
+
+        site_name = getattr(settings, 'SITE_NAME', 'Clivo')
+        portal_url = NotificationService._supplementary_portal_url(briefing)
+
+        count = len(questions)
+        plural = 'perguntas' if count > 1 else 'pergunta'
+
+        subject = (
+            f'Novas {plural} no seu briefing — {briefing.title}'
+        )
+
+        lines = [
+            f'Olá, {briefing.client.name}!',
+            '',
+            f'O arquiteto adicionou {count} {plural} complementar(es) '
+            f'ao briefing "{briefing.title}".',
+            '',
+            'Para ver e responder, acesse:',
+            portal_url,
+            '',
+            f'— {site_name}',
+        ]
+
+        EmailService.send(
+            to=target_email,
+            subject=subject,
+            text='\n'.join(lines),
+        )
+
+    @staticmethod
+    def _send_whatsapp_if_available(briefing: Briefing):
+        """
+        Gancho para envio via WhatsApp.
+
+        Hoje: no-op com log explícito. Não existe integração WhatsApp
+        configurada em `integrations`. Não simulamos envio.
+
+        Retorna (sent: bool, reason: str).
+        """
+        try:
+            from apps.integrations.models import WorkspaceIntegration
+            has_whatsapp = WorkspaceIntegration.objects.filter(
+                workspace=briefing.workspace,
+                provider__key='whatsapp',
+                status=WorkspaceIntegration.STATUS_ACTIVE,
+            ).exists()
+        except Exception:
+            logger.exception(
+                'Falha ao verificar integração WhatsApp (briefing=%s)',
+                briefing.id,
+            )
+            return (False, 'whatsapp_check_error')
+
+        if not has_whatsapp:
+            return (False, 'no_whatsapp_provider_configured')
+
+        logger.warning(
+            'Integração WhatsApp existe para workspace=%s, mas o '
+            'adaptador de envio não está implementado nesta versão. '
+            'Nenhuma mensagem foi enviada.',
+            briefing.workspace_id,
+        )
+        return (False, 'whatsapp_adapter_not_implemented')
+
+    @staticmethod
     def _portal_url(briefing: Briefing) -> str:
-        """
-        Link autenticado do portal do cliente para este briefing.
-        """
         from django.conf import settings
         frontend_url = getattr(
             settings, 'FRONTEND_URL', ''
@@ -9532,43 +10852,65 @@ class NotificationService:
             return ''
         return f'{frontend_url}/'
 
+    @staticmethod
+    def _supplementary_portal_url(briefing: Briefing) -> str:
+        from django.conf import settings
+        frontend_url = getattr(
+            settings, 'FRONTEND_URL', ''
+        ).rstrip('/')
+        if not frontend_url:
+            return ''
+        return f'{frontend_url}/portal/briefings/{briefing.id}/'
+
 ================================================================================
-ARQUIVO 52 DE 75
+ARQUIVO 54 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\services
 ARQUIVO: question_instance_service.py
-TAMANHO: 8,96 KB
+TAMANHO: 11,41 KB
 EXTENSAO: .py
-LINHAS: 266
+LINHAS: 342
 ================================================================================
 
 """
-BriefingQuestionInstanceService — CRUD de perguntas exclusivas.
+BriefingQuestionInstanceService — CRUD de perguntas complementares.
 
 REGRA ARQUITETURAL
 ------------------
-Perguntas exclusivas só podem ser adicionadas/removidas enquanto o
-briefing NÃO tem nenhuma resposta (`is_snapshot_locked()` retorna
-False).
+Perguntas complementares vão SEMPRE para o `supplementary_snapshot`,
+nunca reescrevem o `structure_snapshot` original.
 
-Quando a primeira resposta chega, o snapshot do briefing já
-incorporou as custom questions — e a partir daí qualquer alteração
-invalidaria a estrutura que o cliente está vendo.
+Podem ser adicionadas em qualquer momento — inclusive quando o
+briefing já tem respostas ou está `completed`. NÃO são bloqueadas
+por `is_snapshot_locked()`.
+
+Exceção: briefings `cancelled` NÃO aceitam perguntas complementares.
+
+REMOÇÃO
+-------
+Remoção é DELETE real. Sem soft delete.
+
+Perguntas JÁ RESPONDIDAS não podem ser removidas. Regra de negócio:
+o arquiteto deve adicionar uma nova pergunta complementar para
+corrigir, e a resposta antiga permanece no histórico.
+
+Perguntas NÃO respondidas podem ser removidas. O evento
+`custom_question_removed` guarda o snapshot completo da pergunta
+removida no `content`, preservando o histórico.
 """
 
 import logging
 
 from django.db import transaction
-from django.utils import timezone
 
 from apps.briefings.models import (
     Briefing,
+    BriefingAnswer,
+    BriefingEvent,
     BriefingQuestionInstance,
 )
-from apps.briefings.exceptions import (
-    BriefingError,
-    BriefingNotFoundError,
-)
+from apps.briefings.exceptions import BriefingError
+from apps.briefings.services.event_service import BriefingEventService
 
 logger = logging.getLogger('briefings')
 
@@ -9576,30 +10918,38 @@ logger = logging.getLogger('briefings')
 class BriefingQuestionInstanceService:
 
     @staticmethod
-    def _assert_briefing_editable(briefing: Briefing) -> None:
+    def _assert_briefing_accepts_supplementary(briefing: Briefing) -> None:
         """
-        Levanta BriefingError se o briefing não aceita mais edições
-        estruturais.
+        Levanta BriefingError se o briefing não aceita perguntas
+        complementares no estado atual.
+
+        Permitido em: in_progress, paused, completed.
+        Bloqueado em: cancelled.
         """
-        if briefing.status == Briefing.STATUS_COMPLETED:
+        if briefing.status == Briefing.STATUS_CANCELLED:
             raise BriefingError(
-                'Este briefing já foi concluído. Não é possível '
-                'adicionar ou remover perguntas.'
+                'Este briefing foi cancelado. Não é possível adicionar '
+                'ou remover perguntas complementares.'
             )
-        if briefing.status == Briefing.STATUS_CLOSED:
+
+    @staticmethod
+    def _assert_instance_not_answered(
+        briefing: Briefing,
+        instance_id,
+    ) -> None:
+        """
+        Levanta BriefingError se a pergunta já foi respondida.
+        Perguntas respondidas não podem ser editadas nem removidas.
+        """
+        exists = BriefingAnswer.objects.filter(
+            briefing=briefing,
+            question_id=instance_id,
+        ).exists()
+        if exists:
             raise BriefingError(
-                'Este briefing foi encerrado. Não é possível '
-                'adicionar ou remover perguntas.'
-            )
-        if briefing.status == Briefing.STATUS_EXPIRED:
-            raise BriefingError(
-                'Este briefing expirou. Não é possível '
-                'adicionar ou remover perguntas.'
-            )
-        if briefing.is_snapshot_locked():
-            raise BriefingError(
-                'O cliente já começou a responder. Não é possível '
-                'alterar a estrutura agora.'
+                'Esta pergunta já foi respondida e não pode ser '
+                'alterada. Para corrigir, adicione uma nova pergunta '
+                'complementar.'
             )
 
     # ------------------------------------------------------------------
@@ -9640,7 +10990,9 @@ class BriefingQuestionInstanceService:
         is_required: bool = True,
         actor=None,
     ) -> BriefingQuestionInstance:
-        BriefingQuestionInstanceService._assert_briefing_editable(briefing)
+        BriefingQuestionInstanceService._assert_briefing_accepts_supplementary(
+            briefing,
+        )
 
         text = (text or '').strip()
         if not text:
@@ -9650,18 +11002,21 @@ class BriefingQuestionInstanceService:
         if not section_ref:
             raise BriefingError('A seção é obrigatória.')
 
-        # Confirma que a seção existe no snapshot do briefing
-        snapshot = briefing.structure_snapshot or {}
-        section_ids = {
-            str(s.get('id')) for s in snapshot.get('sections', [])
-        }
-        if section_ref not in section_ids:
+        section_exists = False
+        for s in (briefing.structure_snapshot or {}).get('sections', []):
+            if str(s.get('id')) == section_ref:
+                section_exists = True
+                break
+        if not section_exists:
+            for s in (briefing.supplementary_snapshot or {}).get('sections', []):
+                if str(s.get('id')) == section_ref:
+                    section_exists = True
+                    break
+        if not section_exists:
             raise BriefingError(
                 'A seção informada não pertence a este briefing.'
             )
 
-        # Próxima posição (respeitando o que já existe no snapshot
-        # daquela seção E as custom questions já adicionadas)
         last_position = BriefingQuestionInstanceService._next_position(
             briefing=briefing,
             section_ref=section_ref,
@@ -9684,19 +11039,38 @@ class BriefingQuestionInstanceService:
             created_by=actor,
         )
 
-        # Marca o briefing como personalizado
+        from apps.briefings.services.briefing_service import BriefingService
+        BriefingService.freeze_supplementary_questions_into_snapshot(briefing)
+
+        BriefingEventService.log(
+            briefing=briefing,
+            kind=BriefingEvent.KIND_CUSTOM_QUESTION_ADDED,
+            user=actor,
+            question_id=instance.id,
+            content={
+                'instance_id': str(instance.id),
+                'section_ref': section_ref,
+                'text': text,
+                'is_required': bool(is_required),
+                'question_type': instance.question_type,
+            },
+        )
+
         if not briefing.has_custom_questions:
             briefing.has_custom_questions = True
-            briefing.save(update_fields=['has_custom_questions', 'updated_at'])
+            briefing.save(update_fields=[
+                'has_custom_questions', 'updated_at',
+            ])
+
+        logger.info(
+            'Pergunta complementar adicionada | briefing=%s | instance=%s',
+            briefing.id, instance.id,
+        )
 
         return instance
 
     @staticmethod
     def _next_position(*, briefing: Briefing, section_ref: str) -> int:
-        """
-        Retorna a próxima posição livre na seção, considerando tanto
-        as perguntas do snapshot quanto as custom questions já criadas.
-        """
         snapshot_positions = []
         for s in (briefing.structure_snapshot or {}).get('sections', []):
             if str(s.get('id')) != section_ref:
@@ -9730,8 +11104,11 @@ class BriefingQuestionInstanceService:
         is_required: bool = None,
         actor=None,
     ) -> BriefingQuestionInstance:
-        BriefingQuestionInstanceService._assert_briefing_editable(
+        BriefingQuestionInstanceService._assert_briefing_accepts_supplementary(
             instance.briefing,
+        )
+        BriefingQuestionInstanceService._assert_instance_not_answered(
+            instance.briefing, instance.id,
         )
 
         fields = []
@@ -9766,6 +11143,11 @@ class BriefingQuestionInstanceService:
         if fields:
             instance.save(update_fields=fields + ['updated_at'])
 
+            from apps.briefings.services.briefing_service import BriefingService
+            BriefingService.freeze_supplementary_questions_into_snapshot(
+                instance.briefing,
+            )
+
         return instance
 
     # ------------------------------------------------------------------
@@ -9779,19 +11161,43 @@ class BriefingQuestionInstanceService:
         instance: BriefingQuestionInstance,
         actor=None,
     ) -> None:
-        BriefingQuestionInstanceService._assert_briefing_editable(
+        BriefingQuestionInstanceService._assert_briefing_accepts_supplementary(
             instance.briefing,
         )
+        BriefingQuestionInstanceService._assert_instance_not_answered(
+            instance.briefing, instance.id,
+        )
+
+        briefing = instance.briefing
+        instance_id = instance.id
+        payload = instance.to_removal_event_payload()
+
         instance.delete()
 
-        # Se não sobrou nenhuma, limpa a flag
+        from apps.briefings.services.briefing_service import BriefingService
+        BriefingService.freeze_supplementary_questions_into_snapshot(briefing)
+
+        BriefingEventService.log(
+            briefing=briefing,
+            kind=BriefingEvent.KIND_CUSTOM_QUESTION_REMOVED,
+            user=actor,
+            question_id=instance_id,
+            content=payload,
+        )
+
         remaining = BriefingQuestionInstance.objects.filter(
-            briefing=instance.briefing,
+            briefing=briefing,
         ).exists()
         if not remaining:
-            b = instance.briefing
-            b.has_custom_questions = False
-            b.save(update_fields=['has_custom_questions', 'updated_at'])
+            briefing.has_custom_questions = False
+            briefing.save(update_fields=[
+                'has_custom_questions', 'updated_at',
+            ])
+
+        logger.info(
+            'Pergunta complementar removida | briefing=%s | instance=%s',
+            briefing.id, instance_id,
+        )
 
     # ------------------------------------------------------------------
     # HELPERS
@@ -9806,11 +11212,11 @@ class BriefingQuestionInstanceService:
         except (ValueError, TypeError):
             instance = None
         if instance is None:
-            raise BriefingError('Pergunta exclusiva não encontrada.')
+            raise BriefingError('Pergunta complementar não encontrada.')
         return instance
 
 ================================================================================
-ARQUIVO 53 DE 75
+ARQUIVO 55 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\services
 ARQUIVO: send_service.py
@@ -9988,7 +11394,7 @@ class BriefingSendService:
         }
 
 ================================================================================
-ARQUIVO 54 DE 75
+ARQUIVO 56 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\services
 ARQUIVO: tasks.py
@@ -10035,7 +11441,7 @@ else:
         raise RuntimeError('Celery não instalado.')
 
 ================================================================================
-ARQUIVO 55 DE 75
+ARQUIVO 57 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\services
 ARQUIVO: template_service.py
@@ -10761,7 +12167,7 @@ class BriefingTemplateService:
             question.reference_documents.set(docs)
 
 ================================================================================
-ARQUIVO 56 DE 75
+ARQUIVO 58 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\services
 ARQUIVO: template_version_service.py
@@ -11783,7 +13189,7 @@ class BriefingTemplateVersionService:
         }
 
 ================================================================================
-ARQUIVO 57 DE 75
+ARQUIVO 59 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\services
 ARQUIVO: transcription_service.py
@@ -11982,13 +13388,13 @@ class TranscriptionService:
             )
 
 ================================================================================
-ARQUIVO 58 DE 75
+ARQUIVO 60 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings
 ARQUIVO: signals.py
-TAMANHO: 6,17 KB
+TAMANHO: 8,68 KB
 EXTENSAO: .py
-LINHAS: 166
+LINHAS: 224
 ================================================================================
 
 """
@@ -12008,6 +13414,29 @@ via `transaction.on_commit`. Isso garante que:
 `occurrence_id` = `BriefingEvent.id`. É estável, único e imutável.
 Não usar `created_at` (pode colidir em testes rápidos).
 
+CAPTURA IMUTÁVEL ANTES DO COMMIT
+--------------------------------
+O `on_commit` roda DEPOIS que a transação fecha. Se o `BriefingEvent`
+foi criado e o `Briefing` foi apagado em seguida (CASCADE), o objeto
+`event` ainda existe em memória, mas `event.briefing` levanta
+`RelatedObjectDoesNotExist` — o briefing já não existe no banco.
+
+Por isso, capturamos `workspace_id`, `client_id`, `briefing_id` e
+`source_kind` ANTES de registrar o `on_commit`. O callback usa
+apenas esses valores imutáveis, nunca acessa `event.briefing`.
+
+EVENTO DE CONCLUSÃO
+-------------------
+`KIND_COMPLETED` está em `_KINDS_INGESTED`. Quando o cliente
+responde a última pergunta obrigatória, o briefing vira `completed`
+e um segundo job é agendado com `data_version` novo — garantindo
+que a análise final reflita o estado `completed` (não apenas o
+estado `in_progress` capturado no `KIND_ANSWERED` anterior).
+
+O `intelligence` não tem `SOURCE_KIND_BRIEFING_COMPLETED`; mapeamos
+para `SOURCE_KIND_BRIEFING_ANSWER` — semanticamente, é uma resposta
+que concluiu o briefing. Não inventamos um kind novo.
+
 EXCLUSÃO DE BRIEFING
 --------------------
 Quando um `Briefing` é excluído, publicamos um evento de invalidação
@@ -12017,8 +13446,7 @@ via `pre_delete`, para que o `intelligence` possa:
 
 O evento usa `source_kind='client.updated'` porque o `Intelligence`
 não tem um kind `briefing.deleted` — e o efeito prático (reprocessar
-o conhecimento do cliente) é o mesmo. Não inventamos um kind novo
-em `InsightEvent` por causa desta feature.
+o conhecimento do cliente) é o mesmo.
 """
 
 import logging
@@ -12036,6 +13464,10 @@ logger = logging.getLogger('briefings')
 # Fatos que alimentam o conhecimento do cliente. Excluímos eventos
 # operacionais (pause, resume, completion_email_sent) porque eles
 # não mudam o conteúdo analisável.
+#
+# KIND_COMPLETED está incluído: dispara um segundo job após a
+# conclusão, garantindo que a análise final reflita o estado
+# `completed`.
 _KINDS_INGESTED = frozenset({
     BriefingEvent.KIND_ANSWERED,
     BriefingEvent.KIND_CLARIFICATION_REQUESTED,
@@ -12044,13 +13476,19 @@ _KINDS_INGESTED = frozenset({
     BriefingEvent.KIND_NOTE_CREATED,
     BriefingEvent.KIND_NOTE_UPDATED,
     BriefingEvent.KIND_NOTE_DELETED,
+    BriefingEvent.KIND_COMPLETED,
 })
 
 
-def _source_kind_for_event(event: BriefingEvent) -> str:
+def _source_kind_for_event_kind(kind: str) -> str:
     """
     Traduz o `kind` de `BriefingEvent` para o `source_kind` de
     `InsightEvent`. Mapeamento explícito, sem heurística.
+
+    Recebe a string `kind`, não o objeto `event` — o `on_commit`
+    pode rodar depois que o `BriefingEvent` foi CASCADE-apagado,
+    e acessar `event.kind` ainda funciona (está em memória), mas
+    é mais seguro passar apenas o valor imutável.
     """
     from apps.intelligence.models import InsightEvent
 
@@ -12062,7 +13500,10 @@ def _source_kind_for_event(event: BriefingEvent) -> str:
         BriefingEvent.KIND_NOTE_CREATED: InsightEvent.SOURCE_KIND_BRIEFING_NOTE_CREATED,
         BriefingEvent.KIND_NOTE_UPDATED: InsightEvent.SOURCE_KIND_BRIEFING_NOTE_UPDATED,
         BriefingEvent.KIND_NOTE_DELETED: InsightEvent.SOURCE_KIND_BRIEFING_NOTE_DELETED,
-    }[event.kind]
+        # Conclusão mapeada para answer: semanticamente, é uma
+        # resposta que concluiu o briefing. Não inventamos kind novo.
+        BriefingEvent.KIND_COMPLETED: InsightEvent.SOURCE_KIND_BRIEFING_ANSWER,
+    }[kind]
 
 
 @receiver(post_save, sender=BriefingEvent)
@@ -12076,6 +13517,12 @@ def publish_briefing_event_to_intelligence(
     transação de `briefings`. Se o processo cair entre commit e
     ingestão, o evento é perdido — aceitável, porque a resposta
     do cliente NÃO pode ser bloqueada pelo `intelligence`.
+
+    IMPORTANTE: os dados são capturados ANTES do `on_commit`. O
+    callback usa apenas valores imutáveis (`briefing_id`,
+    `workspace_id`, `client_id`, `source_kind`, `source_ref`,
+    `occurrence_id`). NUNCA acessa `event.briefing` — o briefing
+    pode ter sido CASCADE-apagado antes do callback rodar.
     """
     if not created:
         return
@@ -12087,31 +13534,45 @@ def publish_briefing_event_to_intelligence(
     if event.briefing_id is None:
         return
 
+    # Captura IMUTÁVEL antes do commit.
+    briefing_id = event.briefing_id
+    try:
+        briefing = event.briefing
+        if briefing is None:
+            return
+        workspace_id = briefing.workspace_id
+        client_id = briefing.client_id
+    except Exception:
+        # Briefing já foi apagado em CASCADE — não publica.
+        return
+
+    source_kind = _source_kind_for_event_kind(event.kind)
+    source_ref = (
+        str(event.question_id) if event.question_id
+        else str(event.content.get('note_id') or '')
+    )
+    occurrence_id = str(event.id)
+    # `event.created_at` é imutável — diferente de
+    # `briefing.updated_at`, que muda a cada save do briefing.
+    data_version = str(event.created_at.timestamp())
+
     def _ingest():
         try:
             from apps.intelligence.services import IngestService
-            from apps.intelligence.models import InsightEvent
-
-            briefing = event.briefing
-            if briefing is None:
-                return
 
             IngestService.ingest_change_event(
-                workspace_id=briefing.workspace_id,
-                client_id=briefing.client_id,
-                briefing_id=briefing.id,
-                source_kind=_source_kind_for_event(event),
-                source_ref=(
-                    str(event.question_id) if event.question_id
-                    else str(event.content.get('note_id') or '')
-                ),
-                occurrence_id=str(event.id),
-                data_version=str(briefing.updated_at.timestamp()),
+                workspace_id=workspace_id,
+                client_id=client_id,
+                briefing_id=briefing_id,
+                source_kind=source_kind,
+                source_ref=source_ref,
+                occurrence_id=occurrence_id,
+                data_version=data_version,
             )
         except Exception:
             logger.exception(
                 'Falha ao publicar BriefingEvent=%s para intelligence',
-                event.id,
+                occurrence_id,
             )
 
     transaction.on_commit(_ingest)
@@ -12128,6 +13589,9 @@ def publish_briefing_invalidation(sender, instance, **kwargs):
     `ingest_change_event` aceita `briefing_id` e, se o briefing
     não existir mais, o `JobService` cria um job de cliente (sem
     briefing) para reconciliar o conhecimento acumulado.
+
+    Captura os IDs antes do `on_commit` — o `instance` ainda existe
+    em memória, mas o registro do banco será apagado pelo CASCADE.
     """
     briefing_id = instance.id
     workspace_id = instance.workspace_id
@@ -12159,7 +13623,7 @@ def publish_briefing_invalidation(sender, instance, **kwargs):
     transaction.on_commit(_ingest)
 
 ================================================================================
-ARQUIVO 59 DE 75
+ARQUIVO 61 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\tests
 ARQUIVO: conftest.py
@@ -12480,7 +13944,7 @@ def outsider_client(api_client, user_outsider):
     return api_client
 
 ================================================================================
-ARQUIVO 60 DE 75
+ARQUIVO 62 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\tests
 ARQUIVO: test_audio_preservation.py
@@ -12587,7 +14051,7 @@ class TestAudioPreservation:
         assert audio.pk is not None
 
 ================================================================================
-ARQUIVO 61 DE 75
+ARQUIVO 63 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\tests
 ARQUIVO: test_briefing_deletion_invalidation.py
@@ -12737,7 +14201,7 @@ class TestBriefingDeletion:
         assert 'briefing.deleted' in kw['source_ref']
 
 ================================================================================
-ARQUIVO 62 DE 75
+ARQUIVO 64 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\tests
 ARQUIVO: test_concurrency.py
@@ -12934,7 +14398,7 @@ class TestConcurrencyReal(TransactionTestCase):
         )
 
 ================================================================================
-ARQUIVO 63 DE 75
+ARQUIVO 65 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\tests
 ARQUIVO: test_isolation.py
@@ -13054,7 +14518,7 @@ class TestNoteIsolation:
         assert 'notes' not in payload
 
 ================================================================================
-ARQUIVO 64 DE 75
+ARQUIVO 66 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\tests
 ARQUIVO: test_note_events_ingest.py
@@ -13218,7 +14682,7 @@ class TestNoteEvents:
         assert kw['briefing_id'] == briefing.id
 
 ================================================================================
-ARQUIVO 65 DE 75
+ARQUIVO 67 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\tests
 ARQUIVO: test_notes.py
@@ -13319,7 +14783,7 @@ class TestNotesApi:
         assert resp.status_code in (403, 404)
 
 ================================================================================
-ARQUIVO 66 DE 75
+ARQUIVO 68 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\tests
 ARQUIVO: test_notifications.py
@@ -13517,7 +14981,7 @@ class TestCompletionNotification:
         assert len(callbacks) >= 1
 
 ================================================================================
-ARQUIVO 67 DE 75
+ARQUIVO 69 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\tests
 ARQUIVO: test_public_contract.py
@@ -13711,7 +15175,7 @@ class TestGetBriefingIdsForClient:
         assert str(briefing_a.id) not in ids
 
 ================================================================================
-ARQUIVO 68 DE 75
+ARQUIVO 70 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\tests
 ARQUIVO: test_reopen.py
@@ -13848,7 +15312,7 @@ class TestReopen:
             )
 
 ================================================================================
-ARQUIVO 69 DE 75
+ARQUIVO 71 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\tests
 ARQUIVO: test_send_service.py
@@ -13989,7 +15453,7 @@ class TestSendService:
         assert result['sent'] is True
 
 ================================================================================
-ARQUIVO 70 DE 75
+ARQUIVO 72 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\tests
 ARQUIVO: test_sequence.py
@@ -14167,7 +15631,7 @@ class TestSequence:
             )
 
 ================================================================================
-ARQUIVO 71 DE 75
+ARQUIVO 73 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\tests
 ARQUIVO: test_template_events.py
@@ -14260,7 +15724,7 @@ class TestTemplateEvents:
         ).count() == 1
 
 ================================================================================
-ARQUIVO 72 DE 75
+ARQUIVO 74 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\tests
 ARQUIVO: test_template_versions_api.py
@@ -14505,7 +15969,7 @@ class TestVersionSemantics:
         assert version_v1.status == BriefingTemplateVersion.STATUS_PUBLISHED
 
 ================================================================================
-ARQUIVO 73 DE 75
+ARQUIVO 75 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings\tests
 ARQUIVO: test_versioning.py
@@ -15091,7 +16555,7 @@ class TestRestoreInto:
         assert event.content['questions_created'] == 3
 
 ================================================================================
-ARQUIVO 74 DE 75
+ARQUIVO 76 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings
 ARQUIVO: urls.py
@@ -15212,27 +16676,14 @@ urlpatterns = [
 ]
 
 ================================================================================
-ARQUIVO 75 DE 75
+ARQUIVO 77 DE 77
 ================================================================================
 PASTA: C:\clivo-v1\apps\briefings
 ARQUIVO: views.py
-TAMANHO: 7,16 KB
+TAMANHO: 3,93 KB
 EXTENSAO: .py
-LINHAS: 214
+LINHAS: 126
 ================================================================================
-
-"""
-Views HTML do módulo briefings.
-
-    /fluxo/                                         → painel do arquiteto (Mesa)
-    /w/<public_id>/briefings/<briefing_id>/         → detalhe autenticado
-    /portal/briefings/<briefing_id>/respostas/      → dados brutos (cliente)
-    /w/<public_id>/briefings/<briefing_id>/resumo/  → dados brutos (arquiteto)
-
-v22:
-    - FluxoView passa `workspace_public_id` no contexto, para que o
-      botão "Editar briefing" da Mesa consiga montar a URL correta.
-"""
 
 from django.http import Http404
 from django.shortcuts import redirect, render
@@ -15246,17 +16697,7 @@ from apps.briefings.api.serializers import PortalBriefingSerializer
 from apps.briefings.queries import BriefingQueries
 
 
-# =========================================================================
-# HELPERS LOCAIS
-# =========================================================================
-
 def _resolve_current_workspace(request):
-    """
-    Retorna o Workspace ativo a partir de `request.session['current_workspace_id']`
-    ou `None` se não houver sessão válida.
-
-    Não redireciona. O chamador decide o que fazer.
-    """
     workspace_id = request.session.get('current_workspace_id')
     if not workspace_id:
         return None
@@ -15264,16 +16705,6 @@ def _resolve_current_workspace(request):
 
 
 def _workspace_public_id(workspace):
-    """
-    Resolve o identificador público do workspace usado nas URLs
-    (`/w/<public_id>/...`).
-
-    Tenta, nesta ordem:
-        public_id → slug → id
-
-    Isso permite funcionar mesmo se o modelo Workspace expuser o
-    identificador sob outro nome.
-    """
     if workspace is None:
         return ''
     return str(
@@ -15283,25 +16714,10 @@ def _workspace_public_id(workspace):
     )
 
 
-# =========================================================================
-# MESA — PAINEL DO ARQUITETO
-# =========================================================================
-
 class FluxoView(View):
     """
     Renderiza a página da Mesa (painel principal do arquiteto).
-
-    Contexto:
-        workspace_public_id → identificador público do workspace ativo,
-                              consumido por `mesa.js` para montar as URLs
-                              de navegação ("Editar briefing" etc.).
-
-    Se o usuário não estiver logado → redireciona para /login/.
-    Se não houver workspace ativo na sessão → renderiza mesmo assim,
-    com `workspace_public_id` vazio. O frontend exibe a lista vazia
-    e evita ações que dependem do workspace.
     """
-
     def get(self, request):
         if not request.user.is_authenticated:
             return redirect('/login/')
@@ -15314,19 +16730,7 @@ class FluxoView(View):
         })
 
 
-# =========================================================================
-# DETALHE AUTENTICADO DO BRIEFING (PÁGINA HTML)
-# =========================================================================
-
 class BriefingDetailView(View):
-    """
-    Página autenticada do briefing para o arquiteto.
-
-    Resolve o workspace pelo `public_id` da URL e valida que o
-    usuário é membro. Se o briefing não existir naquele workspace,
-    volta para a Mesa.
-    """
-
     def get(self, request, public_id, briefing_id):
         if not request.user.is_authenticated:
             return redirect('/login/')
@@ -15350,25 +16754,11 @@ class BriefingDetailView(View):
         return render(request, 'briefing_detail.html', {
             'workspace': workspace,
             'briefing_id': str(briefing.id),
+            'workspace_public_id': _workspace_public_id(workspace),
         })
 
 
-# =========================================================================
-# RESPOSTAS BRUTAS — VISÃO DO CLIENTE
-# =========================================================================
-
 class BriefingRawAnswersView(View):
-    """
-    Página HTML com as RESPOSTAS BRUTAS na visão do CLIENTE.
-
-    - Perguntas + respostas do cliente
-    - Imagens escolhidas / enviadas (moodboard pessoal)
-    - Sem referências do arquiteto
-
-    Depende do `ClientPortalMiddleware` para injetar
-    `request.portal_client`. Sem sessão do portal → volta para /portal/.
-    """
-
     def get(self, request, briefing_id=None):
         client = getattr(request, 'portal_client', None)
         if client is None:
@@ -15391,21 +16781,7 @@ class BriefingRawAnswersView(View):
         )
 
 
-# =========================================================================
-# RESPOSTAS BRUTAS — VISÃO DO ARQUITETO
-# =========================================================================
-
 class BriefingArchitectRawView(View):
-    """
-    Página HTML com as RESPOSTAS BRUTAS na visão do ARQUITETO.
-
-    - Perguntas + respostas (incluindo transcrições)
-    - Referências do arquiteto
-    - Imagens escolhidas / enviadas pelo cliente (moodboard)
-    - Filtros por sessão e busca
-    - Exportar PDF (mode='architect')
-    """
-
     def get(self, request, public_id, briefing_id):
         if not request.user.is_authenticated:
             return redirect('/login/')

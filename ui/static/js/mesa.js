@@ -1,10 +1,12 @@
 /* =========================================================================
-   MESA — v42
-   - Botão "Salvar" (notas) com spinner real
-   - Notas: anti-duplicata reserva o texto ANTES do POST
-   - Clicar na nota abre o editor (modal estilo Apple/Notion)
-   - Editor de nota: popup com autofocus, ⌘/Ctrl+Enter salva, Esc fecha
-   - Performance: cache, delegação, rAF de ícones
+   MESA — v46
+   - Botão "Salvar" (notas) com spinner
+   - Editor de nota estilo Apple/Notion
+   - Notas: pin, click-to-edit
+   - INSIGHT BULLETS: containers laterais (Resumo/Desejos/Atenção) como
+     bullets curtos, com cor/ícone por bloco
+   - TAGS: barra fixa no topo do side, até 10 balões lado a lado
+   - DESEJOS / ATENÇÃO: 4 slots fixos, pontuais, sem repetição
    ========================================================================= */
 (function () {
   "use strict";
@@ -28,6 +30,14 @@
   ]);
   const NOTE_DUPLICATE_WINDOW_MS = 1500;
 
+  const POLL_INTERVAL_MS = 2500;
+  const POLL_MAX_ATTEMPTS = 120;
+
+  // Limites do painel lateral
+  const TAGS_MAX = 10;
+  const WISHES_SLOTS = 8;
+  const ATTENTION_SLOTS = 8;
+
   const state = {
     briefings: [],
     filtered: [],
@@ -38,6 +48,8 @@
     notes: [],
     events: [],
     client: null,
+    containers: {},
+    clientContainers: {},
     customQuestions: [],
     activeTab: "summary",
     activeView: "detail",
@@ -59,6 +71,7 @@
     editingNoteId: null,
     noteEditorSaving: false,
     _renderScheduled: false,
+    reanalysisPolling: null,
   };
 
   const el = {};
@@ -109,8 +122,11 @@
     el.addCustomQuestionBtn = document.getElementById("msAddCustomQuestionBtn");
     el.historyList = document.getElementById("msHistoryList");
     el.tagsList = document.getElementById("msTagsList");
+    el.tagsBar = document.getElementById("msTagsBar");
     el.wishesList = document.getElementById("msWishesList");
+    el.wishesCount = document.getElementById("msWishesCount");
     el.attentionList = document.getElementById("msAttentionList");
+    el.attentionCount = document.getElementById("msAttentionCount");
     el.briefSummary = document.getElementById("msBriefSummary");
     el.moodboardGrid = document.getElementById("msMoodboardGrid");
     el.moodboardCount = document.getElementById("msMoodboardCount");
@@ -705,6 +721,34 @@
       detail, events, notes, customQuestions, ts: Date.now(),
     });
   }
+
+  async function loadIntelligenceContainers(briefing, clientId) {
+    try {
+      const url = clientId
+        ? `/api/intelligence/mesa/?client=${encodeURIComponent(clientId)}`
+        : `/api/intelligence/mesa/`;
+      const data = await api(url);
+      state.containers = (data && data.containers) || {};
+    } catch (err) {
+      console.warn("[mesa] falha ao carregar containers da mesa", err);
+      state.containers = {};
+    }
+
+    if (clientId) {
+      try {
+        const data = await api(
+          `/api/intelligence/clientes/${encodeURIComponent(clientId)}/`,
+        );
+        state.clientContainers = (data && data.containers) || {};
+      } catch (err) {
+        console.warn("[mesa] falha ao carregar containers do cliente", err);
+        state.clientContainers = {};
+      }
+    } else {
+      state.clientContainers = {};
+    }
+  }
+
   async function fetchBriefingBundle(id, ctrl) {
     const [detail, events, notes, customQs] = await Promise.all([
       api(`/api/briefings/${id}/`, { signal: ctrl ? ctrl.signal : undefined }),
@@ -719,7 +763,7 @@
       customQuestions: Array.isArray(customQs) ? customQs : [],
     };
   }
-  function hydrateDetail(id, bundle) {
+  async function hydrateDetail(id, bundle) {
     state.detail = bundle.detail;
     state.events = bundle.events;
     const seen = new Set();
@@ -744,10 +788,16 @@
     renderNotes();
     if (state.activeTab === "history") renderHistory();
     if (state.activeTab === "questions") renderQuestions();
+
     if (bundle.detail && bundle.detail.client) {
-      loadClient(bundle.detail.client);
+      await Promise.all([
+        loadClient(bundle.detail.client),
+        loadIntelligenceContainers(bundle.detail, bundle.detail.client),
+      ]);
     }
+
     renderMoodboard();
+    renderSideLists();
   }
   async function loadBriefing(id) {
     if (state.abortDetail) state.abortDetail.abort();
@@ -756,12 +806,12 @@
     state.activeId = id;
     optimisticApplyFromList(id);
     const cached = getCachedDetail(id);
-    if (cached) { hydrateDetail(id, cached); return; }
+    if (cached) { await hydrateDetail(id, cached); return; }
     try {
       const bundle = await fetchBriefingBundle(id, ctrl);
       if (ctrl.signal.aborted) return;
       putCachedDetail(id, bundle.detail, bundle.events, bundle.notes, bundle.customQuestions);
-      hydrateDetail(id, bundle);
+      await hydrateDetail(id, bundle);
     } catch (err) {
       if (err && err.name === "AbortError") return;
       console.warn("[mesa] falha ao carregar briefing", err, err && err.payload);
@@ -782,7 +832,6 @@
   async function loadClient(clientId) {
     state.client = null;
     try { state.client = await api(`/api/clients/${clientId}/`); } catch (e) {}
-    renderSideLists();
   }
 
   // -------------------- HISTÓRICO / PERGUNTAS --------------------
@@ -967,8 +1016,6 @@
       return;
     }
 
-    // Reserva ANTES do POST. Isso bloqueia cliques/entradas
-    // repetidos enquanto a requisição está em voo.
     state.noteSaving = true;
     state.lastNoteText = text;
     state.lastNoteTs = now;
@@ -1064,7 +1111,7 @@
     }
   }
 
-  // -------------------- EDITOR DE NOTA (estilo Apple/Notion) --------------------
+  // -------------------- EDITOR DE NOTA --------------------
   function openNoteEditor(noteId) {
     if (!state.activeId || !noteId) return;
     const note = state.notes.find((n) => String(n.id) === String(noteId));
@@ -1150,46 +1197,191 @@
     }
   }
 
-  // -------------------- SIDE --------------------
-  function normalizeList(raw) {
-    if (!Array.isArray(raw)) return [];
-    return raw
-      .map((item) => {
-        if (typeof item === "string") return { title: item, subtitle: "" };
-        if (item && typeof item === "object")
-          return {
-            title: item.title || item.name || "",
-            subtitle: item.subtitle || item.description || "",
-          };
-        return null;
-      })
-      .filter(Boolean)
-      .slice(0, 8);
+  // -------------------- SIDE (containers de inteligência) --------------------
+  //
+  // Regras:
+  //   - Resumo: bullets livres, sem limite (o service já entrega curtos).
+  //   - Desejos / Atenção: 4 slots fixos. Truncamos o excesso e preenchemos
+  //     com placeholder. O contador "X/4" mostra quantos foram preenchidos.
+  //   - Tags: barra fixa no topo do side. Até 10 balões; o resto é
+  //     silenciosamente descartado na visualização (não quebra layout).
+  //
+
+  function _containerItems(containerKey) {
+    const mesa = state.containers || {};
+    const cli = state.clientContainers || {};
+    return (mesa[containerKey] || []).concat(cli[containerKey] || []);
   }
-  function fillSlots(ul, items) {
-    if (!ul) return;
-    const slots = ul.querySelectorAll(".ms-check-slot");
-    slots.forEach((li, idx) => {
-      const item = items[idx];
-      const strong = li.querySelector(".ms-check-text strong");
-      const small = li.querySelector(".ms-check-text small");
-      if (!strong) return;
-      if (item && (item.title || item.subtitle)) {
-        li.classList.remove("is-empty");
-        strong.textContent = item.title || "—";
-        if (small) small.textContent = item.subtitle || "";
-      } else {
-        li.classList.add("is-empty");
-        strong.textContent = "—";
-        if (small) small.textContent = "";
-      }
+
+  /**
+   * Deduplica bullets por texto normalizado. A inteligência pode devolver
+   * o mesmo item em containers diferentes (mesa + cliente), então
+   * concatenamos e limpamos antes de renderizar. Sem isso, "Desejos"
+   * e "Atenção" repetiriam itens.
+   */
+  function _dedupeBullets(items) {
+    const seen = new Set();
+    const out = [];
+    (items || []).forEach((item) => {
+      const raw = (item && item.content) ? String(item.content).trim() : "";
+      if (!raw) return;
+      const key = raw.toLowerCase().replace(/\s+/g, " ");
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push(item);
     });
+    return out;
   }
+
+  /**
+   * Renderiza uma lista de bullets com limite de slots.
+   *
+   * `limit === 0` → sem limite (Resumo).
+   * `limit > 0`   → trunca e preenche com `is-empty` até o limite.
+   */
+  function _renderBulletList(containerEl, items, emptyLabel, blockKey, limit) {
+    if (!containerEl) return;
+    containerEl.innerHTML = "";
+
+    const cap = Number.isFinite(limit) ? limit : 0;
+    const clean = _dedupeBullets(items);
+
+    if (!clean.length) {
+      const empty = document.createElement("li");
+      empty.className = `ms-bullet is-empty ms-bullet--${blockKey}`;
+      const dot = document.createElement("span");
+      dot.className = "ms-bullet-dot";
+      const text = document.createElement("span");
+      text.className = "ms-bullet-text";
+      text.textContent = emptyLabel;
+      empty.appendChild(dot);
+      empty.appendChild(text);
+      containerEl.appendChild(empty);
+      // Se o bloco tem slots fixos, preenche o restante com placeholders.
+      if (cap > 1) {
+        for (let i = 1; i < cap; i++) {
+          containerEl.appendChild(_makePlaceholderBullet(blockKey, i + 1));
+        }
+      }
+      return;
+    }
+
+    const frag = document.createDocumentFragment();
+    const max = cap > 0 ? Math.min(cap, clean.length) : clean.length;
+    for (let i = 0; i < max; i++) {
+      const item = clean[i];
+      const li = document.createElement("li");
+      li.className = `ms-bullet ms-bullet--${blockKey}`;
+      li.dataset.confidence = item.confidence || "interpretation";
+      if (cap > 0) li.dataset.slot = String(i + 1);
+
+      const dot = document.createElement("span");
+      dot.className = "ms-bullet-dot";
+      dot.setAttribute("aria-hidden", "true");
+
+      const text = document.createElement("span");
+      text.className = "ms-bullet-text";
+      text.textContent = String(item.content || "").trim();
+      text.title = String(item.content || "").trim();
+
+      li.appendChild(dot);
+      li.appendChild(text);
+      frag.appendChild(li);
+    }
+
+    // Preenche os slots restantes com placeholder.
+    if (cap > 0 && max < cap) {
+      for (let i = max; i < cap; i++) {
+        frag.appendChild(_makePlaceholderBullet(blockKey, i + 1));
+      }
+    }
+
+    containerEl.appendChild(frag);
+  }
+
+  function _makePlaceholderBullet(blockKey, slotIndex) {
+    const li = document.createElement("li");
+    li.className = `ms-bullet is-empty ms-bullet--${blockKey}`;
+    li.dataset.slot = String(slotIndex);
+    const dot = document.createElement("span");
+    dot.className = "ms-bullet-dot";
+    const text = document.createElement("span");
+    text.className = "ms-bullet-text";
+    text.textContent = "—";
+    li.appendChild(dot);
+    li.appendChild(text);
+    return li;
+  }
+
+  function _updateSlotCounter(counterEl, items, limit) {
+    if (!counterEl) return;
+    const filled = Math.min(_dedupeBullets(items).length, limit);
+    counterEl.textContent = `${filled}/${limit}`;
+  }
+
   function renderSideLists() {
-    const c = state.client || {};
-    const ctx = c.context && typeof c.context === "object" ? c.context : {};
+    // ----- Resumo (sem limite) -----
+    if (el.briefSummary) {
+      const items = _containerItems("05_resumo");
+      if (items.length) {
+        _renderBulletList(
+          el.briefSummary,
+          items,
+          "Ainda sem resumo gerado.",
+          "resumo",
+          0,
+        );
+      } else if (state.detail && state.detail.description) {
+        _renderBulletList(
+          el.briefSummary,
+          [{ content: state.detail.description, confidence: "fact" }],
+          "Ainda sem resumo gerado.",
+          "resumo",
+          0,
+        );
+      } else {
+        _renderBulletList(
+          el.briefSummary,
+          [],
+          "Ainda sem resumo gerado.",
+          "resumo",
+          0,
+        );
+      }
+    }
+
+    // ----- Desejos (4 slots) -----
+    const wishItems = _containerItems("01_desejos_prioridades");
+    _renderBulletList(
+      el.wishesList,
+      wishItems,
+      "Nenhum desejo registrado ainda.",
+      "wishes",
+      WISHES_SLOTS,
+    );
+    _updateSlotCounter(el.wishesCount, wishItems, WISHES_SLOTS);
+
+    // ----- Atenção (4 slots) -----
+    const attentionItems = _containerItems("02_pontos_atencao");
+    _renderBulletList(
+      el.attentionList,
+      attentionItems,
+      "Nenhum ponto de atenção.",
+      "attention",
+      ATTENTION_SLOTS,
+    );
+    _updateSlotCounter(el.attentionCount, attentionItems, ATTENTION_SLOTS);
+
+    // ----- Tags (barra fixa, até 10) -----
     if (el.tagsList) {
-      const tags = Array.isArray(ctx.tags) ? ctx.tags : [];
+      const c = state.client || {};
+      const ctx = c.context && typeof c.context === "object" ? c.context : {};
+      const rawTags = Array.isArray(ctx.tags) ? ctx.tags : [];
+      const tags = rawTags
+        .map((t) => String(t || "").trim())
+        .filter(Boolean)
+        .slice(0, TAGS_MAX);
+
       if (!tags.length) {
         el.tagsList.innerHTML = '<span class="ms-tag ms-tag--empty">—</span>';
       } else {
@@ -1198,13 +1390,8 @@
           .join("");
       }
     }
-    const wishes = normalizeList(ctx.wishes);
-    const attention = normalizeList(ctx.attention);
-    fillSlots(el.wishesList, wishes);
-    fillSlots(el.attentionList, attention);
-    if (el.briefSummary && state.detail) {
-      el.briefSummary.textContent = state.detail.description || "—";
-    }
+
+    refreshIcons();
   }
 
   // -------------------- MOODBOARD --------------------
@@ -1539,7 +1726,7 @@
       state.detailCache.delete(String(state.activeId));
       const bundle = await fetchBriefingBundle(state.activeId);
       putCachedDetail(state.activeId, bundle.detail, bundle.events, bundle.notes, bundle.customQuestions);
-      hydrateDetail(state.activeId, bundle);
+      await hydrateDetail(state.activeId, bundle);
       setActiveTab("questions");
       backToDetail();
       reloadListFromBackend();
@@ -1623,37 +1810,110 @@
     }
   }
 
+  // -------------------- REANÁLISE MANUAL --------------------
+  function stopReanalysisPolling() {
+    if (state.reanalysisPolling) {
+      clearTimeout(state.reanalysisPolling);
+      state.reanalysisPolling = null;
+    }
+  }
+
+  async function refreshAllContainers() {
+    if (!state.activeId || !state.detail) return;
+    state.detailCache.delete(String(state.activeId));
+    try {
+      const bundle = await fetchBriefingBundle(state.activeId);
+      putCachedDetail(
+        state.activeId,
+        bundle.detail,
+        bundle.events,
+        bundle.notes,
+        bundle.customQuestions,
+      );
+      await hydrateDetail(state.activeId, bundle);
+    } catch (err) {
+      console.warn("[mesa] falha ao recarregar briefing após reanálise", err);
+    }
+    await reloadListFromBackend();
+  }
+
+  function pollJobStatus(jobId, attempt) {
+    if (!jobId) return;
+    attempt = attempt || 1;
+    stopReanalysisPolling();
+
+    const tick = async () => {
+      try {
+        const status = await api(
+          `/api/intelligence/jobs/${jobId}/status/`,
+        );
+        if (status.status === "completed" || status.status === "failed") {
+          stopReanalysisPolling();
+          if (el.reanalyzeBtn) {
+            el.reanalyzeBtn.classList.remove("is-loading");
+            el.reanalyzeBtn.disabled = false;
+          }
+          if (status.status === "completed") {
+            await refreshAllContainers();
+          } else {
+            console.warn(
+              "[mesa] job de reanálise falhou", status.error_message,
+            );
+          }
+          return;
+        }
+        if (attempt >= POLL_MAX_ATTEMPTS) {
+          stopReanalysisPolling();
+          if (el.reanalyzeBtn) {
+            el.reanalyzeBtn.classList.remove("is-loading");
+            el.reanalyzeBtn.disabled = false;
+          }
+          return;
+        }
+        state.reanalysisPolling = setTimeout(() => {
+          pollJobStatus(jobId, attempt + 1);
+        }, POLL_INTERVAL_MS);
+      } catch (err) {
+        console.warn("[mesa] falha no polling do job", err);
+        if (attempt >= POLL_MAX_ATTEMPTS) {
+          stopReanalysisPolling();
+          if (el.reanalyzeBtn) {
+            el.reanalyzeBtn.classList.remove("is-loading");
+            el.reanalyzeBtn.disabled = false;
+          }
+          return;
+        }
+        state.reanalysisPolling = setTimeout(() => {
+          pollJobStatus(jobId, attempt + 1);
+        }, POLL_INTERVAL_MS);
+      }
+    };
+    tick();
+  }
+
   async function triggerReanalysis() {
     if (!state.activeId || !el.reanalyzeBtn) return;
-    const id = state.activeId;
     if (el.reanalyzeBtn.classList.contains("is-loading")) return;
 
     el.reanalyzeBtn.classList.add("is-loading");
     el.reanalyzeBtn.disabled = true;
-    const startedAt = Date.now();
+
     try {
-      const result = await api(`/api/intelligence/briefings/${id}/reanalyze/`, {
-        method: "POST", body: {},
-      });
+      const result = await api(
+        `/api/intelligence/briefings/${state.activeId}/reanalyze/`,
+        { method: "POST", body: {} },
+      );
       const jobId = (result && result.job_id) || "";
-      const elapsed = Date.now() - startedAt;
-      const wait = Math.max(0, 400 - elapsed);
-      if (wait > 0) await new Promise((res) => setTimeout(res, wait));
-      showAlert({
-        title: "Análise agendada",
-        message: jobId
-          ? `Job ${String(jobId).slice(0, 8)} enfileirado. O resultado aparecerá na coluna Insight.`
-          : "A análise foi enfileirada. O resultado aparecerá na coluna Insight.",
-        variant: "info",
-      });
+      if (!jobId) {
+        el.reanalyzeBtn.classList.remove("is-loading");
+        el.reanalyzeBtn.disabled = false;
+        return;
+      }
+      pollJobStatus(jobId, 1);
     } catch (err) {
-      if (err && err.status === 404) {
-        showAlert({
-          title: "Análise manual indisponível",
-          message: "O endpoint de reanálise manual ainda não está disponível neste ambiente. O backend precisa ser atualizado.",
-          variant: "danger",
-        });
-      } else if (err && err.status === 403) {
+      el.reanalyzeBtn.classList.remove("is-loading");
+      el.reanalyzeBtn.disabled = false;
+      if (err && err.status === 403) {
         showAlert({
           title: "Sem permissão",
           message: "Sua governança não permite disparar nova análise.",
@@ -1665,6 +1925,12 @@
           message: (err && err.message) || "A política de quota bloqueou a execução.",
           variant: "danger",
         });
+      } else if (err && err.status === 404) {
+        showAlert({
+          title: "Análise manual indisponível",
+          message: "O endpoint de reanálise manual ainda não está disponível neste ambiente.",
+          variant: "danger",
+        });
       } else {
         showAlert({
           title: "Falha ao agendar",
@@ -1672,9 +1938,6 @@
           variant: "danger",
         });
       }
-    } finally {
-      el.reanalyzeBtn.classList.remove("is-loading");
-      el.reanalyzeBtn.disabled = false;
     }
   }
 
@@ -1793,9 +2056,32 @@
     if (el.notesList) el.notesList.innerHTML = '<li class="cl-empty">Nenhuma nota ainda.</li>';
     if (el.questionsList) el.questionsList.innerHTML = '<li class="cl-empty">Nenhuma pergunta adicional.</li>';
     if (el.historyList) el.historyList.innerHTML = '<li class="cl-empty">Sem eventos registrados.</li>';
-    if (el.briefSummary) el.briefSummary.textContent = "—";
+    if (el.briefSummary) {
+      _renderBulletList(el.briefSummary, [], "Ainda sem resumo gerado.", "resumo", 0);
+    }
     if (el.tagsList) el.tagsList.innerHTML = '<span class="ms-tag ms-tag--empty">—</span>';
     if (el.moodboardCount) el.moodboardCount.textContent = "";
+    if (el.wishesList) {
+      _renderBulletList(
+        el.wishesList,
+        [],
+        "Nenhum desejo registrado ainda.",
+        "wishes",
+        WISHES_SLOTS,
+      );
+     if (el.wishesCount) el.wishesCount.textContent = `0/${WISHES_SLOTS}`;
+    if (el.attentionCount) el.attentionCount.textContent = `0/${ATTENTION_SLOTS}`;
+    }
+    if (el.attentionList) {
+      _renderBulletList(
+        el.attentionList,
+        [],
+        "Nenhum ponto de atenção.",
+        "attention",
+        ATTENTION_SLOTS,
+      );
+      if (el.attentionCount) el.attentionCount.textContent = `0/${ATTENTION_SLOTS}`;
+    }
     renderMoodboard();
     setDetailView("detail");
   }
@@ -1941,7 +2227,6 @@
           return;
         }
 
-        // Clique na linha (fora dos botões) abre o editor.
         openNoteEditor(noteId);
       });
     }
@@ -2025,6 +2310,8 @@
     state.notes = [];
     state.events = [];
     state.client = null;
+    state.containers = {};
+    state.clientContainers = {};
     state.customQuestions = [];
     state.activeTab = "summary";
     state.activeView = "detail";
@@ -2045,6 +2332,7 @@
       try { state.abortDetail.abort(); } catch (e) {}
       state.abortDetail = null;
     }
+    stopReanalysisPolling();
 
     cacheElements();
     applyGreeting();
@@ -2057,6 +2345,7 @@
     setActiveTab("summary");
     setDetailView("detail");
     renderMoodboard();
+    renderSideLists();
     loadAll();
     state.bound = true;
   }
@@ -2067,6 +2356,7 @@
       try { state.abortDetail.abort(); } catch (e) {}
       state.abortDetail = null;
     }
+    stopReanalysisPolling();
     state.listCache = new Map();
     state.detailCache = new Map();
     state.prefetching = new Set();

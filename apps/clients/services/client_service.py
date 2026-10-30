@@ -1,12 +1,33 @@
 """
 ClientService — ciclo de vida do Client.
+
+AUDITORIA DO ENVIO DE ACESSO
+----------------------------
+`create_client` envia o e-mail com o código de acesso e o link do
+portal. Para que esse envio seja RASTREÁVEL (mesmo padrão do
+`PortalInvitationService`), gravamos um `ClientPortalInvitation`
+com `status='sent'` ou `status='failed'`.
+
+IMPORTANTE: aqui NÃO criamos `ClientPortalSession` nem revogamos
+sessões antigas. O cliente entra no portal digitando o código
+(`POST /api/portal/login/`). O envio com token/sessão é
+responsabilidade do `PortalInvitationService` (ação
+`POST /api/clients/{id}/portal/send-access/`), que é um fluxo
+diferente e deliberado.
+
+Falha de envio NÃO falha a criação do cliente. O registro auditável
+fica como `failed` e o arquiteto pode reenviar depois.
 """
 
 from typing import Optional
 
+from django.conf import settings
 from django.db import transaction
 
-from apps.clients.models import Client
+from apps.clients.models import (
+    Client,
+    ClientPortalInvitation,
+)
 from apps.clients.services.public_code import generate_unique_public_code
 from apps.clients.exceptions import (
     ClientDuplicateEmailError,
@@ -57,7 +78,74 @@ class ClientService:
         ClientEventEmitter.client_created(
             client=client, actor=created_by, request=request,
         )
+
+        # Envio do código de acesso — fora da atomicidade do cliente.
+        # Falha de envio não reverte a criação.
+        if client.email:
+            ClientService._send_access_code(
+                client=client,
+                actor=created_by,
+            )
+
         return client
+
+    # ------------------------------------------------------------------
+    # ENVIO DO CÓDIGO DE ACESSO (com auditoria)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _send_access_code(*, client: Client, actor=None) -> None:
+        """
+        Envia o e-mail com `public_code` + link do portal e grava
+        um `ClientPortalInvitation` com o resultado.
+
+        NÃO cria sessão. NÃO revoga sessões. O cliente digita o
+        código na tela do portal.
+        """
+        from apps.accounts.services.email import EmailService
+
+        target_email = (client.email or '').strip()
+        if not target_email:
+            return
+
+        frontend_url = (
+            getattr(settings, 'FRONTEND_URL', '') or
+            'https://clivoos.com'
+        ).rstrip('/')
+        # O portal é acessado em /portal/ — o cliente digita o código
+        # lá. NÃO colocar o código no path.
+        portal_url = f'{frontend_url}/portal/'
+
+        invitation = ClientPortalInvitation.objects.create(
+            client=client,
+            session=None,
+            email=target_email,
+            sent_by=(
+                actor if (actor and getattr(actor, 'is_authenticated', False))
+                else None
+            ),
+            status=ClientPortalInvitation.STATUS_PENDING,
+        )
+
+        try:
+            EmailService.send_client_code_email(
+                client=client,
+                workspace=client.workspace,
+                portal_url=portal_url,
+            )
+        except Exception as exc:
+            invitation.status = ClientPortalInvitation.STATUS_FAILED
+            invitation.error_message = str(exc)[:2000]
+            invitation.save(update_fields=['status', 'error_message'])
+            import logging
+            logging.getLogger('clients').exception(
+                'Falha ao enviar código de acesso para client_id=%s '
+                'email=%s', client.id, target_email,
+            )
+            return
+
+        invitation.status = ClientPortalInvitation.STATUS_SENT
+        invitation.save(update_fields=['status'])
 
     # ------------------------------------------------------------------
     # LEITURA

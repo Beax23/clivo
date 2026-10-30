@@ -14,12 +14,14 @@ de briefing, o UUID da ClientNote + updated_at, ou um `updated_at`
 monotônico). Isso impede que a mesma nota atualizada duas vezes seja
 silenciosamente ignorada como "duplicada para sempre".
 
-PERGUNTAS COMPLEMENTARES
-------------------------
-Eventos originados pelo bloco complementar de um briefing usam
-`SOURCE_KIND_BRIEFING_SUPPLEMENTARY_*`. Distintos dos eventos do
-bloco original, para que a inteligência possa rastrear a evolução
-do conhecimento do cliente separadamente.
+REANÁLISE MANUAL
+----------------
+`SOURCE_KIND_MANUAL_REANALYZE` é usado pela view de reanálise (o
+botão "Nova análise"). Ele NÃO representa uma mudança real nas
+fontes — representa uma decisão explícita do operador de reprocessar
+o estado atual. O `occurrence_id` é o timestamp da chamada, então
+cada clique gera um evento novo e um job novo. A idempotência por
+`dedupe_key` não bloqueia cliques repetidos legítimos.
 """
 
 import uuid
@@ -49,6 +51,9 @@ class InsightEvent(models.Model):
     SOURCE_KIND_CLIENT_UPDATED = 'client.updated'
     SOURCE_KIND_CLIENT_CONTEXT_UPDATED = 'client.context.updated'
 
+    # Reanálise manual: o operador pediu reprocessamento.
+    SOURCE_KIND_MANUAL_REANALYZE = 'manual.reanalyze'
+
     SOURCE_KIND_CHOICES = [
         (SOURCE_KIND_BRIEFING_ANSWER, 'Resposta de briefing enviada'),
         (SOURCE_KIND_BRIEFING_NOTE_CREATED, 'Nota de briefing criada'),
@@ -71,6 +76,7 @@ class InsightEvent(models.Model):
         (SOURCE_KIND_CLIENT_NOTE_DELETED, 'Nota de cliente excluída'),
         (SOURCE_KIND_CLIENT_UPDATED, 'Cliente atualizado'),
         (SOURCE_KIND_CLIENT_CONTEXT_UPDATED, 'Contexto do cliente atualizado'),
+        (SOURCE_KIND_MANUAL_REANALYZE, 'Reanálise manual'),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

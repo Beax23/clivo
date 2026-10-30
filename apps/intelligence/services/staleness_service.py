@@ -4,9 +4,20 @@ execução nova os substitui.
 
 REGRA
 -----
-Quando um run novo conclui com sucesso, os insights de runs
-anteriores do MESMO cliente E MESMO briefing que têm `kind` coberto
-pelo run novo passam a `is_stale=True`.
+Um run novo torna stale os insights de runs anteriores do MESMO
+workspace e MESMO cliente cujos `kind` estão cobertos pelo run novo.
+O escopo de comparação cobre:
+
+    - briefing=X   (quando o run novo tem briefing)
+    - briefing=None (para kinds de cliente que o run também produz)
+
+Por quê os dois escopos: um run com briefing gera kinds de briefing
+E kinds de cliente. Os kinds de cliente (preference.profile,
+client.profile, how_to_conduct, knowledge.accumulated) têm
+`briefing=None` no InsightItem, mesmo tendo sido produzidos por um
+run com briefing. Comparar só pelo `briefing` do run novo deixaria
+esses insights antigos "vivos" — o que mostraria duas versões
+concorrentes nos containers do Cliente.
 
 NÃO apaga nada. O insight antigo continua consultável, mas sinalizado
 como desatualizado. A interface pode exibi-lo com aviso ou ocultá-lo
@@ -16,6 +27,7 @@ por padrão.
 import logging
 
 from django.db import transaction
+from django.db.models import Q
 
 from apps.intelligence.models import AnalysisRun, InsightItem
 
@@ -29,8 +41,12 @@ class StalenessService:
         """
         Marca como stale os insights de runs anteriores compatíveis.
 
-        Compatibilidade: mesmo workspace, mesmo cliente, mesmo briefing
-        (incluindo ambos NULL para análises de cliente sem briefing).
+        Compatibilidade:
+            - mesmo workspace
+            - mesmo cliente
+            - mesmo `briefing` do run (para kinds de briefing)
+              OU `briefing=None` (para kinds de cliente que o run
+              também produz)
 
         Retorna a quantidade de insights marcados.
         """
@@ -43,12 +59,19 @@ class StalenessService:
         if not new_kinds:
             return 0
 
+        # Escopo do briefing: o `briefing` do run novo, se houver.
+        # Insights de cliente têm `briefing=None` mesmo quando
+        # produzidos por um run com briefing.
+        scope_q = Q(briefing=new_run.briefing)
+        if new_run.briefing_id is not None:
+            scope_q |= Q(briefing__isnull=True)
+
         qs = (
             InsightItem.objects
             .filter(
+                scope_q,
                 workspace=new_run.workspace,
                 client=new_run.client,
-                briefing=new_run.briefing,
                 kind__in=new_kinds,
                 is_stale=False,
             )
@@ -63,7 +86,7 @@ class StalenessService:
 
         logger.info(
             'StalenessService: %d insights marcados como stale '
-            '(run=%s, kinds=%s)',
-            updated, new_run.id, new_kinds,
+            '(run=%s, kinds=%s, briefing=%s)',
+            updated, new_run.id, new_kinds, new_run.briefing_id,
         )
         return updated

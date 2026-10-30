@@ -11,26 +11,40 @@ REGRA ARQUITETURAL
     - registra ProviderLog e UsageRecord,
     - devolve um payload normalizado.
 
-`AnalysisService` é responsável por:
-    - preparar input (via contratos públicos),
-    - validar a saída da IA,
-    - persistir insights, evidências e histórico,
-    - alocar custo aos insights produzidos,
-    - marcar insights anteriores como stale.
+RESOLUÇÃO DE PROVIDER/MODELO
+----------------------------
+Quando `INTELLIGENCE_PROVIDER` / `INTELLIGENCE_MODEL` estão definidos
+em settings, eles vencem. Quando NÃO estão definidos, o serviço lê
+`AIConfigService.get_or_create_default()` — a config ativa do Console.
 
-ANÁLISE PARCIAL
----------------
-`AnalysisJob.target_kinds` define quais kinds devem ser produzidos.
-Quando vazio, produz o conjunto completo padrão. Quando preenchido,
-o prompt é instruído a produzir APENAS esses kinds, e a validação
-rejeita kinds fora da lista.
+O provider/modelo escolhidos são PERSISTIDOS no `AnalysisRun` como
+snapshot histórico.
 
-MULTIMODAL
-----------
-Se `briefings.public.get_reference_document_payloads()` devolver
-imagens acessíveis, o payload inclui entradas `images` que a ponte
-`console.public.call_ai` encaminha ao provider. Se a interface não
-estiver disponível, o input degrada para texto sem inventar imagens.
+ESCOPO DOS KINDS
+----------------
+A `user_message` lista EXPLICITAMENTE os `target_kinds` da execução.
+
+IDEMPOTÊNCIA POR TENTATIVA
+--------------------------
+O `input_hash` inclui `job.attempt_count`. Cada tentativa do worker
+cria um `AnalysisRun` NOVO. Isso é essencial porque:
+
+    - o `created_at` do run é atualizado a cada tentativa (é
+      `auto_now_add=True`, não dá para alterar via `save()`);
+    - o `StalenessService` compara `latest_event.created_at` com
+      `run.created_at` — se o run for reaproveitado, o
+      `created_at` continua sendo o original (velho), e o run
+      é sempre considerado stale;
+    - com um run novo por tentativa, o `created_at` é sempre
+      posterior ao evento `manual.reanalyze` que disparou o job;
+    - o `request_id` (=run.id) também muda, o que força o
+      `AICallService` a fazer uma chamada real ao provider em vez
+      de retornar `raw_content=""` do `UsageRecord` antigo.
+
+Ao criar um run novo, também DELETAMOS os `UsageRecord` e
+`ProviderLog` de runs anteriores do MESMO job — evita lixo no
+banco e garante que nenhum artefato antigo interfira na nova
+tentativa.
 """
 
 import hashlib
@@ -59,7 +73,6 @@ from apps.intelligence.exceptions import (
 logger = logging.getLogger('intelligence')
 
 
-# Kinds que EXIGEM evidência para serem publicados.
 KINDS_REQUIRING_EVIDENCE = frozenset({
     InsightItem.KIND_DESIRE,
     InsightItem.KIND_ATTENTION,
@@ -75,7 +88,6 @@ KINDS_REQUIRING_EVIDENCE = frozenset({
 })
 
 
-# Conjunto padrão de kinds por escopo de job (quando target_kinds vazio).
 DEFAULT_KINDS_WITH_BRIEFING = [
     InsightItem.KIND_SUMMARY_BRIEFING,
     InsightItem.KIND_DESIRE,
@@ -92,6 +104,10 @@ DEFAULT_KINDS_WITH_BRIEFING = [
     InsightItem.KIND_READINESS_ASSESSMENT,
     InsightItem.KIND_EXECUTIVE_SUMMARY,
     InsightItem.KIND_TAG,
+    InsightItem.KIND_PREFERENCE_PROFILE,
+    InsightItem.KIND_KNOWLEDGE_ACCUMULATED,
+    InsightItem.KIND_HOW_TO_CONDUCT,
+    InsightItem.KIND_CLIENT_PROFILE,
 ]
 
 DEFAULT_KINDS_WITHOUT_BRIEFING = [
@@ -108,18 +124,13 @@ class AnalysisService:
 
     @staticmethod
     def execute(job: AnalysisJob) -> Optional[AnalysisRun]:
-        """
-        Executa o fluxo completo.
-
-        A chamada à IA acontece FORA de qualquer transação — não
-        bloqueia o banco durante a latência do provider.
-        """
-        with transaction.atomic():
-            run = AnalysisService._create_analysis_run(job)
-            if run is None:
-                return None
-
+        run = None
         try:
+            with transaction.atomic():
+                run = AnalysisService._create_analysis_run(job)
+                if run is None:
+                    return None
+
             from apps.console import public as console_public
             allowed, reason = console_public.is_ai_execution_allowed(job.workspace)
             if not allowed:
@@ -146,8 +157,6 @@ class AnalysisService:
                     duration_ms=ai_response.get('duration_ms'),
                 )
 
-            # Alocação de custo e staleness — fora da transação principal
-            # para não bloquear o commit dos insights.
             try:
                 from apps.intelligence.services.cost_allocation_service import (
                     CostAllocationService,
@@ -173,24 +182,29 @@ class AnalysisService:
             return run
 
         except StaleAnalysisError:
-            with transaction.atomic():
-                run.status = AnalysisRun.STATUS_SKIPPED_STALE
-                run.is_stale = True
-                run.completed_at = timezone.now()
-                run.save(update_fields=[
-                    'status', 'is_stale', 'completed_at', 'updated_at',
-                ])
+            if run is not None:
+                with transaction.atomic():
+                    run.status = AnalysisRun.STATUS_SKIPPED_STALE
+                    run.is_stale = True
+                    run.completed_at = timezone.now()
+                    run.save(update_fields=[
+                        'status', 'is_stale', 'completed_at', 'updated_at',
+                    ])
             raise
 
         except Exception as exc:
-            logger.exception('Falha na execução da análise (Run=%s)', run.id)
-            with transaction.atomic():
-                run.status = AnalysisRun.STATUS_FAILED
-                run.error_message = str(exc)
-                run.completed_at = timezone.now()
-                run.save(update_fields=[
-                    'status', 'error_message', 'completed_at', 'updated_at',
-                ])
+            logger.exception(
+                'Falha na execução da análise (Run=%s)',
+                run.id if run else '<none>',
+            )
+            if run is not None:
+                with transaction.atomic():
+                    run.status = AnalysisRun.STATUS_FAILED
+                    run.error_message = str(exc)
+                    run.completed_at = timezone.now()
+                    run.save(update_fields=[
+                        'status', 'error_message', 'completed_at', 'updated_at',
+                    ])
             raise
 
     # ------------------------------------------------------------------
@@ -199,14 +213,6 @@ class AnalysisService:
 
     @staticmethod
     def _resolve_target_kinds(run: AnalysisRun) -> List[str]:
-        """
-        Resolve quais kinds este run deve produzir.
-
-        Prioridade:
-            1. `job.target_kinds` (definido pelo agendador, ex.: análise
-               parcial de um container específico).
-            2. Default por escopo (com ou sem briefing).
-        """
         job = run.job
         requested = job.target_kinds or []
         valid = {c[0] for c in InsightItem.KIND_CHOICES}
@@ -219,25 +225,86 @@ class AnalysisService:
         return list(DEFAULT_KINDS_WITHOUT_BRIEFING)
 
     # ------------------------------------------------------------------
+    # RESOLUÇÃO DE PROVIDER/MODELO
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _resolve_provider_and_model() -> tuple:
+        prompt_version = getattr(settings, 'INTELLIGENCE_PROMPT_VERSION', 'v1')
+
+        explicit_provider = getattr(settings, 'INTELLIGENCE_PROVIDER', None)
+        explicit_model = getattr(settings, 'INTELLIGENCE_MODEL', None)
+
+        if explicit_provider and explicit_model:
+            return (explicit_provider, explicit_model, prompt_version)
+
+        try:
+            from apps.console.services.ai_config_service import AIConfigService
+            config = AIConfigService.get_or_create_default()
+        except Exception:
+            logger.warning(
+                'AIProviderConfig indisponível. Usando fallback de settings.',
+            )
+            config = None
+
+        if config is not None and config.is_active:
+            return (
+                explicit_provider or config.provider.key,
+                explicit_model or config.model,
+                prompt_version,
+            )
+
+        return (
+            explicit_provider or 'openai',
+            explicit_model or 'gpt-4o-mini',
+            prompt_version,
+        )
+
+    # ------------------------------------------------------------------
     # CRIAÇÃO DO RUN
     # ------------------------------------------------------------------
 
     @staticmethod
     def _create_analysis_run(job: AnalysisJob) -> Optional[AnalysisRun]:
         """
-        Cria o run aplicando idempotência por `input_hash`.
+        Cria um `AnalysisRun` NOVO para esta tentativa do job.
 
-        O `input_hash` inclui workspace + prompt + provider + model +
-        payload + target_kinds. Isso diferencia análises parciais
-        (kinds distintos) de re-execuções completas.
+        O `input_hash` inclui `job.attempt_count` (incrementado pelo
+        `JobService.claim_next_job` antes de chamar `execute`). Isso
+        garante que cada tentativa cria um run distinto:
+
+            - Tentativa 1: hash A → run 1
+            - Tentativa 2: hash B → run 2
+            - Tentativa 3: hash C → run 3
+
+        Motivos:
+            - O `created_at` do run é `auto_now_add=True`. Reaproveitar
+              o run mantém o `created_at` ORIGINAL, o que faz o
+              `StalenessService` sempre rejeitar como stale quando o
+              evento `manual.reanalyze` é posterior ao run original.
+            - O `request_id` (=run.id) muda a cada tentativa, então
+              o `AICallService` faz uma chamada real ao provider em
+              vez de devolver `raw_content=""` do `UsageRecord`
+              antigo.
+
+        Se já existe um run `COMPLETED` para ESTA tentativa (mesmo
+        attempt_count), retorna `None` — idempotência real (o worker
+        reivindicou o mesmo job duas vezes sem incrementar o
+        attempt_count não deveria acontecer, mas é defesa em
+        profundidade).
+
+        Antes de criar o run novo, DELETA os `UsageRecord` e
+        `ProviderLog` de runs anteriores do MESMO job — evita lixo no
+        banco e garante que nenhum artefato antigo interfira na nova
+        tentativa.
         """
         input_payload = AnalysisService._prepare_input(job)
         if not input_payload:
             raise AnalysisInputError('Falha ao preparar input para hashing.')
 
-        model = getattr(settings, 'INTELLIGENCE_MODEL', 'gpt-4o-mini')
-        prompt_version = getattr(settings, 'INTELLIGENCE_PROMPT_VERSION', 'v1')
-        provider = getattr(settings, 'INTELLIGENCE_PROVIDER', 'openai')
+        provider, model, prompt_version = (
+            AnalysisService._resolve_provider_and_model()
+        )
 
         target_kinds = AnalysisService._resolve_target_kinds_from_job(job)
         payload_hash = hashlib.sha256(
@@ -247,7 +314,13 @@ class AnalysisService:
             ).encode('utf-8')
         ).hexdigest()
 
+        # `job.id` distingue jobs diferentes com o mesmo input.
+        # `job.attempt_count` distingue tentativas do MESMO job.
+        # Juntos, garantem hash único por tentativa — e, por
+        # consequência, `created_at` sempre atual no run.
         composite = '|'.join([
+            str(job.id),
+            str(job.attempt_count),
             str(job.workspace_id),
             prompt_version,
             provider,
@@ -256,16 +329,41 @@ class AnalysisService:
         ])
         input_hash = hashlib.sha256(composite.encode('utf-8')).hexdigest()
 
-        existing = AnalysisRun.objects.filter(
+        # ------------------------------------------------------------------
+        # 1. Se já existe run COMPLETED para este attempt_count → idempotente
+        #
+        #    Defesa em profundidade: `claim_next_job` incrementa
+        #    `attempt_count` antes de chamar `execute`, então este
+        #    cenário não deveria ocorrer. Mas se ocorrer, o run está
+        #    completo e a IA já produziu os insights. Não roda de novo.
+        # ------------------------------------------------------------------
+        completed = AnalysisRun.objects.filter(
             input_hash=input_hash,
             status=AnalysisRun.STATUS_COMPLETED,
         ).first()
-        if existing:
+        if completed is not None:
             logger.info(
-                'Run idêntico já concluído (hash=%s). Ignorando.', input_hash,
+                'Run idêntico já concluído para este attempt (hash=%s). '
+                'Ignorando.', input_hash,
             )
             return None
 
+        # ------------------------------------------------------------------
+        # 2. Limpa artefatos de runs anteriores do MESMO job.
+        #
+        #    Como cada tentativa cria um run novo, os `UsageRecord` e
+        #    `ProviderLog` das tentativas anteriores ficam órfãos
+        #    (apontando para `request_id` de runs antigos). Deletamos
+        #    para manter o banco limpo e evitar que o `StalenessService`
+        #    ou o `CostAllocationService` tropecem neles.
+        # ------------------------------------------------------------------
+        previous_runs = AnalysisRun.objects.filter(job=job)
+        for prev_run in previous_runs:
+            AnalysisService._cleanup_run_artifacts(prev_run)
+
+        # ------------------------------------------------------------------
+        # 3. Cria run novo
+        # ------------------------------------------------------------------
         return AnalysisRun.objects.create(
             job=job,
             workspace=job.workspace,
@@ -281,6 +379,47 @@ class AnalysisService:
         )
 
     @staticmethod
+    def _cleanup_run_artifacts(run: AnalysisRun) -> None:
+        """
+        Remove `UsageRecord` e `ProviderLog` de um run anterior.
+
+        Chamado antes de criar um run novo para a mesma tentativa
+        de job. Não levanta — falhas de limpeza não impedem a nova
+        tentativa.
+
+        Não mexe em `InsightItem` — esses são artefatos do run
+        anterior, mas o `StalenessService` marca como stale
+        apropriadamente quando o run novo conclui. Deletá-los
+        aqui quebraria a auditoria histórica.
+        """
+        try:
+            from apps.console.models import UsageRecord, ProviderLog
+
+            deleted_usage, _ = UsageRecord.objects.filter(
+                provider__key=run.provider,
+                request_id=str(run.id),
+            ).delete()
+            if deleted_usage:
+                logger.info(
+                    'UsageRecord antigo do run=%s deletado '
+                    '(forçar chamada real).', run.id,
+                )
+
+            deleted_log, _ = ProviderLog.objects.filter(
+                provider__key=run.provider,
+                request_id=str(run.id),
+            ).delete()
+            if deleted_log:
+                logger.info(
+                    'ProviderLog antigo do run=%s deletado.', run.id,
+                )
+        except Exception:
+            logger.exception(
+                'Falha ao limpar artefatos do run=%s. Prosseguindo.',
+                run.id,
+            )
+
+    @staticmethod
     def _resolve_target_kinds_from_job(job: AnalysisJob) -> List[str]:
         requested = job.target_kinds or []
         valid = {c[0] for c in InsightItem.KIND_CHOICES}
@@ -292,15 +431,11 @@ class AnalysisService:
         return list(DEFAULT_KINDS_WITHOUT_BRIEFING)
 
     # ------------------------------------------------------------------
-    # INPUT (via contratos públicos)
+    # INPUT
     # ------------------------------------------------------------------
 
     @staticmethod
     def _prepare_input(job_or_run) -> Optional[Dict[str, Any]]:
-        """
-        Monta o payload a partir dos contratos públicos.
-        Nenhum import direto de models de `briefings`/`clients`.
-        """
         from apps.briefings import public as briefings_public
         from apps.clients import public as clients_public
 
@@ -318,9 +453,6 @@ class AnalysisService:
                 raise AnalysisInputError('Briefing não encontrado.')
             payload['briefing'] = briefing_snap
 
-            # Multimodal: tenta obter imagens via contrato público.
-            # Se a interface não existir ou devolver vazio, o input
-            # degrada para texto SEM inventar imagens.
             images = AnalysisService._collect_images(
                 briefings_public, briefing_snap,
             )
@@ -331,13 +463,6 @@ class AnalysisService:
 
     @staticmethod
     def _collect_images(briefings_public, briefing_snap: dict) -> List[Dict]:
-        """
-        Coleta imagens acessíveis do briefing via contrato público.
-
-        Regra: se `get_reference_document_payloads` não existir ou
-        devolver payloads sem URL acessível, retorna lista vazia.
-        NUNCA inventa descrição de imagem a partir do ID.
-        """
         getter = getattr(
             briefings_public, 'get_reference_document_payloads', None,
         )
@@ -390,15 +515,11 @@ class AnalysisService:
         return result
 
     # ------------------------------------------------------------------
-    # IA — via ponte do console
+    # IA
     # ------------------------------------------------------------------
 
     @staticmethod
     def _call_ai_via_console(run: AnalysisRun, input_data: dict) -> dict:
-        """
-        Chama a ponte `console.public.call_ai`, que executa o provider
-        real e registra uso/custo. Devolve payload normalizado.
-        """
         from apps.console import public as console_public
 
         call_ai = getattr(console_public, 'call_ai', None)
@@ -410,8 +531,22 @@ class AnalysisService:
             )
 
         system_prompt = get_prompt()
+
+        target_kinds = AnalysisService._resolve_target_kinds(run)
+        kinds_list = '\n'.join(f'  - "{k}"' for k in target_kinds)
+
         user_message = (
-            "Analise os dados abaixo e produza insights no formato JSON:\n\n"
+            "Analise os dados abaixo e produza insights no formato JSON.\n\n"
+            "============================================================================\n"
+            "KINDS A PRODUZIR NESTA EXECUÇÃO (use SOMENTE estes):\n"
+            "============================================================================\n"
+            f"{kinds_list}\n\n"
+            "Se a análise não tiver evidência suficiente para um kind\n"
+            "que exige evidência, NÃO invente — produza apenas os kinds\n"
+            "que conseguir sustentar.\n\n"
+            "============================================================================\n"
+            "DADOS:\n"
+            "============================================================================\n"
             f"{json.dumps(input_data, ensure_ascii=False, indent=2, default=str)}"
         )
 
@@ -459,22 +594,40 @@ class AnalysisService:
         ai_response: dict,
         target_kinds: Optional[List[str]] = None,
     ) -> List[Dict]:
-        """
-        Valida o JSON. Exige 'insights' (lista) com 'kind' válido,
-        'content' não vazio e 'confidence' válida.
-
-        Se `target_kinds` for fornecido, rejeita kinds fora da lista
-        (análise parcial não pode produzir o que não foi pedido).
-
-        Rejeita `evidences=[]` para kinds que exigem evidência.
-        """
         raw = ai_response.get('raw_content') or ''
+
+        if not raw.strip():
+            logger.error(
+                'Resposta da IA veio VAZIA. Isso geralmente significa '
+                'que o `AICallService` devolveu `raw_content=""` '
+                'porque o `UsageRecord` já existia (idempotência) e '
+                'o `metadata["raw_content"]` não foi persistido. '
+                'Solução: deletar o UsageRecord antigo com '
+                '`request_id=<run.id>` e tentar de novo.'
+            )
+            raise AIResponseError(
+                'Resposta da IA veio vazia. O `UsageRecord` antigo '
+                'pode ter sido reaproveitado sem `raw_content`. '
+                'Delete o `UsageRecord` do run e tente novamente.'
+            )
+
         try:
             data = json.loads(raw)
         except json.JSONDecodeError as exc:
+            logger.error(
+                'Resposta da IA não é JSON. raw_content=%r '
+                '(primeiros 500 chars)',
+                raw[:500],
+            )
             raise AIResponseError(f'Resposta da IA não é JSON válido: {exc}')
 
         if not isinstance(data, dict) or 'insights' not in data:
+            logger.error(
+                'Resposta da IA não tem chave "insights". '
+                'chaves=%r, raw=%r',
+                list(data.keys()) if isinstance(data, dict) else type(data).__name__,
+                raw[:500],
+            )
             raise AIResponseError("Resposta da IA não contém a chave 'insights'.")
 
         insights = data['insights']
@@ -488,7 +641,11 @@ class AnalysisService:
         validated = []
         for i, item in enumerate(insights):
             if not isinstance(item, dict):
+                logger.error(
+                    'Insight #%d não é dict. Recebido: %r', i, item,
+                )
                 raise AIResponseError(f'Insight #{i} não é um objeto.')
+
             kind = item.get('kind')
             content = (item.get('content') or '').strip()
             confidence = item.get(
@@ -496,15 +653,32 @@ class AnalysisService:
             )
 
             if kind not in valid_kinds:
+                logger.error(
+                    'Insight #%d: kind inválido. '
+                    'Recebido=%r. Item completo=%r',
+                    i, kind, item,
+                )
                 raise AIResponseError(f'Insight #{i}: kind inválido ({kind}).')
+
             if kind not in allowed:
+                logger.error(
+                    'Insight #%d: kind "%s" fora do target_kinds. '
+                    'Permitidos=%r',
+                    i, kind, sorted(allowed),
+                )
                 raise AIResponseError(
                     f'Insight #{i}: kind "{kind}" não solicitado nesta '
                     f'execução (target_kinds).'
                 )
+
             if not content:
                 raise AIResponseError(f'Insight #{i}: content vazio.')
             if confidence not in valid_confidences:
+                logger.error(
+                    'Insight #%d: confidence inválida. '
+                    'Recebido=%r, permitidos=%r',
+                    i, confidence, sorted(valid_confidences),
+                )
                 raise AIResponseError(
                     f'Insight #{i}: confidence inválida ({confidence}).'
                 )
@@ -514,6 +688,10 @@ class AnalysisService:
                 raise AIResponseError(f'Insight #{i}: evidences deve ser lista.')
 
             if kind in KINDS_REQUIRING_EVIDENCE and not evidences:
+                logger.error(
+                    'Insight #%d (%s): exige evidência, recebeu [].',
+                    i, kind,
+                )
                 raise AIResponseError(
                     f'Insight #{i} ({kind}): evidência obrigatória ausente.'
                 )
@@ -534,11 +712,6 @@ class AnalysisService:
 
     @staticmethod
     def _apply_ai_results(run, ai_response, insights_data, duration_ms):
-        """
-        Persiste os insights e evidências, e atualiza as métricas do run.
-        Detecta stale comparando a data de criação do run com o
-        `created_at` do último `InsightEvent` do alvo.
-        """
         latest_event = (
             InsightEvent.objects
             .filter(
@@ -580,11 +753,6 @@ class AnalysisService:
 
     @staticmethod
     def _persist_evidences(insight, raw_evidences, workspace):
-        """
-        Persiste as evidências, validando que cada fonte pertence ao
-        mesmo workspace do insight. Fontes inválidas são descartadas
-        com log, nunca silenciosamente aceitas.
-        """
         from apps.briefings import public as briefings_public
         from apps.clients import public as clients_public
 

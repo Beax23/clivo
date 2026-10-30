@@ -32,6 +32,33 @@ WHATSAPP
 --------
 No-op com log explícito. Não existe integração WhatsApp configurada
 em `integrations`. Se um dia existir, o gancho está preparado.
+
+LINKS POR DESTINATÁRIO
+----------------------
+`_client_portal_url(briefing)`      → raiz do portal do cliente
+`_architect_briefing_url(briefing)` → página de resumo do briefing
+                                       no painel do arquiteto
+                                       (`/w/<public_id>/briefings/<id>/resumo/`).
+
+Os dois links são DISTINTOS. O cliente entra no portal; o arquiteto
+entra no briefing respondido. Enviar a mesma URL para os dois
+(como era antes) fazia o arquiteto cair na home do frontend.
+
+RESPONSABILIDADE DO ENVIO
+-------------------------
+`_send_completion` NÃO decide se envia para o arquiteto ou para o
+cliente. Ele delega tudo ao `EmailService.send_briefing_completed`,
+que já trata:
+
+    - `architect_email` vazio  → pula o e-mail do arquiteto com
+                                  warning;
+    - `client.email` vazio      → pula o e-mail do cliente com info;
+    - `architect_briefing_url` vazio → fallback gracioso para
+                                       `{FRONTEND_URL}/fluxo/`.
+
+Isso evita duplicação de lógica entre `NotificationService` e
+`EmailService`, e garante que TODO envio de conclusão passe pelo
+mesmo caminho (PDF anexado, link correto, texto idêntico).
 """
 
 import logging
@@ -43,6 +70,83 @@ from apps.briefings.services.event_service import BriefingEventService
 
 logger = logging.getLogger('briefings')
 
+
+# =========================================================================
+# HELPERS DE LINK
+# =========================================================================
+
+def _frontend_base() -> str:
+    from django.conf import settings
+    return (getattr(settings, 'FRONTEND_URL', '') or '').rstrip('/')
+
+
+def _workspace_public_id(workspace) -> str:
+    """
+    Resolve o identificador público do workspace da mesma forma que
+    `apps/briefings/views.py:_workspace_public_id`.
+
+    Ordem: `public_id` → `slug` → `id`. Nunca devolve vazio para um
+    workspace existente.
+    """
+    if workspace is None:
+        return ''
+    return str(
+        getattr(workspace, 'public_id', '')
+        or getattr(workspace, 'slug', '')
+        or workspace.id
+    )
+
+
+def _client_portal_url(briefing: Briefing) -> str:
+    """
+    URL do portal do CLIENTE. Aponta para a raiz do portal (onde o
+    cliente digita o código) — não inclui o briefing, porque o
+    portal resolve tudo a partir da sessão.
+    """
+    base = _frontend_base()
+    if not base:
+        return ''
+    return f'{base}/'
+
+
+def _architect_briefing_url(briefing: Briefing) -> str:
+    """
+    URL do briefing respondido no painel do ARQUITETO.
+
+    Espelha `_architect_page_url` de `portal_serializers.py` e a rota
+    `briefing-architect-raw` (`BriefingArchitectRawView`):
+
+        /w/<public_id>/briefings/<briefing_id>/resumo/
+
+    Devolve '' quando não é possível montar o link (sem FRONTEND_URL
+    ou sem workspace). Nesse caso o `EmailService` cai no fallback
+    para `{FRONTEND_URL}/fluxo/` — nunca com link inventado.
+    """
+    base = _frontend_base()
+    if not base:
+        return ''
+    public_id = _workspace_public_id(briefing.workspace)
+    if not public_id:
+        return ''
+    return f'{base}/w/{public_id}/briefings/{briefing.id}/resumo/'
+
+
+def _supplementary_portal_url(briefing: Briefing) -> str:
+    """
+    URL do briefing específico no portal do cliente.
+
+    Diferente de `_client_portal_url` (raiz do portal): aqui o
+    cliente precisa ir direto ao briefing com complementares.
+    """
+    base = _frontend_base()
+    if not base:
+        return ''
+    return f'{base}/portal/briefings/{briefing.id}/'
+
+
+# =========================================================================
+# SERVICE
+# =========================================================================
 
 class NotificationService:
 
@@ -102,6 +206,8 @@ class NotificationService:
                 'architect_email': briefing.created_by.email
                     if briefing.created_by else None,
                 'client_email': briefing.client.email or None,
+                'architect_url': _architect_briefing_url(briefing),
+                'client_url': _client_portal_url(briefing),
             },
         )
         logger.info(
@@ -324,6 +430,20 @@ class NotificationService:
 
     @staticmethod
     def _send_completion(briefing: Briefing) -> None:
+        """
+        Envia o e-mail de conclusão.
+
+        NÃO decide destinatários. Delega tudo ao
+        `EmailService.send_briefing_completed`, que já trata:
+
+            - `architect_email` vazio  → pula o arquiteto com warning;
+            - `client.email` vazio      → pula o cliente com info;
+            - `architect_briefing_url` vazio → fallback gracioso
+                                               para `{FRONTEND_URL}/fluxo/`.
+
+        Isso mantém UM caminho único de envio de conclusão, com PDF
+        anexado, link correto e texto idêntico em todos os casos.
+        """
         from apps.accounts.services.email import EmailService
 
         architect_email = (
@@ -331,6 +451,9 @@ class NotificationService:
             if briefing.created_by else None
         )
 
+        # Gera PDF do cliente (modo='client', sem notas internas).
+        # Falha de geração NÃO bloqueia o envio — o e-mail sai sem
+        # anexo.
         client_pdf_bytes = None
         client_pdf_filename = None
         try:
@@ -350,32 +473,17 @@ class NotificationService:
                 briefing.id,
             )
 
-        client_portal_url = NotificationService._portal_url(briefing)
+        client_url = _client_portal_url(briefing)
+        architect_url = _architect_briefing_url(briefing)
 
-        if architect_email:
-            EmailService.send_briefing_completed(
-                briefing=briefing,
-                client_portal_url=client_portal_url,
-                architect_email=architect_email,
-                client_pdf_bytes=client_pdf_bytes,
-                client_pdf_filename=client_pdf_filename,
-            )
-        else:
-            if briefing.client.email:
-                from django.conf import settings
-                site_name = getattr(settings, 'SITE_NAME', 'Clivo')
-                EmailService.send(
-                    to=briefing.client.email,
-                    subject=(
-                        f'Seu briefing foi registrado — {briefing.title}'
-                    ),
-                    text=(
-                        f'Olá,\n\n'
-                        f'Recebemos suas respostas do briefing '
-                        f'"{briefing.title}".\n\n'
-                        f'— {site_name}'
-                    ),
-                )
+        EmailService.send_briefing_completed(
+            briefing=briefing,
+            client_portal_url=client_url,
+            architect_briefing_url=architect_url,
+            architect_email=architect_email,
+            client_pdf_bytes=client_pdf_bytes,
+            client_pdf_filename=client_pdf_filename,
+        )
 
     @staticmethod
     def _send_supplementary_email(
@@ -387,7 +495,7 @@ class NotificationService:
         from django.conf import settings
 
         site_name = getattr(settings, 'SITE_NAME', 'Clivo')
-        portal_url = NotificationService._supplementary_portal_url(briefing)
+        portal_url = _supplementary_portal_url(briefing)
 
         count = len(questions)
         plural = 'perguntas' if count > 1 else 'pergunta'
@@ -449,22 +557,13 @@ class NotificationService:
         )
         return (False, 'whatsapp_adapter_not_implemented')
 
-    @staticmethod
-    def _portal_url(briefing: Briefing) -> str:
-        from django.conf import settings
-        frontend_url = getattr(
-            settings, 'FRONTEND_URL', ''
-        ).rstrip('/')
-        if not frontend_url:
-            return ''
-        return f'{frontend_url}/'
+    # ==================================================================
+    # COMPATIBILIDADE
+    # ==================================================================
 
     @staticmethod
-    def _supplementary_portal_url(briefing: Briefing) -> str:
-        from django.conf import settings
-        frontend_url = getattr(
-            settings, 'FRONTEND_URL', ''
-        ).rstrip('/')
-        if not frontend_url:
-            return ''
-        return f'{frontend_url}/portal/briefings/{briefing.id}/'
+    def _portal_url(briefing: Briefing) -> str:
+        """
+        Mantido por compatibilidade. Use `_client_portal_url`.
+        """
+        return _client_portal_url(briefing)

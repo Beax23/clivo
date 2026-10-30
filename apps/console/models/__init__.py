@@ -25,6 +25,8 @@ from apps.console.models.storage_budget import (
     StorageBudgetChange,
 )
 
+from apps.console.models.ai_provider_config import AIProviderConfig
+
 __all__ = [
     # Console V1 — governança
     'ConsoleGovernance',
@@ -53,4 +55,7 @@ __all__ = [
     'StorageProviderSnapshot',
     'StorageBudget',
     'StorageBudgetChange',
+
+    # Console V1 — IA
+    'AIProviderConfig',
 ]

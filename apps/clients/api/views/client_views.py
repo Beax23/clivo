@@ -9,11 +9,19 @@ Regras:
     - Sem archive/unarchive: cliente é criado, editado ou excluído.
     - `status` é editável via `clients.client.update`.
     - Sem timeline local. Eventos vão para `ClientEventEmitter`.
+
+O envio do código de acesso na criação fica em
+`ClientService.create_client` (com auditoria em
+`ClientPortalInvitation`). A view NÃO envia e-mail diretamente.
+
+O endpoint `portal/send-access` continua usando
+`PortalInvitationService.send_access` (fluxo com token/sessão).
+A ação `send-code` usa `ClientService._send_access_code` (só código,
+sem sessão, com auditoria) — é o mesmo fluxo que roda no `create`.
 """
 
 import logging
 
-from django.conf import settings
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -180,31 +188,9 @@ class ClientViewSet(viewsets.ModelViewSet):
         except ClientDuplicateEmailError as e:
             return Response({'error': str(e)}, status=status.HTTP_409_CONFLICT)
 
-        # Envio automático do código de acesso por email.
-        # Não bloqueia a criação se o envio falhar.
-        if client.email:
-            try:
-                from apps.accounts.services.email import EmailService
-
-                frontend_url = (
-                    getattr(settings, 'FRONTEND_URL', '') or
-                    'https://clivoos.com'
-                ).rstrip('/')
-                # O portal é acessado em /portal/ — o cliente digita o código lá.
-                # NÃO colocar o código no path.
-                portal_url = f"{frontend_url}/portal/"
-
-                EmailService.send_client_code_email(
-                    client=client,
-                    workspace=workspace,
-                    portal_url=portal_url,
-                )
-            except Exception:
-                logger.exception(
-                    "Falha ao enviar código de acesso para client_id=%s email=%s",
-                    client.id,
-                    client.email,
-                )
+        # O envio do código de acesso (com auditoria em
+        # ClientPortalInvitation) já foi feito pelo service.
+        # A view NÃO envia e-mail diretamente.
 
         return Response(
             ClientDetailSerializer(client).data,
@@ -338,7 +324,7 @@ class ClientViewSet(viewsets.ModelViewSet):
         )
         return Response(ClientDetailSerializer(client).data)
 
-    # ==================================================================
+            # ==================================================================
     # CONTACTS
     # ==================================================================
 
@@ -534,6 +520,18 @@ class ClientViewSet(viewsets.ModelViewSet):
         url_path='portal/send-access',
     )
     def portal_send_access(self, request, id=None):
+        """
+        Envia acesso com TOKEN/SESSÃO temporária.
+
+        Fluxo diferente do `send-code`:
+            - cria `ClientPortalSession`;
+            - revoga sessões anteriores do cliente;
+            - e-mail aponta para link com `?t=<token>`.
+
+        Uso: quando o arquiteto quer mandar o cliente DIRETO para o
+        briefing (por exemplo, para responder complementares), sem
+        exigir que ele digite o código de novo.
+        """
         client = self._get_client_or_404(id)
         if client is None:
             return Response({'error': 'Cliente não encontrado'}, status=404)
@@ -551,6 +549,9 @@ class ClientViewSet(viewsets.ModelViewSet):
         except PortalEmailMissingError as e:
             return Response({'error': str(e)}, status=400)
         except Exception:
+            logger.exception(
+                'Falha ao enviar acesso do portal (client=%s)', client.id,
+            )
             return Response(
                 {'error': 'Falha ao enviar acesso'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -600,7 +601,7 @@ class ClientViewSet(viewsets.ModelViewSet):
         return Response(PortalFeedbackSerializer(feedbacks, many=True).data)
 
     # ==================================================================
-    # SEND CODE
+    # SEND CODE (reenvio com auditoria, SEM sessão)
     # ==================================================================
 
     @action(
@@ -610,7 +611,14 @@ class ClientViewSet(viewsets.ModelViewSet):
     )
     def send_code(self, request, id=None):
         """
-        Envia (ou reenvia) o código do cliente por email.
+        Envia (ou reenvia) o CÓDIGO de acesso por e-mail.
+
+        Mesmo fluxo do `create`: `ClientService._send_access_code`.
+        NÃO cria sessão. NÃO revoga sessões. Grava
+        `ClientPortalInvitation` com o resultado (auditoria).
+
+        Uso: quando o cliente perdeu o e-mail original e o arquiteto
+        quer reenviar o código sem gerar link com token.
         """
         client = self._get_client_or_404(id)
         if client is None:
@@ -626,25 +634,16 @@ class ClientViewSet(viewsets.ModelViewSet):
                 status=400,
             )
 
-        from apps.accounts.services.email import EmailService
+        # O service grava ClientPortalInvitation('sent'|'failed') e
+        # não levanta para falha de SMTP. A view não precisa (e não
+        # deve) inspecionar exceção de e-mail.
+        ClientService._send_access_code(
+            client=client,
+            actor=request.user,
+        )
 
-        frontend_url = (
-            getattr(settings, 'FRONTEND_URL', '') or
-            'https://clivoos.com'
-        ).rstrip('/')
-        # O portal é acessado em /portal/ — o cliente digita o código lá.
-        portal_url = f"{frontend_url}/portal/"
-
-        try:
-            EmailService.send_client_code_email(
-                client=client,
-                workspace=client.workspace,
-                portal_url=portal_url,
-            )
-        except Exception:
-            return Response(
-                {'error': 'Falha ao enviar o código'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
-
-        return Response({'detail': 'Código enviado com sucesso'})
+        return Response(
+            {'detail': 'Código enviado com sucesso'},
+            status=status.HTTP_200_OK,
+        )
+        

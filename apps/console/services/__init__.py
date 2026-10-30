@@ -21,6 +21,7 @@ from apps.console.services.ai_call_service import (
     AICallService,
     AICallError,
 )
+from apps.console.services.ai_config_service import AIConfigService
 
 __all__ = [
     'ConsoleMembershipService',
@@ -40,4 +41,5 @@ __all__ = [
     'StorageBudgetService',
     'AICallService',
     'AICallError',
+    'AIConfigService',
 ]

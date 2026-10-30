@@ -1,1828 +1,992 @@
 {% load static %}
 <!DOCTYPE html>
-<html lang="pt-BR" data-theme-mode="auto">
+<html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="theme-color" content="#FFFFFF">
-    <title>Briefing · {{ briefing.title }}</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Briefing · {{ briefing.client_name|default:"Cliente" }}</title>
+  <link rel="icon" type="image/svg+xml" href="{% static 'img/clivo-logo.svg' %}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
-    <link rel="icon" type="image/jfif" href="{% static 'img/clivo-logo.svg' %}">
+  <script>
+  (function () {
+    try {
+      var saved = localStorage.getItem('clivo-theme');
+      var mode = saved || 'auto';
+      var isDark = mode === 'dark' || (mode === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      if (isDark) document.documentElement.setAttribute('data-theme', 'dark');
+    } catch (e) {}
+  })();
+  </script>
 
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    /* Tokens oficiais da Clivo */
+    :root {
+      --bg-page: #FFFFFF;
+      --bg-card: #FFFFFF;
+      --bg-secondary: #F7F7F9;
+      --bg-hover: #F0F0F2;
+      --border-color: #E9E9EC;
+      --border-light: #EFEFF1;
+      --text-primary: #101014;
+      --text-secondary: #6B6B76;
+      --text-tertiary: #9797A1;
 
-    <script>
-        (function () {
-            try {
-                var saved = localStorage.getItem('clivo-theme');
-                var mode = saved || 'auto';
-                document.documentElement.setAttribute('data-theme-mode', mode);
-                var isDark = false;
-                if (mode === 'dark') isDark = true;
-                else if (mode === 'light') isDark = false;
-                else isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-                if (isDark) document.documentElement.setAttribute('data-theme', 'dark');
-                else document.documentElement.removeAttribute('data-theme');
-            } catch (e) {}
-        })();
-    </script>
+      --cl-accent: #4a6cf7;
+      --cl-accent-strong: #1d4ed8;
+      --cl-accent-bg: #eef3ff;
 
-    <style>
-        /* ============================================================
-           TOKENS — idênticos a cliente.css / mesa.css
-           ============================================================ */
-        :root {
-            --bg-page: #FFFFFF;
-            --bg-card: #FFFFFF;
-            --bg-soft: #F9FAFB;
-            --bg-hover: #F3F4F6;
-            --bg-secondary: #F7F7F9;
+      --cl-green: #17b26a;
+      --cl-green-bg: rgba(23, 178, 106, 0.12);
+      --cl-green-ink: #0e8f55;
 
-            --border-color: #E9E9EC;
-            --border-light: #EFEFF1;
+      --cl-amber: #d97706;
+      --cl-amber-bg: rgba(217, 119, 6, 0.12);
+      --cl-amber-ink: #b45309;
 
-            --text-primary: #101014;
-            --text-secondary: #6B6B76;
-            --text-tertiary: #9797A1;
+      --cl-red: #e5484d;
+      --cl-red-bg: rgba(229, 72, 77, 0.12);
+      --cl-red-ink: #c8363b;
 
-            --blue: #4A6CF7;
-            --blue-bg: #EEF3FF;
-            --blue-ink: #1D4ED8;
+      --cl-purple: #7c3aed;
+      --cl-purple-bg: rgba(124, 58, 237, 0.1);
+      --cl-purple-ink: #6d28d9;
 
-            --green: #17B26A;
-            --green-bg: #E6F8EF;
+      --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    [data-theme="dark"] {
+      --bg-page: #0A0A0A;
+      --bg-card: #0A0A0A;
+      --bg-secondary: #121212;
+      --bg-hover: #1A1A1A;
+      --border-color: #1F1F1F;
+      --border-light: #1F1F1F;
+      --text-primary: #F5F5F5;
+      --text-secondary: #A0A0A0;
+      --text-tertiary: #666666;
+      --cl-accent: #6b8afb;
+      --cl-accent-strong: #93c5fd;
+      --cl-accent-bg: #11203a;
+      --cl-green-bg: rgba(23, 178, 106, 0.18);
+      --cl-green-ink: #3ccb8a;
+      --cl-amber-bg: rgba(217, 119, 6, 0.18);
+      --cl-amber-ink: #f59e0b;
+      --cl-red-bg: rgba(229, 72, 77, 0.18);
+      --cl-red-ink: #f26d71;
+      --cl-purple-bg: rgba(124, 58, 237, 0.2);
+      --cl-purple-ink: #a78bfa;
+    }
 
-            --red: #E5484D;
-            --red-bg: #FDECEC;
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: var(--font-family);
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--text-primary);
+      background: var(--bg-secondary);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    h1, h2, h3, h4, p { margin: 0; }
+    a { color: inherit; text-decoration: none; }
+    button, input, select { font: inherit; color: inherit; }
+    button { cursor: pointer; background: none; border: none; }
+    svg { flex-shrink: 0; display: inline-block; }
 
-            --amber: #D97706;
-            --amber-bg: #FEF3C7;
+    .rp-shell {
+      width: min(100% - 48px, 1560px);
+      margin: 24px auto 64px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    @media (max-width: 680px) { .rp-shell { width: 100%; margin: 0; gap: 0; } }
 
-            --purple: #7C3AED;
-            --purple-bg: #F3E8FF;
+    .rp-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 24px 28px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.04);
+    }
+    @media (max-width: 680px) { .rp-card { border-radius: 0; border-left: 0; border-right: 0; padding: 18px 16px; } }
 
-            --radius-sm: 6px;
-            --radius-md: 8px;
-            --radius-lg: 12px;
-            --radius-xl: 16px;
+    /* CAPA — header compacto, SEM botão de reanálise */
+    .rp-cover-top {
+      display: flex; justify-content: space-between; align-items: center;
+      gap: 12px; flex-wrap: wrap;
+      margin-bottom: 16px; padding-bottom: 12px;
+      border-bottom: 1px solid var(--border-light);
+    }
+    .rp-wordmark { font-size: 18px; font-weight: 800; letter-spacing: -.04em; color: var(--text-primary); }
+    .rp-wordmark span { color: var(--cl-accent); }
+    .rp-eyebrow {
+      font-size: 10px; font-weight: 700; letter-spacing: .5px;
+      text-transform: uppercase; color: var(--text-tertiary);
+      margin-bottom: 8px;
+    }
+    .rp-title {
+      font-size: clamp(24px, 2.6vw, 36px); font-weight: 800;
+      letter-spacing: -1px; line-height: 1.1;
+      color: var(--text-primary); margin: 0 0 10px;
+    }
+    .rp-title em { font-style: italic; font-weight: 700; color: var(--cl-accent); }
+    .rp-lede { font-size: 13px; line-height: 1.6; color: var(--text-secondary); max-width: 760px; margin: 0; }
+    .rp-meta-bar {
+      display: flex; flex-wrap: wrap; gap: 12px 24px;
+      margin-top: 18px; padding-top: 14px;
+      border-top: 1px solid var(--border-light);
+    }
+    .rp-meta-bar > div { min-width: 110px; }
+    .rp-meta-bar dt {
+      font-size: 9.5px; font-weight: 700; letter-spacing: .4px;
+      text-transform: uppercase; color: var(--text-tertiary); margin-bottom: 3px;
+    }
+    .rp-meta-bar dd { margin: 0; font-size: 12.5px; font-weight: 600; color: var(--text-primary); }
 
-            --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            --t: 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    .rp-section-head {
+      display: flex; justify-content: space-between; align-items: baseline;
+      gap: 12px; margin-bottom: 16px; flex-wrap: wrap;
+    }
+    .rp-section-title {
+      font-size: 15px; font-weight: 700; letter-spacing: -.2px;
+      color: var(--text-primary); margin: 0;
+    }
+    .rp-section-desc {
+      font-size: 12px; color: var(--text-tertiary);
+      margin: 4px 0 0; line-height: 1.5;
+    }
 
-            --safe-top: env(safe-area-inset-top, 0px);
-            --safe-bottom: env(safe-area-inset-bottom, 0px);
-            --safe-left: env(safe-area-inset-left, 0px);
-            --safe-right: env(safe-area-inset-right, 0px);
+    /* GRID: Síntese + Moodboard lado a lado */
+    .rp-top-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 20px;
+      align-items: stretch;
+    }
+    @media (max-width: 900px) { .rp-top-grid { grid-template-columns: 1fr; } }
 
-            --pad-x: 16px;
-        }
+    /* SÍNTESE */
+    .rp-summary-body {
+      border-left: 3px solid var(--cl-accent);
+      padding: 2px 0 2px 20px;
+      font-size: 15px; line-height: 1.7; color: var(--text-secondary);
+      max-height: 520px;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(0,0,0,.08) transparent;
+    }
+    .rp-summary-body::-webkit-scrollbar { width: 5px; }
+    .rp-summary-body::-webkit-scrollbar-thumb { background: rgba(0,0,0,.08); border-radius: 999px; }
+    [data-theme="dark"] .rp-summary-body { scrollbar-color: rgba(255,255,255,.1) transparent; }
+    [data-theme="dark"] .rp-summary-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,.08); }
+    .rp-summary-body p { margin: 0 0 10px; white-space: pre-wrap; }
+    .rp-summary-body p:last-child { margin-bottom: 0; }
+    .rp-empty { font-size: 12.5px; color: var(--text-tertiary); font-style: italic; padding: 8px 0; }
 
-        [data-theme="dark"] {
-            --bg-page: #0A0A0A;
-            --bg-card: #0F0F0F;
-            --bg-soft: #0A0A0A;
-            --bg-hover: #171717;
-            --bg-secondary: #141414;
+    /* MOODBOARD */
+    .rp-moodboard-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 10px;
+      max-height: 520px;
+      overflow-y: auto;
+      padding-right: 4px;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(0,0,0,.08) transparent;
+    }
+    .rp-moodboard-grid::-webkit-scrollbar { width: 5px; }
+    .rp-moodboard-grid::-webkit-scrollbar-thumb { background: rgba(0,0,0,.08); border-radius: 999px; }
+    [data-theme="dark"] .rp-moodboard-grid { scrollbar-color: rgba(255,255,255,.1) transparent; }
+    [data-theme="dark"] .rp-moodboard-grid::-webkit-scrollbar-thumb { background: rgba(255,255,255,.08); }
+    .rp-moodboard-item {
+      position: relative; aspect-ratio: 1/1;
+      border-radius: 10px; overflow: hidden;
+      border: 1px solid var(--border-light);
+      background: var(--bg-secondary);
+      cursor: zoom-in;
+      transition: transform 160ms ease;
+    }
+    .rp-moodboard-item:hover { transform: translateY(-2px); }
+    .rp-moodboard-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .rp-source-badge {
+      position: absolute; top: 6px; left: 6px;
+      background: rgba(0,0,0,.65); color: #fff;
+      font-size: 9px; font-weight: 700; letter-spacing: .4px;
+      text-transform: uppercase; padding: 3px 6px; border-radius: 4px;
+    }
 
-            --border-color: #1F1F1F;
-            --border-light: #1A1A1A;
+    /* GRID PRINCIPAL — Insights × Perguntas */
+    .rp-main {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 20px; align-items: start;
+    }
+    @media (max-width: 1024px) { .rp-main { grid-template-columns: 1fr; gap: 20px; } }
 
-            --text-primary: #F5F5F5;
-            --text-secondary: #B0B0B0;
-            --text-tertiary: #6A6A6E;
+    .rp-insights-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+    }
+    @media (max-width: 700px) { .rp-insights-grid { grid-template-columns: 1fr; } }
 
-            --blue-bg: #131A33;
-            --blue-ink: #93C5FD;
+    .rp-insight {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      display: flex; flex-direction: column;
+      height: 380px; overflow: hidden;
+    }
+    .rp-insight-head {
+      display: flex; align-items: center; gap: 10px;
+      padding: 14px 16px; border-bottom: 1px solid var(--border-light);
+      flex-shrink: 0;
+    }
+    .rp-insight-icon {
+      width: 26px; height: 26px; border-radius: 8px;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: var(--cl-accent-bg); color: var(--cl-accent-strong);
+      flex-shrink: 0;
+    }
+    .rp-insight-icon svg { width: 13px; height: 13px; }
+    .rp-insight-title {
+      font-size: 12.5px; font-weight: 700; letter-spacing: -.1px;
+      color: var(--text-primary); flex: 1; min-width: 0;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .rp-insight-count {
+      font-size: 10px; font-weight: 700; color: var(--text-tertiary);
+      background: var(--bg-secondary); padding: 3px 7px;
+      border-radius: 999px; flex-shrink: 0; font-variant-numeric: tabular-nums;
+    }
+    .rp-insight-list {
+      list-style: none; margin: 0; padding: 12px 16px;
+      display: flex; flex-direction: column; gap: 10px;
+      flex: 1; overflow-y: auto;
+      scrollbar-width: thin; scrollbar-color: rgba(0,0,0,.08) transparent;
+    }
+    .rp-insight-list::-webkit-scrollbar { width: 4px; }
+    .rp-insight-list::-webkit-scrollbar-thumb { background: rgba(0,0,0,.08); border-radius: 999px; }
+    [data-theme="dark"] .rp-insight-list { scrollbar-color: rgba(255,255,255,.1) transparent; }
+    [data-theme="dark"] .rp-insight-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,.08); }
+    .rp-insight-item {
+      display: flex; gap: 8px; font-size: 12.5px; line-height: 1.55;
+      color: var(--text-secondary); word-break: break-word;
+    }
+    .rp-insight-item::before {
+      content: ""; width: 5px; height: 5px; border-radius: 50%;
+      background: var(--cl-accent); flex-shrink: 0; margin-top: 7px;
+    }
+    .rp-insight-item.fact::before { background: var(--cl-green); }
+    .rp-insight-item.gap::before { background: var(--cl-amber); }
+    .rp-insight-item.contradiction::before { background: var(--cl-red); }
+    .rp-insight-empty {
+      font-size: 11.5px; color: var(--text-tertiary);
+      font-style: italic; padding: 16px 0; text-align: center;
+    }
 
-            --green-bg: #0A1F14;
-            --red-bg: #2A1012;
-            --amber-bg: #2A1F0A;
-            --purple-bg: #1E1533;
-        }
+    /* FILTROS */
+    .rp-tools {
+      display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+      margin-bottom: 16px;
+    }
+    .rp-tools select,
+    .rp-tools input[type="search"] {
+      height: 32px; padding: 0 10px;
+      border: 1px solid var(--border-color); border-radius: 8px;
+      background: var(--bg-card); color: var(--text-primary);
+      font-size: 12px; font-family: var(--font-family); outline: none;
+    }
+    .rp-tools input[type="search"] { flex: 1; min-width: 160px; }
+    .rp-tools select:focus, .rp-tools input[type="search"]:focus {
+      border-color: var(--cl-accent);
+      box-shadow: 0 0 0 3px var(--cl-accent-bg);
+    }
+    .rp-filter {
+      height: 32px; padding: 0 10px;
+      border: 1px solid var(--border-color); border-radius: 8px;
+      background: var(--bg-card); color: var(--text-secondary);
+      font-size: 11.5px; display: inline-flex; align-items: center; gap: 5px;
+    }
+    .rp-filter[aria-pressed="true"] {
+      background: var(--text-primary);
+      border-color: var(--text-primary);
+      color: var(--bg-card);
+    }
 
-        *, *::before, *::after {
-            margin: 0; padding: 0; box-sizing: border-box;
-            -webkit-tap-highlight-color: transparent;
-        }
-        html, body { min-height: 100%; }
-        body {
-            font-family: var(--font);
-            background: var(--bg-soft);
-            color: var(--text-primary);
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
-            font-size: 13px;
-            line-height: 1.5;
-        }
-        button, input, select, textarea { font-family: inherit; }
-        a { color: inherit; text-decoration: none; }
-        svg { flex-shrink: 0; }
+    /* RESPOSTAS */
+    .rp-session {
+      background: var(--bg-card); border: 1px solid var(--border-color);
+      border-radius: 12px; overflow: hidden; margin-bottom: 14px;
+    }
+    .rp-session[hidden] { display: none; }
+    .rp-session-head {
+      display: flex; justify-content: space-between; align-items: center;
+      gap: 10px; padding: 12px 14px;
+      background: var(--bg-secondary); border-bottom: 1px solid var(--border-light);
+    }
+    .rp-session-head strong { font-size: 12px; font-weight: 700; color: var(--text-primary); }
+    .rp-session-head span { font-size: 10px; font-weight: 600; color: var(--text-tertiary); }
 
-        /* ============================================================
-           TOPBAR MÍNIMA (só trilha, PDF, tema)
-           ============================================================ */
-        .mini-topbar {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            height: 40px;
-            padding: 0 12px;
-            padding-top: var(--safe-top);
-            padding-left: calc(12px + var(--safe-left));
-            padding-right: calc(12px + var(--safe-right));
-            border-bottom: 1px solid var(--border-light);
-            background: var(--bg-card);
-            position: sticky;
-            top: 0;
-            z-index: 20;
-        }
-        .mini-back {
-            width: 28px;
-            height: 28px;
-            border-radius: 7px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            color: var(--text-secondary);
-            background: transparent;
-            border: none;
-            cursor: pointer;
-            flex-shrink: 0;
-            transition: background var(--t), color var(--t);
-        }
-        .mini-back:hover { background: var(--bg-hover); color: var(--text-primary); }
-        .mini-back svg { width: 14px; height: 14px; stroke-width: 2; }
+    .rp-question { padding: 14px 16px; border-bottom: 1px solid var(--border-light); }
+    .rp-question:last-child { border-bottom: 0; }
+    .rp-question[hidden] { display: none; }
+    .rp-q-top { display: grid; grid-template-columns: 26px 1fr auto; gap: 10px; align-items: start; }
+    .rp-q-num {
+      font-size: 10.5px; font-weight: 700; color: var(--text-tertiary);
+      font-variant-numeric: tabular-nums; padding-top: 2px;
+    }
+    .rp-q-title {
+      font-size: 13px; font-weight: 600; line-height: 1.5;
+      color: var(--text-primary); white-space: pre-wrap;
+    }
+    .rp-q-status {
+      font-size: 9.5px; font-weight: 700; padding: 3px 7px;
+      border-radius: 999px; background: var(--bg-secondary);
+      color: var(--text-tertiary); white-space: nowrap;
+    }
+    .rp-q-status.is-answered { background: var(--cl-green-bg); color: var(--cl-green-ink); }
+    .rp-q-status.is-doubt { background: var(--cl-amber-bg); color: var(--cl-amber-ink); }
 
-        .mini-crumb {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            flex: 1;
-            min-width: 0;
-            font-size: 12px;
-            color: var(--text-tertiary);
-        }
-        .mini-crumb svg { width: 10px; height: 10px; opacity: 0.5; }
-        .mini-crumb strong {
-            font-weight: 600;
-            color: var(--text-primary);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            max-width: 320px;
-        }
+    .rp-answer {
+      margin: 10px 0 0 36px; padding: 10px 12px;
+      background: var(--bg-secondary); border-radius: 8px;
+      font-size: 12.5px; line-height: 1.65; color: var(--text-primary);
+      white-space: pre-wrap; word-break: break-word;
+    }
+    .rp-answer.is-empty { color: var(--text-tertiary); font-style: italic; }
+    .rp-answer-label {
+      display: block; margin-bottom: 4px;
+      font-size: 9.5px; font-weight: 700; letter-spacing: .4px;
+      text-transform: uppercase; color: var(--text-tertiary);
+    }
 
-        .mini-actions {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            flex-shrink: 0;
-        }
-        .mini-btn {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 5px;
-            height: 28px;
-            padding: 0 9px;
-            border-radius: 7px;
-            font-size: 11.5px;
-            font-weight: 500;
-            cursor: pointer;
-            border: 1px solid transparent;
-            background: transparent;
-            color: var(--text-secondary);
-            transition: background var(--t), color var(--t), border-color var(--t);
-            white-space: nowrap;
-        }
-        .mini-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
-        .mini-btn svg { width: 12px; height: 12px; stroke-width: 2; }
-        .mini-btn .label { display: none; }
-        @media (min-width: 640px) { .mini-btn .label { display: inline; } }
+    .rp-chosen-options {
+      margin: 10px 0 0 36px; padding: 10px 12px;
+      background: var(--cl-accent-bg);
+      border-left: 2px solid var(--cl-accent);
+      border-radius: 0 8px 8px 0;
+    }
+    .rp-chosen-options-label {
+      display: block; margin-bottom: 6px;
+      font-size: 9.5px; font-weight: 700; letter-spacing: .4px;
+      text-transform: uppercase; color: var(--cl-accent-strong);
+    }
+    .rp-chosen-options-list {
+      list-style: none; padding: 0; margin: 0;
+      display: flex; flex-wrap: wrap; gap: 6px;
+    }
+    .rp-chosen-options-list li {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 3px 9px; background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 999px; font-size: 11px; font-weight: 500;
+      color: var(--text-primary);
+    }
+    .rp-chosen-options-list li::before {
+      content: "✓"; color: var(--cl-accent); font-weight: 700;
+    }
 
-        .mini-btn.primary {
-            background: var(--text-primary);
-            color: var(--bg-card);
-            border-color: var(--text-primary);
-        }
-        .mini-btn.primary:hover {
-            opacity: 0.9;
-            background: var(--text-primary);
-            color: var(--bg-card);
-        }
+    .rp-answer-images {
+      margin: 10px 0 0 36px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+      gap: 8px;
+    }
+    .rp-answer-image {
+      position: relative; aspect-ratio: 1/1;
+      border-radius: 8px; overflow: hidden;
+      border: 1px solid var(--border-color);
+      background: var(--bg-secondary);
+      cursor: zoom-in;
+      transition: transform 140ms ease;
+    }
+    .rp-answer-image:hover { transform: translateY(-2px); }
+    .rp-answer-image img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
-        /* ============================================================
-           WRAP
-           ============================================================ */
-        .wrap {
-            max-width: 1440px;
-            margin: 0 auto;
-            padding: 16px 12px 48px;
-            padding-left: calc(12px + var(--safe-left));
-            padding-right: calc(12px + var(--safe-right));
-            padding-bottom: calc(48px + var(--safe-bottom));
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-        }
+    .rp-answer-file {
+      display: inline-flex; align-items: center; gap: 6px;
+      margin: 10px 0 0 36px; padding: 6px 10px;
+      border: 1px solid var(--border-color); border-radius: 6px;
+      background: var(--bg-card); font-size: 11px; color: var(--text-primary);
+    }
 
-        /* ============================================================
-           HERO COMPACTO
-           ============================================================ */
-        .hero {
-            background: var(--bg-card);
-            border: 1px solid var(--border-light);
-            border-radius: var(--radius-lg);
-            padding: 16px;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-        .hero-top {
-            display: flex;
-            align-items: flex-start;
-            justify-content: space-between;
-            gap: 12px;
-        }
-        .hero-titles { min-width: 0; flex: 1; }
-        .hero-eyebrow {
-            font-size: 10px;
-            font-weight: 700;
-            letter-spacing: 0.5px;
-            text-transform: uppercase;
-            color: var(--text-tertiary);
-            margin-bottom: 4px;
-        }
-        .hero-title {
-            font-size: 20px;
-            font-weight: 700;
-            letter-spacing: -0.4px;
-            line-height: 1.2;
-            color: var(--text-primary);
-            margin: 0;
-            word-break: break-word;
-        }
-        .hero-meta {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px 14px;
-            font-size: 12px;
-            color: var(--text-secondary);
-            margin-top: 6px;
-        }
-        .hero-meta-item {
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-        }
-        .hero-meta-item svg {
-            width: 12px; height: 12px;
-            stroke-width: 2;
-            color: var(--text-tertiary);
-        }
-        .hero-meta-item strong { color: var(--text-primary); font-weight: 600; }
+    .rp-transcript {
+      margin: 10px 0 0 36px; padding: 10px 12px;
+      border-left: 2px solid var(--cl-accent);
+      background: var(--cl-accent-bg);
+      font-size: 11.5px; line-height: 1.6;
+      color: var(--text-secondary); white-space: pre-wrap;
+      border-radius: 0 6px 6px 0;
+    }
+    .rp-audio { margin: 10px 0 0 36px; }
+    .rp-audio audio { width: min(100%, 420px); height: 32px; }
+    .rp-q-foot {
+      display: flex; flex-wrap: wrap; gap: 10px;
+      margin: 10px 0 0 36px;
+      font-size: 10px; color: var(--text-tertiary);
+      font-variant-numeric: tabular-nums;
+    }
 
-        /* Badge de status */
-        .status-pill {
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-            height: 22px;
-            padding: 0 9px;
-            border-radius: 999px;
-            background: var(--blue-bg);
-            color: var(--blue-ink);
-            font-size: 10.5px;
-            font-weight: 600;
-            white-space: nowrap;
-            flex-shrink: 0;
-        }
-        .status-pill .dot {
-            width: 5px;
-            height: 5px;
-            border-radius: 50%;
-            background: currentColor;
-        }
-        .status-pill.is-done {
-            background: var(--green-bg);
-            color: var(--green);
-        }
-        .status-pill.is-warning {
-            background: var(--amber-bg);
-            color: var(--amber);
-        }
+    @media (max-width: 680px) {
+      .rp-answer, .rp-chosen-options, .rp-answer-images, .rp-answer-file,
+      .rp-transcript, .rp-audio, .rp-q-foot { margin-left: 0; }
+      .rp-q-top { grid-template-columns: 22px 1fr; }
+      .rp-q-status { grid-column: 2; justify-self: start; }
+      .rp-insight { height: 300px; }
+      .rp-summary-body, .rp-moodboard-grid { max-height: 340px; }
+    }
 
-        /* Progresso inline */
-        .hero-progress {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding-top: 12px;
-            border-top: 1px solid var(--border-light);
-        }
-        .hero-progress-bar {
-            flex: 1;
-            height: 4px;
-            border-radius: 999px;
-            background: var(--bg-secondary);
-            overflow: hidden;
-        }
-        .hero-progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, var(--blue), #6B8AFB);
-            border-radius: inherit;
-            transition: width 500ms cubic-bezier(0.16, 1, 0.3, 1);
-        }
-        .hero-progress-fill.is-done {
-            background: linear-gradient(90deg, var(--green), #4ADE80);
-        }
-        .hero-progress-count {
-            font-size: 11.5px;
-            color: var(--text-secondary);
-            font-variant-numeric: tabular-nums;
-            white-space: nowrap;
-        }
-        .hero-progress-count strong { color: var(--text-primary); font-weight: 600; }
-        .hero-progress-pct {
-            font-size: 11.5px;
-            font-weight: 700;
-            color: var(--blue-ink);
-            font-variant-numeric: tabular-nums;
-            min-width: 34px;
-            text-align: right;
-        }
-        .hero-progress-pct.is-done { color: var(--green); }
-
-        /* ============================================================
-           KPI STRIP — reaproveita .cl-top-pair (grid 4 cols)
-           ============================================================ */
-        .kpi-strip {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 8px;
-        }
-        @media (min-width: 640px) {
-            .kpi-strip { grid-template-columns: repeat(4, 1fr); }
-        }
-
-        .kpi {
-            background: var(--bg-card);
-            border: 1px solid var(--border-light);
-            border-radius: var(--radius-lg);
-            padding: 12px 14px;
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-            min-width: 0;
-        }
-        .kpi-head {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 10px;
-            font-weight: 700;
-            letter-spacing: 0.4px;
-            text-transform: uppercase;
-            color: var(--text-tertiary);
-        }
-        .kpi-head svg { width: 11px; height: 11px; stroke-width: 2; }
-        .kpi-value {
-            font-size: 22px;
-            font-weight: 700;
-            color: var(--text-primary);
-            font-variant-numeric: tabular-nums;
-            line-height: 1.1;
-            letter-spacing: -0.4px;
-        }
-        .kpi-value.is-blue { color: var(--blue-ink); }
-        .kpi-value.is-amber { color: var(--amber); }
-        .kpi-value.is-green { color: var(--green); }
-        .kpi-sub {
-            font-size: 11px;
-            color: var(--text-tertiary);
-            margin-top: 2px;
-        }
-
-        /* ============================================================
-           GRID PRINCIPAL
-           ============================================================ */
-        .report-grid {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 16px;
-        }
-        @media (min-width: 1024px) {
-            .report-grid {
-                grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
-                gap: 20px;
-                align-items: start;
-            }
-        }
-        .report-main,
-        .report-side {
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-            min-width: 0;
-        }
-
-        /* ============================================================
-           CARD (mesmo container de .cl-knowledge-card / .cl-briefings-section)
-           ============================================================ */
-        .card {
-            background: var(--bg-card);
-            border: 1px solid var(--border-light);
-            border-radius: var(--radius-lg);
-            overflow: hidden;
-        }
-        .card-head {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 12px 16px;
-            border-bottom: 1px solid var(--border-light);
-            flex-shrink: 0;
-        }
-        .card-head-icon {
-            width: 22px; height: 22px;
-            border-radius: 6px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            background: var(--bg-soft);
-            color: var(--text-secondary);
-            flex-shrink: 0;
-        }
-        .card-head-icon svg { width: 12px; height: 12px; stroke-width: 2; }
-        .card-head-icon.is-blue { background: var(--blue-bg); color: var(--blue-ink); }
-        .card-head-icon.is-purple { background: var(--purple-bg); color: var(--purple); }
-        .card-head-icon.is-amber { background: var(--amber-bg); color: var(--amber); }
-
-        .card-title {
-            flex: 1;
-            font-size: 12.5px;
-            font-weight: 600;
-            color: var(--text-primary);
-            letter-spacing: -0.1px;
-            min-width: 0;
-        }
-        .card-count {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            min-width: 20px;
-            height: 18px;
-            padding: 0 6px;
-            border-radius: 999px;
-            background: var(--bg-soft);
-            color: var(--text-tertiary);
-            font-size: 10.5px;
-            font-weight: 600;
-            font-variant-numeric: tabular-nums;
-            flex-shrink: 0;
-        }
-        .card-body { padding: 14px 16px; }
-        .card-body--flush { padding: 0; }
-
-        /* ============================================================
-           MOODBOARD
-           ============================================================ */
-        .moodboard-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
-            gap: 8px;
-        }
-        .moodboard-tile {
-            position: relative;
-            aspect-ratio: 1 / 1;
-            border-radius: var(--radius-md);
-            overflow: hidden;
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-light);
-            cursor: zoom-in;
-            transition: transform var(--t), box-shadow var(--t);
-        }
-        .moodboard-tile:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 16px rgba(0,0,0,0.08);
-        }
-        .moodboard-tile img {
-            width: 100%; height: 100%;
-            object-fit: cover;
-            display: block;
-        }
-        .moodboard-tile .cap {
-            position: absolute;
-            left: 0; right: 0; bottom: 0;
-            padding: 4px 6px;
-            background: linear-gradient(to top, rgba(0,0,0,0.78), transparent);
-            color: #FFF;
-            font-size: 9px;
-            font-weight: 500;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-        .moodboard-tile .src {
-            position: absolute;
-            top: 5px; left: 5px;
-            padding: 2px 6px;
-            border-radius: 999px;
-            background: rgba(0,0,0,0.72);
-            color: #FFF;
-            font-size: 8px;
-            font-weight: 700;
-            letter-spacing: 0.3px;
-            text-transform: uppercase;
-        }
-        .moodboard-empty {
-            text-align: center;
-            padding: 32px 16px;
-            color: var(--text-tertiary);
-            font-size: 12px;
-            line-height: 1.5;
-        }
-        .moodboard-empty svg {
-            width: 28px; height: 28px;
-            stroke-width: 1.6;
-            margin-bottom: 8px;
-            opacity: 0.5;
-        }
-
-        /* ============================================================
-           ANÁLISES — mesmo padrão de .ms-side-section / .cl-side-block
-           ============================================================ */
-        .analyses {
-            display: flex;
-            flex-direction: column;
-            gap: 0;
-        }
-        .analysis-block {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            padding: 14px 16px;
-            border-top: 1px solid var(--border-light);
-        }
-        .analysis-block:first-child { border-top: none; }
-
-        .analysis-head {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-        .analysis-icon {
-            width: 16px; height: 16px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            color: var(--text-tertiary);
-            flex-shrink: 0;
-        }
-        .analysis-icon svg { width: 13px; height: 13px; stroke-width: 2; }
-        .analysis-title {
-            font-size: 11px;
-            font-weight: 700;
-            letter-spacing: 0.4px;
-            text-transform: uppercase;
-            color: var(--text-tertiary);
-        }
-        .analysis-body {
-            font-size: 13px;
-            line-height: 1.65;
-            color: var(--text-secondary);
-            white-space: pre-wrap;
-            word-break: break-word;
-        }
-
-        /* Checks (desejos / atenção) */
-        .checks {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            list-style: none;
-        }
-        .check {
-            display: flex;
-            align-items: flex-start;
-            gap: 8px;
-            font-size: 12.5px;
-            line-height: 1.5;
-        }
-        .check-bullet {
-            width: 12px;
-            height: 20px;
-            flex-shrink: 0;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .check-bullet::before {
-            content: "";
-            width: 5px;
-            height: 5px;
-            border-radius: 50%;
-            background: var(--text-tertiary);
-        }
-        .check--wish .check-bullet::before { background: var(--purple); }
-        .check--attention .check-bullet::before { background: var(--amber); }
-        .check-text { flex: 1; min-width: 0; }
-        .check-text strong {
-            display: block;
-            font-weight: 500;
-            color: var(--text-primary);
-        }
-        .check-text small {
-            display: block;
-            margin-top: 1px;
-            font-size: 11.5px;
-            color: var(--text-tertiary);
-        }
-
-        /* Tags */
-        .tags {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 5px;
-        }
-        .tag {
-            display: inline-flex;
-            align-items: center;
-            height: 22px;
-            padding: 0 9px;
-            border-radius: 999px;
-            background: var(--bg-soft);
-            color: var(--text-secondary);
-            font-size: 11px;
-            font-weight: 500;
-            white-space: nowrap;
-        }
-        .tag--blue { background: var(--blue-bg); color: var(--blue-ink); }
-        .tag--purple { background: var(--purple-bg); color: var(--purple); }
-        .tag--green { background: var(--green-bg); color: var(--green); }
-        .tag--amber { background: var(--amber-bg); color: var(--amber); }
-
-        /* Empty inline */
-        .inline-empty {
-            font-size: 12px;
-            color: var(--text-tertiary);
-            font-style: italic;
-        }
-
-        /* ============================================================
-           PERGUNTAS BRUTAS — container .card + colapsáveis
-           ============================================================ */
-        .filters {
-            display: flex;
-            gap: 8px;
-            padding: 10px 16px;
-            border-bottom: 1px solid var(--border-light);
-            flex-wrap: wrap;
-            align-items: center;
-            background: var(--bg-soft);
-        }
-        .search-wrap {
-            position: relative;
-            flex: 1 1 200px;
-            min-width: 0;
-            height: 30px;
-        }
-        .search-wrap svg {
-            position: absolute;
-            left: 10px; top: 50%;
-            transform: translateY(-50%);
-            width: 12px; height: 12px;
-            stroke-width: 2;
-            color: var(--text-tertiary);
-            pointer-events: none;
-        }
-        .search-wrap input {
-            width: 100%; height: 100%;
-            padding: 0 28px 0 30px;
-            border-radius: 7px;
-            border: 1px solid var(--border-color);
-            background: var(--bg-card);
-            color: var(--text-primary);
-            font-size: 12px;
-            outline: none;
-            transition: border-color var(--t);
-        }
-        .search-wrap input::placeholder { color: var(--text-tertiary); }
-        .search-wrap input:focus { border-color: var(--blue); }
-
-        .filter-select {
-            height: 30px;
-            padding: 0 26px 0 10px;
-            border-radius: 7px;
-            border: 1px solid var(--border-color);
-            background: var(--bg-card);
-            color: var(--text-primary);
-            font-size: 11.5px;
-            font-weight: 500;
-            outline: none;
-            cursor: pointer;
-            appearance: none;
-            -webkit-appearance: none;
-            background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%239797A1' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
-            background-repeat: no-repeat;
-            background-position: right 8px center;
-        }
-        .filter-select:focus { border-color: var(--blue); }
-
-        /* Sessão */
-        .section-group {
-            border-top: 1px solid var(--border-light);
-        }
-        .section-group:first-of-type { border-top: none; }
-
-        .section-head {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 10px 16px;
-            background: var(--bg-soft);
-            cursor: pointer;
-            user-select: none;
-            transition: background var(--t);
-        }
-        .section-head:hover { background: var(--bg-hover); }
-
-        .section-num {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 22px; height: 22px;
-            border-radius: 6px;
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            color: var(--text-secondary);
-            font-size: 10px;
-            font-weight: 700;
-            font-variant-numeric: tabular-nums;
-            flex-shrink: 0;
-        }
-        .section-title {
-            flex: 1;
-            font-size: 12.5px;
-            font-weight: 600;
-            color: var(--text-primary);
-            letter-spacing: -0.1px;
-            min-width: 0;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .section-count {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            min-width: 20px;
-            height: 18px;
-            padding: 0 6px;
-            border-radius: 999px;
-            background: var(--bg-card);
-            color: var(--text-tertiary);
-            font-size: 10.5px;
-            font-weight: 600;
-            font-variant-numeric: tabular-nums;
-            flex-shrink: 0;
-        }
-        .section-chev {
-            width: 12px; height: 12px;
-            color: var(--text-tertiary);
-            transition: transform var(--t);
-            flex-shrink: 0;
-        }
-        .section-group.is-open .section-chev { transform: rotate(180deg); }
-
-        .section-desc {
-            padding: 0 16px 10px;
-            font-size: 11.5px;
-            color: var(--text-secondary);
-            line-height: 1.55;
-            background: var(--bg-soft);
-            white-space: pre-wrap;
-        }
-        .section-group:not(.is-open) .section-desc,
-        .section-group:not(.is-open) .questions { display: none; }
-
-        /* Pergunta */
-        .questions { display: flex; flex-direction: column; }
-
-        .qa {
-            padding: 12px 16px;
-            border-top: 1px solid var(--border-light);
-            background: var(--bg-card);
-            transition: background var(--t);
-        }
-        .qa:hover { background: var(--bg-soft); }
-        .qa:first-child { border-top: none; }
-
-        .qa-head {
-            display: flex;
-            align-items: flex-start;
-            gap: 10px;
-            margin-bottom: 8px;
-        }
-        .qa-num {
-            min-width: 24px;
-            height: 24px;
-            padding: 0 6px;
-            border-radius: 6px;
-            background: var(--bg-soft);
-            color: var(--text-secondary);
-            font-size: 10.5px;
-            font-weight: 700;
-            font-variant-numeric: tabular-nums;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-            align-self: flex-start;
-        }
-        .qa-body { flex: 1; min-width: 0; }
-        .qa-text {
-            font-size: 13px;
-            font-weight: 600;
-            color: var(--text-primary);
-            line-height: 1.4;
-            letter-spacing: -0.1px;
-            white-space: pre-wrap;
-            word-break: break-word;
-        }
-        .qa-instr {
-            margin-top: 6px;
-            padding: 7px 10px;
-            background: var(--bg-soft);
-            border-radius: var(--radius-sm);
-            font-size: 11.5px;
-            color: var(--text-secondary);
-            line-height: 1.5;
-            white-space: pre-wrap;
-            word-break: break-word;
-        }
-        .qa-tags {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 4px;
-            margin-top: 7px;
-        }
-        .qa-tag {
-            display: inline-flex;
-            align-items: center;
-            height: 18px;
-            padding: 0 7px;
-            border-radius: 999px;
-            background: var(--bg-soft);
-            color: var(--text-secondary);
-            font-size: 10px;
-            font-weight: 500;
-            white-space: nowrap;
-        }
-        .qa-tag--done { background: var(--green-bg); color: var(--green); }
-        .qa-tag--pending { background: var(--amber-bg); color: var(--amber); }
-        .qa-tag--custom { background: var(--purple-bg); color: var(--purple); }
-
-        /* Resposta */
-        .qa-answer {
-            margin-top: 10px;
-            padding-top: 10px;
-            border-top: 1px dashed var(--border-light);
-        }
-        .qa-answer-label {
-            font-size: 9.5px;
-            font-weight: 700;
-            letter-spacing: 0.4px;
-            text-transform: uppercase;
-            color: var(--text-tertiary);
-            margin-bottom: 6px;
-        }
-        .qa-answer-text {
-            display: inline-block;
-            max-width: 100%;
-            padding: 9px 12px;
-            border-radius: 10px;
-            background: var(--text-primary);
-            color: var(--bg-card);
-            font-size: 12.5px;
-            line-height: 1.55;
-            white-space: pre-wrap;
-            word-break: break-word;
-        }
-        .qa-answer-empty {
-            display: inline-block;
-            padding: 7px 11px;
-            border-radius: var(--radius-sm);
-            background: var(--bg-soft);
-            color: var(--text-tertiary);
-            font-size: 11.5px;
-            font-style: italic;
-        }
-
-        /* Imagens */
-        .qa-imgs {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
-            gap: 6px;
-            margin-top: 8px;
-        }
-        .qa-img {
-            position: relative;
-            aspect-ratio: 1 / 1;
-            border-radius: var(--radius-md);
-            overflow: hidden;
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-light);
-            cursor: zoom-in;
-            transition: transform var(--t);
-        }
-        .qa-img:hover { transform: scale(1.03); }
-        .qa-img img {
-            width: 100%; height: 100%;
-            object-fit: cover;
-            display: block;
-        }
-        .qa-img .cap {
-            position: absolute;
-            left: 0; right: 0; bottom: 0;
-            padding: 3px 5px;
-            background: linear-gradient(to top, rgba(0,0,0,0.78), transparent);
-            color: #FFF;
-            font-size: 8.5px;
-            font-weight: 500;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        /* Áudio / transcrição */
-        .qa-audio {
-            margin-top: 8px;
-            padding: 9px 11px;
-            border-radius: var(--radius-md);
-            background: var(--bg-soft);
-        }
-        .qa-audio audio {
-            width: 100%;
-            height: 30px;
-            margin-top: 4px;
-        }
-        .qa-transcript {
-            margin-top: 8px;
-            padding: 9px 11px;
-            border-left: 2px solid var(--border-color);
-            background: var(--bg-soft);
-            border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-            font-size: 11.5px;
-            line-height: 1.55;
-            color: var(--text-secondary);
-            white-space: pre-wrap;
-            word-break: break-word;
-        }
-        .qa-transcript .label {
-            display: block;
-            font-size: 9px;
-            font-weight: 700;
-            letter-spacing: 0.4px;
-            text-transform: uppercase;
-            color: var(--text-tertiary);
-            margin-bottom: 4px;
-        }
-
-        /* ============================================================
-           METADADOS (sidebar)
-           ============================================================ */
-        .meta-list {
-            display: flex;
-            flex-direction: column;
-            gap: 0;
-        }
-        .meta-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 12px;
-            padding: 9px 0;
-            border-top: 1px solid var(--border-light);
-            font-size: 12px;
-        }
-        .meta-item:first-child { border-top: none; padding-top: 0; }
-        .meta-label { color: var(--text-tertiary); flex-shrink: 0; }
-        .meta-value {
-            color: var(--text-primary);
-            font-weight: 500;
-            text-align: right;
-            word-break: break-word;
-        }
-
-        /* ============================================================
-           EMPTY / FOOTER
-           ============================================================ */
-        .empty {
-            text-align: center;
-            padding: 36px 16px;
-            color: var(--text-tertiary);
-            font-size: 12px;
-            line-height: 1.5;
-        }
-        .empty svg {
-            width: 24px; height: 24px;
-            stroke-width: 1.6;
-            margin-bottom: 8px;
-            opacity: 0.5;
-        }
-
-        .footer {
-            text-align: center;
-            font-size: 10.5px;
-            color: var(--text-tertiary);
-            padding: 8px 0;
-            line-height: 1.5;
-        }
-
-        /* ============================================================
-           LIGHTBOX
-           ============================================================ */
-        .lb {
-            position: fixed; inset: 0;
-            background: rgba(0,0,0,0.94);
-            z-index: 99999;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 16px;
-            opacity: 0;
-            visibility: hidden;
-            transition: opacity 200ms ease, visibility 200ms ease;
-        }
-        .lb.is-visible { opacity: 1; visibility: visible; }
-        .lb img {
-            max-width: 100%;
-            max-height: 100%;
-            border-radius: 6px;
-            object-fit: contain;
-        }
-        .lb-close {
-            position: absolute;
-            top: calc(14px + var(--safe-top));
-            right: calc(14px + var(--safe-right));
-            width: 38px; height: 38px;
-            border-radius: 50%;
-            background: rgba(255,255,255,0.14);
-            color: #FFF;
-            border: none;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: background var(--t);
-        }
-        .lb-close:hover { background: rgba(255,255,255,0.24); }
-        .lb-close svg { width: 16px; height: 16px; stroke-width: 2.2; }
-
-        /* ============================================================
-           RESPONSIVO
-           ============================================================ */
-        @media (min-width: 640px) {
-            body { font-size: 13.5px; }
-            .wrap { padding: 20px 20px 56px; gap: 20px; }
-            .hero { padding: 20px; }
-            .hero-title { font-size: 24px; }
-            .card-head { padding: 14px 20px; }
-            .card-body { padding: 16px 20px; }
-            .analysis-block { padding: 16px 20px; }
-            .qa { padding: 14px 20px; }
-            .filters { padding: 12px 20px; }
-            .section-head { padding: 12px 20px; }
-            .section-desc { padding: 0 20px 12px; }
-            .kpi { padding: 14px 16px; }
-            .kpi-value { font-size: 24px; }
-        }
-        @media (min-width: 1024px) {
-            .mini-topbar { padding-left: 24px; padding-right: 24px; }
-            .wrap { padding: 24px 28px 64px; }
-            .mini-crumb strong { max-width: none; }
-        }
-    </style>
+    @media print {
+      @page { size: A4; margin: 16mm 14mm; }
+      body { background: white; }
+      .rp-shell { width: 100%; margin: 0; gap: 16px; }
+      .rp-card { box-shadow: none; border-radius: 0; padding: 16px 0; border: 0; border-bottom: 1px solid #e8e6df; }
+      .rp-main { display: block; }
+      .rp-top-grid { display: block; }
+      .rp-insight { height: auto; overflow: visible; page-break-inside: avoid; }
+      .rp-insight-list { overflow: visible; }
+      .rp-summary-body, .rp-moodboard-grid { max-height: none; overflow: visible; }
+      .rp-tools { display: none; }
+    }
+  </style>
 </head>
 <body>
 
-<!-- ============================== TOPBAR MÍNIMA ============================== -->
-<div class="mini-topbar">
-    <a href="/fluxo/" class="mini-back" aria-label="Voltar">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="19" y1="12" x2="5" y2="12"/>
-            <polyline points="12 19 5 12 12 5"/>
-        </svg>
-    </a>
-    <div class="mini-crumb">
-        <span>Briefing</span>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="9 18 15 12 9 6"/>
-        </svg>
-        <strong>{{ briefing.title }}</strong>
+<div class="rp-shell" id="report"
+     data-briefing-id="{{ briefing_id|default:briefing.id|default:'' }}">
+
+  <div hidden>{% csrf_token %}</div>
+  {% if briefing_payload %}{{ briefing_payload|json_script:"bp" }}{% endif %}
+
+  <!-- CAPA — sem botão de reanálise -->
+  <section class="rp-card">
+    <div class="rp-cover-top">
+      <div class="rp-wordmark">clivo<span>.</span></div>
     </div>
-    <div class="mini-actions">
-        {% if briefing.briefing_architect_pdf_url %}
-        <a href="{{ briefing.briefing_architect_pdf_url }}" class="mini-btn primary" target="_blank" rel="noopener">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                <polyline points="7 10 12 15 17 10"/>
-                <line x1="12" y1="15" x2="12" y2="3"/>
-            </svg>
-            <span class="label">PDF</span>
-        </a>
-        {% endif %}
-        <button type="button" class="mini-btn" id="themeToggle" aria-label="Alternar tema">
-            <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-            </svg>
-        </button>
-    </div>
-</div>
+    <div class="rp-eyebrow">Leitura do briefing · <span id="generated-date">preparando documento</span></div>
+    <h1 class="rp-title" id="report-title">Entendendo o <em>Briefing.</em></h1>
+    <p class="rp-lede" id="report-lede">Uma leitura organizada do que o cliente compartilhou, do que ainda precisa ser esclarecido e dos caminhos possíveis para o projeto.</p>
+    <dl class="rp-meta-bar">
+      <div><dt>Cliente</dt><dd id="client-name">Carregando…</dd></div>
+      <div><dt>Briefing</dt><dd id="briefing-name">—</dd></div>
+      <div><dt>Situação</dt><dd id="briefing-status">—</dd></div>
+      <div><dt>Respostas</dt><dd id="progress-inline">—</dd></div>
+    </dl>
+  </section>
 
-<main class="wrap">
-
-    <!-- ============================== HERO ============================== -->
-    <section class="hero">
-        <div class="hero-top">
-            <div class="hero-titles">
-                <div class="hero-eyebrow">Relatório do arquiteto</div>
-                <h1 class="hero-title">{{ briefing.title }}</h1>
-                <div class="hero-meta">
-                    <span class="hero-meta-item">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M3 21h18"/>
-                            <path d="M5 21V7l8-4v18"/>
-                            <path d="M19 21V11l-6-4"/>
-                        </svg>
-                        {{ briefing.workspace_name }}
-                    </span>
-                    {% if briefing.client_name %}
-                    <span class="hero-meta-item">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                            <circle cx="12" cy="7" r="4"/>
-                        </svg>
-                        {{ briefing.client_name }}
-                    </span>
-                    {% endif %}
-                    {% if briefing.expires_at %}
-                    <span class="hero-meta-item">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-                            <circle cx="12" cy="12" r="10"/>
-                            <polyline points="12 6 12 12 16 14"/>
-                        </svg>
-                        Vence em <strong>{{ briefing.expires_at|date:"d/m/Y" }}</strong>
-                    </span>
-                    {% endif %}
-                </div>
-            </div>
-            <span class="status-pill {% if briefing.status == 'completed' %}is-done{% elif briefing.progress.percent < 50 %}is-warning{% endif %}">
-                <span class="dot"></span>
-                {% if briefing.status == 'completed' %}Concluído{% elif briefing.progress.percent == 0 %}Aguardando{% else %}Em andamento{% endif %}
-            </span>
+  <!-- TOP GRID: SÍNTESE + MOODBOARD -->
+  <div class="rp-top-grid">
+    <section class="rp-card" id="summary-section">
+      <div class="rp-section-head">
+        <div>
+          <h2 class="rp-section-title">Síntese executiva</h2>
+          <p class="rp-section-desc">Resumo produzido pela IA a partir das respostas.</p>
         </div>
-
-        <div class="hero-progress">
-            <div class="hero-progress-bar">
-                <div class="hero-progress-fill {% if briefing.status == 'completed' %}is-done{% endif %}"
-                     style="width: {{ briefing.progress.percent|default:0 }}%;"></div>
-            </div>
-            <span class="hero-progress-count">
-                <strong>{{ briefing.progress.answered|default:0 }}</strong> de <strong>{{ briefing.progress.total_required|default:0 }}</strong> respondidas
-            </span>
-            <span class="hero-progress-pct {% if briefing.status == 'completed' %}is-done{% endif %}">
-                {{ briefing.progress.percent|default:0 }}%
-            </span>
-        </div>
+      </div>
+      <div class="rp-summary-body" id="summary-body">
+        <p class="rp-empty">A síntese aparece aqui quando a análise for gerada.</p>
+      </div>
     </section>
 
-    <!-- ============================== KPI STRIP ============================== -->
-    <div class="kpi-strip">
-        <div class="kpi">
-            <div class="kpi-head">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="20 6 9 17 4 12"/>
-                </svg>
-                Respondidas
-            </div>
-            <div class="kpi-value is-blue">{{ briefing.progress.answered|default:0 }}</div>
-            <div class="kpi-sub">de {{ briefing.progress.total_required|default:0 }} perguntas</div>
+    <section class="rp-card" id="moodboard-section">
+      <div class="rp-section-head">
+        <div>
+          <h2 class="rp-section-title">Moodboard do cliente</h2>
+          <p class="rp-section-desc">Imagens escolhidas e enviadas pelo cliente.</p>
         </div>
-        <div class="kpi">
-            <div class="kpi-head">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="10"/>
-                    <polyline points="12 6 12 12 16 14"/>
-                </svg>
-                Em revisão
-            </div>
-            <div class="kpi-value {% if briefing.progress.pending_review %}is-amber{% endif %}">
-                {{ briefing.progress.pending_review|default:0 }}
-            </div>
-            <div class="kpi-sub">aguardando retorno</div>
+        <span class="rp-insight-count" id="moodboard-count">—</span>
+      </div>
+      <div class="rp-moodboard-grid" id="moodboard-grid"></div>
+      <div class="rp-empty" id="moodboard-empty" style="display:none;">O cliente ainda não enviou imagens.</div>
+    </section>
+  </div>
+
+    <!-- GRID PRINCIPAL: Insights × Perguntas -->
+  <main class="rp-main">
+    <section class="rp-card">
+      <div class="rp-section-head">
+        <div>
+          <h2 class="rp-section-title">Insights</h2>
+          <p class="rp-section-desc">Até 8 pontos por container.</p>
         </div>
-        <div class="kpi">
-            <div class="kpi-head">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="10"/>
-                    <line x1="12" y1="8" x2="12" y2="12"/>
-                    <line x1="12" y1="16" x2="12.01" y2="16"/>
-                </svg>
-                Pendentes
-            </div>
-            <div class="kpi-value">{{ briefing.progress.never_answered|default:0 }}</div>
-            <div class="kpi-sub">sem resposta ainda</div>
+        <span class="rp-insight-count" id="insights-total">—</span>
+      </div>
+      <div class="rp-insights-grid" id="insights-grid">
+        <div class="rp-insight-empty">Carregando insights…</div>
+      </div>
+    </section>
+
+    <section class="rp-card">
+      <div class="rp-section-head">
+        <div>
+          <h2 class="rp-section-title">Perguntas e respostas</h2>
+          <p class="rp-section-desc">O que o cliente realmente disse, preservado.</p>
         </div>
-        <div class="kpi">
-            <div class="kpi-head">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="3" y="3" width="7" height="7"/>
-                    <rect x="14" y="3" width="7" height="7"/>
-                    <rect x="14" y="14" width="7" height="7"/>
-                    <rect x="3" y="14" width="7" height="7"/>
-                </svg>
-                Sessões
-            </div>
-            <div class="kpi-value">{{ briefing.sections|length }}</div>
-            <div class="kpi-sub">no briefing</div>
-        </div>
-    </div>
+      </div>
 
-    <!-- ============================== GRID ============================== -->
-    <div class="report-grid">
+      <div class="rp-tools">
+        <select id="session-filter" aria-label="Filtrar por sessão">
+          <option value="all">Todas as sessões</option>
+        </select>
+        <button class="rp-filter" type="button" data-filter="all" aria-pressed="true">Todas</button>
+        <button class="rp-filter" type="button" data-filter="pending" aria-pressed="false">Em aberto <span id="pending-count">0</span></button>
+        <button class="rp-filter" type="button" data-filter="doubt" aria-pressed="false">Atenção <span id="doubt-count">0</span></button>
+        <input id="question-search" type="search" placeholder="Buscar no briefing…" aria-label="Buscar no briefing">
+      </div>
 
-        <!-- ============================== MAIN ============================== -->
-        <div class="report-main">
+      <div id="questions-root">
+        <div class="rp-insight-empty">Organizando as perguntas…</div>
+      </div>
+    </section>
+  </main>
 
-            <!-- MOODBOARD -->
-            <section class="card" id="moodboardCard">
-                <header class="card-head">
-                    <span class="card-head-icon is-purple">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-                            <rect x="3" y="3" width="18" height="18" rx="2"/>
-                            <circle cx="8.5" cy="8.5" r="1.5"/>
-                            <polyline points="21 15 16 10 5 21"/>
-                        </svg>
-                    </span>
-                    <span class="card-title">Moodboard do cliente</span>
-                    <span class="card-count" id="moodboardCount">0</span>
-                </header>
-                <div class="card-body">
-                    <div class="moodboard-grid" id="moodboardGrid"></div>
-                    <div class="moodboard-empty" id="moodboardEmpty" style="display:none;">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-                            <rect x="3" y="3" width="18" height="18" rx="2"/>
-                            <circle cx="8.5" cy="8.5" r="1.5"/>
-                            <polyline points="21 15 16 10 5 21"/>
-                        </svg>
-                        <div>O cliente ainda não escolheu nem enviou imagens.</div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- ANÁLISES -->
-            <section class="card" id="analysisCard">
-                <header class="card-head">
-                    <span class="card-head-icon is-blue">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M12 3v3"/>
-                            <path d="M12 18v3"/>
-                            <path d="M3 12h3"/>
-                            <path d="M18 12h3"/>
-                            <circle cx="12" cy="12" r="3"/>
-                        </svg>
-                    </span>
-                    <span class="card-title">Análises do briefing</span>
-                </header>
-
-                <div class="analyses">
-                    {% if briefing.analysis_summary or briefing.ai_summary %}
-                    <div class="analysis-block">
-                        <div class="analysis-head">
-                            <span class="analysis-icon">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                                    <polyline points="14 2 14 8 20 8"/>
-                                </svg>
-                            </span>
-                            <span class="analysis-title">Resumo executivo</span>
-                        </div>
-                        <p class="analysis-body">{{ briefing.analysis_summary|default:briefing.ai_summary }}</p>
-                    </div>
-                    {% endif %}
-
-                    {% if briefing.wishes or briefing.analysis_wishes %}
-                    <div class="analysis-block">
-                        <div class="analysis-head">
-                            <span class="analysis-icon">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-                                </svg>
-                            </span>
-                            <span class="analysis-title">Desejos identificados</span>
-                        </div>
-                        <ul class="checks">
-                            {% for item in briefing.wishes|default:briefing.analysis_wishes %}
-                            <li class="check check--wish">
-                                <span class="check-bullet"></span>
-                                <span class="check-text">
-                                    <strong>{{ item.title|default:item }}</strong>
-                                    {% if item.detail %}<small>{{ item.detail }}</small>{% endif %}
-                                </span>
-                            </li>
-                            {% empty %}
-                            <li class="inline-empty">Sem desejos identificados.</li>
-                            {% endfor %}
-                        </ul>
-                    </div>
-                    {% endif %}
-
-                    {% if briefing.attention or briefing.analysis_attention %}
-                    <div class="analysis-block">
-                        <div class="analysis-head">
-                            <span class="analysis-icon">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-                                    <line x1="12" y1="9" x2="12" y2="13"/>
-                                    <line x1="12" y1="17" x2="12.01" y2="17"/>
-                                </svg>
-                            </span>
-                            <span class="analysis-title">Pontos de atenção</span>
-                        </div>
-                        <ul class="checks">
-                            {% for item in briefing.attention|default:briefing.analysis_attention %}
-                            <li class="check check--attention">
-                                <span class="check-bullet"></span>
-                                <span class="check-text">
-                                    <strong>{{ item.title|default:item }}</strong>
-                                    {% if item.detail %}<small>{{ item.detail }}</small>{% endif %}
-                                </span>
-                            </li>
-                            {% empty %}
-                            <li class="inline-empty">Nenhum ponto de atenção identificado.</li>
-                            {% endfor %}
-                        </ul>
-                    </div>
-                    {% endif %}
-
-                    {% if briefing.tags %}
-                    <div class="analysis-block">
-                        <div class="analysis-head">
-                            <span class="analysis-icon">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
-                                    <line x1="7" y1="7" x2="7.01" y2="7"/>
-                                </svg>
-                            </span>
-                            <span class="analysis-title">Tags</span>
-                        </div>
-                        <div class="tags">
-                            {% for tag in briefing.tags %}
-                            <span class="tag">{{ tag }}</span>
-                            {% endfor %}
-                        </div>
-                    </div>
-                    {% endif %}
-
-                    {% if not briefing.analysis_summary and not briefing.ai_summary and not briefing.wishes and not briefing.analysis_wishes and not briefing.attention and not briefing.analysis_attention and not briefing.tags %}
-                    <div class="empty">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-                            <circle cx="12" cy="12" r="10"/>
-                            <line x1="12" y1="8" x2="12" y2="12"/>
-                            <line x1="12" y1="16" x2="12.01" y2="16"/>
-                        </svg>
-                        <div>Análise ainda não gerada.</div>
-                    </div>
-                    {% endif %}
-                </div>
-            </section>
-
-            <!-- PERGUNTAS BRUTAS -->
-            <section class="card" id="rawCard">
-                <header class="card-head">
-                    <span class="card-head-icon">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                        </svg>
-                    </span>
-                    <span class="card-title">Perguntas brutas</span>
-                    <span class="card-count" id="qaTotalCount">{{ briefing.progress.total_required|default:0 }}</span>
-                </header>
-
-                <div class="filters">
-                    <div class="search-wrap">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-                            <circle cx="11" cy="11" r="8"/>
-                            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-                        </svg>
-                        <input type="search" id="filterSearch" placeholder="Buscar pergunta ou resposta…" autocomplete="off">
-                    </div>
-                    <select class="filter-select" id="filterState">
-                        <option value="">Todos os estados</option>
-                        <option value="answered">Respondidas</option>
-                        <option value="pending">Pendentes</option>
-                        <option value="pending_clarification">Com dúvida</option>
-                        <option value="review_requested">Em revisão</option>
-                    </select>
-                </div>
-
-                <div id="qaContainer">
-                    {% for section in briefing.sections %}
-                    <div class="section-group is-open" data-section-id="{{ section.id }}">
-                        <div class="section-head">
-                            <span class="section-num">{{ forloop.counter|stringformat:"02d" }}</span>
-                            <span class="section-title">{{ section.title|default:"Sem título" }}</span>
-                            <span class="section-count">{{ section.questions|length }}</span>
-                            <svg class="section-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-                                <polyline points="6 9 12 15 18 9"/>
-                            </svg>
-                        </div>
-                        {% if section.description %}
-                        <div class="section-desc">{{ section.description }}</div>
-                        {% endif %}
-                        <div class="questions">
-                            {% for q in section.questions %}
-                            <div class="qa"
-                                 data-state="{{ q.state|default:'pending' }}"
-                                 data-search="{{ q.text|lower }} {{ q.latest_content|default:''|lower }} {{ q.latest_transcription|default:''|lower }}">
-
-                                <div class="qa-head">
-                                    <span class="qa-num">{{ forloop.counter|stringformat:"02d" }}</span>
-                                    <div class="qa-body">
-                                        <div class="qa-text">{{ q.text }}</div>
-                                        {% if q.instructions %}
-                                        <div class="qa-instr">{{ q.instructions }}</div>
-                                        {% endif %}
-                                        <div class="qa-tags">
-                                            <span class="qa-tag" data-qtype="{{ q.question_type }}">{{ q.question_type }}</span>
-                                            {% if q.is_required %}
-                                            <span class="qa-tag">obrigatória</span>
-                                            {% else %}
-                                            <span class="qa-tag">opcional</span>
-                                            {% endif %}
-                                            {% if q.is_custom %}
-                                            <span class="qa-tag qa-tag--custom">complementar</span>
-                                            {% endif %}
-                                            {% if q.state == 'answered' %}
-                                            <span class="qa-tag qa-tag--done">respondida</span>
-                                            {% elif q.state == 'pending_clarification' %}
-                                            <span class="qa-tag qa-tag--pending">dúvida aberta</span>
-                                            {% elif q.state == 'review_requested' %}
-                                            <span class="qa-tag qa-tag--pending">revisão pedida</span>
-                                            {% else %}
-                                            <span class="qa-tag">pendente</span>
-                                            {% endif %}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="qa-answer">
-                                    <div class="qa-answer-label">Resposta do cliente</div>
-
-                                    {% if q.latest_content %}
-                                        <div class="qa-answer-text">{{ q.latest_content }}</div>
-                                    {% elif q.latest_audio_url %}
-                                        <div class="qa-answer-empty">Resposta em áudio — veja abaixo.</div>
-                                    {% else %}
-                                        <div class="qa-answer-empty">Aguardando resposta.</div>
-                                    {% endif %}
-
-                                    {% if q.chosen_images %}
-                                    <div class="qa-answer-label" style="margin-top:10px;">Imagens escolhidas</div>
-                                    <div class="qa-imgs">
-                                        {% for img in q.chosen_images %}
-                                        <div class="qa-img" data-full="{{ img.url }}" onclick="openLightbox(this.dataset.full)">
-                                            <img src="{{ img.url }}" alt="{{ img.text }}" loading="lazy">
-                                            <span class="cap">{{ img.text }}</span>
-                                        </div>
-                                        {% endfor %}
-                                    </div>
-                                    {% endif %}
-
-                                    {% if q.attachments %}
-                                    <div class="qa-answer-label" style="margin-top:10px;">Imagens enviadas</div>
-                                    <div class="qa-imgs">
-                                        {% for doc in q.attachments %}
-                                        <div class="qa-img" data-full="{{ doc.url }}" onclick="openLightbox(this.dataset.full)">
-                                            <img src="{{ doc.url }}" alt="{{ doc.name }}" loading="lazy">
-                                            <span class="cap">{{ doc.name }}</span>
-                                        </div>
-                                        {% endfor %}
-                                    </div>
-                                    {% endif %}
-
-                                    {% if q.reference_images %}
-                                    <div class="qa-answer-label" style="margin-top:10px;">Referências do arquiteto</div>
-                                    <div class="qa-imgs">
-                                        {% for doc in q.reference_images %}
-                                        <div class="qa-img" data-full="{{ doc.url }}" onclick="openLightbox(this.dataset.full)">
-                                            <img src="{{ doc.url }}" alt="{{ doc.name }}" loading="lazy">
-                                            <span class="cap">{{ doc.name }}</span>
-                                        </div>
-                                        {% endfor %}
-                                    </div>
-                                    {% endif %}
-
-                                    {% if q.latest_audio_url %}
-                                    <div class="qa-audio">
-                                        <div class="qa-answer-label">Áudio original</div>
-                                        <audio controls preload="metadata" src="{{ q.latest_audio_url }}"></audio>
-                                    </div>
-                                    {% endif %}
-
-                                    {% if q.latest_transcription %}
-                                    <div class="qa-transcript">
-                                        <span class="label">Transcrição</span>
-                                        {{ q.latest_transcription }}
-                                    </div>
-                                    {% elif q.latest_audio_url and q.transcription_status %}
-                                    <div class="qa-transcript">
-                                        <span class="label">Transcrição</span>
-                                        {{ q.transcription_status }}
-                                    </div>
-                                    {% endif %}
-                                </div>
-                            </div>
-                            {% endfor %}
-                        </div>
-                    </div>
-                    {% empty %}
-                    <div class="empty">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-                            <circle cx="12" cy="12" r="10"/>
-                            <line x1="12" y1="8" x2="12" y2="12"/>
-                            <line x1="12" y1="16" x2="12.01" y2="16"/>
-                        </svg>
-                        <div>Nenhuma pergunta registrada.</div>
-                    </div>
-                    {% endfor %}
-                </div>
-            </section>
-
-        </div>
-
-        <!-- ============================== SIDEBAR ============================== -->
-        <aside class="report-side">
-
-            <!-- METADADOS / VISÃO GERAL -->
-            <section class="card">
-                <header class="card-head">
-                    <span class="card-head-icon is-blue">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-                            <circle cx="12" cy="12" r="10"/>
-                            <line x1="12" y1="16" x2="12" y2="12"/>
-                            <line x1="12" y1="8" x2="12.01" y2="8"/>
-                        </svg>
-                    </span>
-                    <span class="card-title">Visão geral</span>
-                </header>
-                <div class="card-body">
-                    <div class="meta-list">
-                        <div class="meta-item">
-                            <span class="meta-label">Progresso</span>
-                            <span class="meta-value">{{ briefing.progress.percent|default:0 }}%</span>
-                        </div>
-                        <div class="meta-item">
-                            <span class="meta-label">Sessões</span>
-                            <span class="meta-value">{{ briefing.sections|length }}</span>
-                        </div>
-                        <div class="meta-item">
-                            <span class="meta-label">Perguntas</span>
-                            <span class="meta-value">{{ briefing.progress.total_required|default:0 }}</span>
-                        </div>
-                        {% if briefing.created_at %}
-                        <div class="meta-item">
-                            <span class="meta-label">Criado em</span>
-                            <span class="meta-value">{{ briefing.created_at|date:"d/m/Y" }}</span>
-                        </div>
-                        {% endif %}
-                        {% if briefing.expires_at %}
-                        <div class="meta-item">
-                            <span class="meta-label">Vence em</span>
-                            <span class="meta-value">{{ briefing.expires_at|date:"d/m/Y" }}</span>
-                        </div>
-                        {% endif %}
-                    </div>
-                </div>
-            </section>
-
-            {% if briefing.intro_message %}
-            <section class="card">
-                <header class="card-head">
-                    <span class="card-head-icon">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                        </svg>
-                    </span>
-                    <span class="card-title">Mensagem inicial</span>
-                </header>
-                <div class="card-body">
-                    <p class="analysis-body">{{ briefing.intro_message }}</p>
-                </div>
-            </section>
-            {% endif %}
-
-        </aside>
-    </div>
-
-    <div class="footer">
-        {{ briefing.workspace_name }} · relatório gerado em {% now "d/m/Y H:i" %}
-    </div>
-
-</main>
-
-<!-- ============================== LIGHTBOX ============================== -->
-<div class="lb" id="lightbox">
-    <button class="lb-close" id="lightboxClose" aria-label="Fechar">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="18" y1="6" x2="6" y2="18"/>
-            <line x1="6" y1="6" x2="18" y2="18"/>
-        </svg>
-    </button>
-    <img id="lightboxImg" alt="">
 </div>
+
+<script src="https://unpkg.com/lucide@latest"></script>
 
 <script>
 (function () {
-    'use strict';
+  "use strict";
 
-    /* QTYPE labels */
-    var QTYPE_LABELS = {
-        'text': 'Texto livre',
-        'short_text': 'Resposta curta',
-        'long_text': 'Parágrafo',
-        'single_choice': 'Escolha única',
-        'multiple_choice': 'Múltipla escolha',
-        'dropdown': 'Lista suspensa',
-        'choice': 'Escolha',
-        'scale': 'Escala',
-        'rating': 'Avaliação',
-        'number': 'Número',
-        'date': 'Data',
-        'time': 'Horário',
-        'url': 'Link',
-        'yes_no': 'Sim / Não',
-        'file_upload': 'Envio de arquivo'
+  const $ = (sel, root = document) => root.querySelector(sel);
+  const esc = v => String(v == null ? "" : v).replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+
+  const reportEl = $("#report");
+  let BID = (reportEl && reportEl.dataset.briefingId || "").trim();
+  if (!BID) {
+    const url = location.href;
+    const m = url.match(/\/briefings\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i)
+           || url.match(/[?&]briefing=([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i);
+    if (m) BID = m[1];
+  }
+
+  // Limite de pontos por container de Insight.
+  const MAX_INSIGHTS_PER_CONTAINER = 8;
+
+  const state = {
+    briefing: null,
+    containers: {},
+    clientContainers: {},
+    sections: [],
+    filter: "all",
+    sessionFilter: "all",
+    search: "",
+    payload: null,
+  };
+
+  const INSIGHT_SLOTS = [
+    { key: "06_insights_cruzados",      title: "Insights cruzados",         icon: "git-branch" },
+    { key: "07_perguntas_recomendadas", title: "Perguntas para aprofundar", icon: "message-square-plus" },
+    { key: "03_leitura_referencias",    title: "Leitura de referências",    icon: "images" },
+    { key: "01_desejos_prioridades",    title: "Desejos (cliente)",         icon: "heart",     source: "cli" },
+    { key: "02_perfil_preferencias",    title: "Perfil e preferências",     icon: "user-cog",  source: "cli" },
+    { key: "03_conhecimento_acumulado", title: "Conhecimento",              icon: "book-open", source: "cli" },
+  ];
+
+  const fmtDate = (v, withTime = false) => {
+    if (!v) return "—";
+    const d = new Date(v);
+    if (isNaN(+d)) return "—";
+    return d.toLocaleDateString("pt-BR") + (withTime ? " · " + d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "");
+  };
+  const safeUrl = v => { try { const u = new URL(v, location.origin); return ["http:", "https:"].includes(u.protocol) ? u.href : "#"; } catch { return "#"; } };
+
+  async function api(url, opts = {}) {
+    const headers = { Accept: "application/json", ...(opts.headers || {}) };
+    if (opts.body && typeof opts.body === "object" && !(opts.body instanceof FormData)) {
+      headers["Content-Type"] = "application/json";
+      opts.body = JSON.stringify(opts.body);
+    }
+    const csrf = document.cookie.match(/csrftoken=([^;]+)/);
+    if (csrf && !/^(GET|HEAD|OPTIONS)$/i.test(opts.method || "GET")) {
+      headers["X-CSRFToken"] = csrf[1];
+    }
+    const r = await fetch(url, { credentials: "same-origin", ...opts, headers });
+    if (!r.ok) {
+      let data = null;
+      try { data = await r.json(); } catch {}
+      const err = new Error((data && (data.error || data.detail)) || `Falha ${r.status}`);
+      err.status = r.status;
+      err.data = data;
+      throw err;
+    }
+    if (r.status === 204) return null;
+    return r.json();
+  }
+
+  function collectImagesFromAnswer(q) {
+    const imgs = []; const seen = {};
+    const options = q.options || [];
+    const chosenOptions = q.chosenOptions || q.chosen_options || [];
+    const chosenTexts = new Set(
+      (Array.isArray(chosenOptions) ? chosenOptions : [])
+        .map(o => typeof o === "string" ? o : (o.text || o.label || ""))
+        .filter(Boolean)
+        .map(t => t.trim())
+    );
+    const content = (q.content || "").trim();
+    const contentParts = new Set(content.split(",").map(s => s.trim()).filter(Boolean));
+
+    options.forEach(opt => {
+      if (!opt || !opt.image_url) return;
+      const text = (opt.text || "").trim();
+      const isChosen = chosenTexts.has(text) || contentParts.has(text);
+      if (!isChosen) return;
+      if (seen[opt.image_url]) return;
+      seen[opt.image_url] = true;
+      imgs.push({ url: opt.image_url, alt: text || "Escolhida", source: "escolhida" });
+    });
+
+    (q.attachments || []).forEach(att => {
+      if (!att) return;
+      const url = att.file_url || att.url;
+      const mime = att.mime_type || "";
+      if (!url || seen[url]) return;
+      if (mime && !mime.startsWith("image/") && !/\.(png|jpe?g|webp|gif)(\?|$)/i.test(url)) return;
+      if (!mime && !/\.(png|jpe?g|webp|gif)(\?|$)/i.test(url)) return;
+      seen[url] = true;
+      imgs.push({ url, alt: att.name || "Enviada", source: "enviada" });
+    });
+
+    return imgs;
+  }
+
+  function normalizeQuestion(q, answerMap, attachmentsMap) {
+    const a = answerMap[String(q.id)] || {};
+    return {
+      id: String(q.id),
+      text: q.text || "",
+      required: q.is_required !== false,
+      state: a.state || "pending",
+      content: a.latest_content || "",
+      transcript: a.latest_transcription || "",
+      audio: a.latest_audio_url || a.audio_url || "",
+      attachments: attachmentsMap[String(q.id)] || a.attachments || [],
+      chosenImages: q.chosen_images || a.chosen_images || [],
+      chosenOptions: q.chosen_options || a.chosen_options || [],
+      options: q.options || [],
+      updated: a.updated_at || null,
+      supplementary: !!q.is_supplementary,
     };
-    document.querySelectorAll('.qa-tag[data-qtype]').forEach(function (el) {
-        var k = el.getAttribute('data-qtype');
-        el.textContent = QTYPE_LABELS[k] || k;
+  }
+
+  function buildQuestions(briefing, payload) {
+    const answers = {};
+    (briefing.answers || []).forEach(a => { answers[String(a.question_id)] = a; });
+    const atts = {};
+    ((payload && payload.sections) || []).forEach(s => { (s.questions || []).forEach(q => { atts[String(q.id)] = q.attachments || []; }); });
+
+    let sections = (payload && payload.sections) || ((briefing.structure_snapshot || {}).sections) || [];
+    sections = [...sections]
+      .sort((a, b) => (a.position || 0) - (b.position || 0))
+      .map((s, i) => ({
+        title: s.title || `Sessão ${i + 1}`,
+        questions: [...(s.questions || [])]
+          .sort((a, b) => (a.position || 0) - (b.position || 0))
+          .map(q => normalizeQuestion(q, answers, atts)),
+      }));
+
+    const extra = briefing.supplementary_questions || briefing.supplementary || [];
+    if (Array.isArray(extra) && extra.length) {
+      sections.push({
+        title: "Perguntas complementares",
+        questions: extra.map(q => normalizeQuestion(q, answers, atts)),
+        supplementary: true,
+      });
+    }
+    return sections;
+  }
+
+  function getContainers(payload) {
+    return payload && payload.containers && typeof payload.containers === "object" ? payload.containers : {};
+  }
+
+    // =========================================================================
+  // RENDERIZAÇÃO
+  // =========================================================================
+
+  function renderSummary() {
+    const body = $("#summary-body");
+    const items = state.containers["01_sintese_executiva"] || [];
+    if (!items.length) {
+      body.innerHTML = `<p class="rp-empty">A síntese aparece aqui quando a análise for gerada.</p>`;
+      return;
+    }
+    body.innerHTML = items.map(i => `<p>${esc(i.content || "")}</p>`).join("");
+  }
+
+  function collectMoodboardImages() {
+    const imgs = []; const seen = {};
+    state.sections.forEach(sec => {
+      sec.questions.forEach(q => {
+        collectImagesFromAnswer(q).forEach(img => {
+          if (seen[img.url]) return;
+          seen[img.url] = true;
+          imgs.push(img);
+        });
+      });
     });
+    return imgs;
+  }
 
-    /* Tema */
-    var themeBtn = document.getElementById('themeToggle');
-    var themeIcon = document.getElementById('themeIcon');
+  function renderMoodboard() {
+    const grid = $("#moodboard-grid");
+    const empty = $("#moodboard-empty");
+    const count = $("#moodboard-count");
+    const imgs = collectMoodboardImages();
+    if (!imgs.length) {
+      grid.innerHTML = ""; empty.style.display = "block"; count.textContent = "—";
+      return;
+    }
+    empty.style.display = "none";
+    count.textContent = `${imgs.length} imagem${imgs.length === 1 ? "" : "s"}`;
+    grid.innerHTML = imgs.map(img => `
+      <a class="rp-moodboard-item" href="${safeUrl(img.url)}" target="_blank" rel="noopener" aria-label="Abrir imagem">
+        <img src="${safeUrl(img.url)}" alt="${esc(img.alt)}" loading="lazy">
+        <span class="rp-source-badge">${esc(img.source)}</span>
+      </a>
+    `).join("");
+  }
 
-    function currentThemeMode() {
-        try { return localStorage.getItem('clivo-theme') || 'auto'; }
-        catch (e) { return 'auto'; }
-    }
-    function updateThemeIcon(isDark) {
-        if (!themeIcon) return;
-        themeIcon.innerHTML = isDark
-            ? '<circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/><line x1="4.93" y1="4.93" x2="6.34" y2="6.34"/><line x1="17.66" y1="17.66" x2="19.07" y2="19.07"/><line x1="4.93" y1="19.07" x2="6.34" y2="17.66"/><line x1="17.66" y1="6.34" x2="19.07" y2="4.93"/>'
-            : '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
-    }
-    function setThemeMode(mode) {
-        try { localStorage.setItem('clivo-theme', mode); } catch (e) {}
-        document.documentElement.setAttribute('data-theme-mode', mode);
-        var isDark;
-        if (mode === 'dark') isDark = true;
-        else if (mode === 'light') isDark = false;
-        else isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        if (isDark) document.documentElement.setAttribute('data-theme', 'dark');
-        else document.documentElement.removeAttribute('data-theme');
-        updateThemeIcon(isDark);
-        try {
-            var meta = document.querySelector('meta[name="theme-color"]');
-            if (meta) meta.setAttribute('content', isDark ? '#0A0A0A' : '#FFFFFF');
-        } catch (e) {}
-    }
-    if (themeBtn) {
-        themeBtn.addEventListener('click', function () {
-            var isDarkNow = document.documentElement.getAttribute('data-theme') === 'dark';
-            setThemeMode(isDarkNow ? 'light' : 'dark');
-        });
-    }
-    try {
-        setThemeMode(currentThemeMode());
-        var mq = window.matchMedia('(prefers-color-scheme: dark)');
-        var onChange = function () {
-            if (currentThemeMode() === 'auto') setThemeMode('auto');
-        };
-        if (mq.addEventListener) mq.addEventListener('change', onChange);
-        else if (mq.addListener) mq.addListener(onChange);
-    } catch (e) {}
+  function renderInsightBox(slot, items) {
+    // Limita a 8 pontos por container.
+    const limited = items.slice(0, MAX_INSIGHTS_PER_CONTAINER);
+    const count = limited.length;
+    const body = count
+      ? limited.map(item => {
+          const conf = item.confidence || "interpretation";
+          return `<li class="rp-insight-item ${esc(conf)}">${esc(item.content || "")}</li>`;
+        }).join("")
+      : `<li class="rp-insight-empty">Nenhum insight gerado ainda.</li>`;
+    return `
+      <div class="rp-insight">
+        <div class="rp-insight-head">
+          <span class="rp-insight-icon"><i data-lucide="${esc(slot.icon)}"></i></span>
+          <span class="rp-insight-title">${esc(slot.title)}</span>
+          <span class="rp-insight-count">${count}</span>
+        </div>
+        <ul class="rp-insight-list">${body}</ul>
+      </div>
+    `;
+  }
 
-    /* Lightbox */
-    var lightbox = document.getElementById('lightbox');
-    var lightboxImg = document.getElementById('lightboxImg');
-    var lightboxClose = document.getElementById('lightboxClose');
+  function renderInsights() {
+    const grid = $("#insights-grid");
+    let total = 0;
+    grid.innerHTML = INSIGHT_SLOTS.map(slot => {
+      const source = slot.source === "cli" ? state.clientContainers : state.containers;
+      const items = source[slot.key] || [];
+      total += Math.min(items.length, MAX_INSIGHTS_PER_CONTAINER);
+      return renderInsightBox(slot, items);
+    }).join("");
+    const totalEl = $("#insights-total");
+    if (totalEl) totalEl.textContent = `${total} insight${total === 1 ? "" : "s"}`;
+    if (window.lucide) setTimeout(() => { try { window.lucide.createIcons(); } catch {} }, 30);
+  }
 
-    window.openLightbox = function (url) {
-        if (!url) return;
-        lightboxImg.src = url;
-        lightbox.classList.add('is-visible');
-    };
-    function closeLightbox() {
-        lightbox.classList.remove('is-visible');
-        lightboxImg.src = '';
-    }
-    if (lightboxClose) lightboxClose.addEventListener('click', closeLightbox);
-    if (lightbox) lightbox.addEventListener('click', function (e) {
-        if (e.target === lightbox) closeLightbox();
+  function renderChosenOptions(q) {
+    const chosen = q.chosenOptions || [];
+    if (!chosen.length) return "";
+    return `
+      <div class="rp-chosen-options">
+        <span class="rp-chosen-options-label">Opções escolhidas</span>
+        <ul class="rp-chosen-options-list">
+          ${chosen.map(o => `<li>${esc(typeof o === "string" ? o : (o.text || o.label || ""))}</li>`).join("")}
+        </ul>
+      </div>
+    `;
+  }
+
+  function renderAnswerImages(q) {
+    const imgs = collectImagesFromAnswer(q);
+    if (!imgs.length) return "";
+    return `
+      <div class="rp-answer-images">
+        ${imgs.map(img => `
+          <a class="rp-answer-image" href="${safeUrl(img.url)}" target="_blank" rel="noopener" aria-label="Abrir imagem">
+            <img src="${safeUrl(img.url)}" alt="${esc(img.alt)}" loading="lazy">
+            <span class="rp-source-badge">${esc(img.source)}</span>
+          </a>
+        `).join("")}
+      </div>
+    `;
+  }
+
+  function renderAnswerFiles(q) {
+    const nonImage = (q.attachments || []).filter(a => {
+      const mime = a.mime_type || "";
+      const url = a.file_url || a.url || "";
+      return !mime.startsWith("image/") && !/\.(png|jpe?g|webp|gif)(\?|$)/i.test(url);
     });
-    document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape') closeLightbox();
-    });
+    if (!nonImage.length) return "";
+    return nonImage.map(a => {
+      const url = safeUrl(a.file_url || a.url || "");
+      return `<a class="rp-answer-file" href="${url}" target="_blank" rel="noopener">↗ ${esc(a.name || "Arquivo")}</a>`;
+    }).join("");
+  }
 
-    /* Colapsar sessão */
-    document.querySelectorAll('.section-head').forEach(function (head) {
-        head.addEventListener('click', function () {
-            var group = head.closest('.section-group');
-            if (group) group.classList.toggle('is-open');
-        });
-    });
+  function renderQuestions() {
+    const root = $("#questions-root");
+    const all = state.sections.flatMap(s => s.questions.map(q => ({ ...q, sectionTitle: s.title })));
+    const answered = all.filter(q => q.state === "answered").length;
+    const doubts = all.filter(q => ["doubt", "review_requested", "clarification_requested"].includes(q.state)).length;
+    const pending = all.length - answered - doubts;
 
-    /* Filtros */
-    var searchInput = document.getElementById('filterSearch');
-    var stateSelect = document.getElementById('filterState');
-    var allQAs = Array.prototype.slice.call(document.querySelectorAll('#qaContainer .qa'));
-    var allGroups = Array.prototype.slice.call(document.querySelectorAll('#qaContainer .section-group'));
+    $("#pending-count").textContent = pending;
+    $("#doubt-count").textContent = doubts;
+    $("#progress-inline").textContent = `${answered}/${all.length}`;
 
-    function applyFilters() {
-        var term = (searchInput ? searchInput.value : '').trim().toLowerCase();
-        var state = stateSelect ? stateSelect.value : '';
-        allQAs.forEach(function (qa) {
-            var okSearch = !term || (qa.getAttribute('data-search') || '').indexOf(term) !== -1;
-            var okState = !state || qa.getAttribute('data-state') === state;
-            qa.style.display = (okSearch && okState) ? '' : 'none';
-        });
-        allGroups.forEach(function (group) {
-            var hasVisible = group.querySelector('.qa:not([style*="display: none"])');
-            group.style.display = hasVisible ? '' : 'none';
-            if (hasVisible && (term || state)) group.classList.add('is-open');
-        });
-    }
-    if (searchInput) searchInput.addEventListener('input', applyFilters);
-    if (stateSelect) stateSelect.addEventListener('change', applyFilters);
+    const sel = $("#session-filter");
+    const currentValue = sel.value;
+    sel.innerHTML = '<option value="all">Todas as sessões</option>' +
+      state.sections.map((s, i) => `<option value="${i}">${esc(s.title)}</option>`).join("");
+    sel.value = currentValue;
 
-    /* Moodboard: coleta todas as imagens de respostas */
-    var moodboardGrid = document.getElementById('moodboardGrid');
-    var moodboardEmpty = document.getElementById('moodboardEmpty');
-    var moodboardCount = document.getElementById('moodboardCount');
-
-    var seen = {};
-    var tiles = [];
-
-    function pushTile(src, caption) {
-        if (!src || seen[src]) return;
-        seen[src] = true;
-        tiles.push({ src: src, caption: caption || '' });
+    if (!all.length) {
+      root.innerHTML = '<div class="rp-insight-empty">Este briefing ainda não possui perguntas.</div>';
+      return;
     }
 
-    document.querySelectorAll('#qaContainer .qa').forEach(function (qa) {
-        qa.querySelectorAll('.qa-img').forEach(function (el) {
-            var img = el.querySelector('img');
-            if (!img) return;
-            var src = img.getAttribute('src') || '';
-            var capEl = el.querySelector('.cap');
-            var cap = capEl ? capEl.textContent.trim() : (img.getAttribute('alt') || '');
-            pushTile(src, cap);
-        });
-    });
+    root.innerHTML = state.sections.map((section, sIdx) => {
+      const qs = section.questions.map(q => {
+        const number = all.findIndex(x => x.id === q.id) + 1;
+        const isAnswered = q.state === "answered";
+        const isDoubt = ["doubt", "review_requested", "clarification_requested"].includes(q.state);
+        const status = isAnswered ? "Respondida" : isDoubt ? "Atenção" : "Em aberto";
 
-    if (tiles.length === 0) {
-        if (moodboardEmpty) moodboardEmpty.style.display = 'block';
-        if (moodboardCount) moodboardCount.textContent = '0';
-    } else {
-        if (moodboardCount) moodboardCount.textContent = tiles.length;
-        var frag = document.createDocumentFragment();
-        tiles.forEach(function (t) {
-            var div = document.createElement('div');
-            div.className = 'moodboard-tile';
-            div.addEventListener('click', function () {
-                window.openLightbox(t.src);
-            });
-            var img = document.createElement('img');
-            img.src = t.src;
-            img.alt = t.caption;
-            img.loading = 'lazy';
-            div.appendChild(img);
-            if (t.caption) {
-                var cap = document.createElement('span');
-                cap.className = 'cap';
-                cap.textContent = t.caption;
-                div.appendChild(cap);
-            }
-            frag.appendChild(div);
-        });
-        moodboardGrid.appendChild(frag);
+        const answer = q.content
+          ? `<div class="rp-answer"><span class="rp-answer-label">Resposta do cliente</span>${esc(q.content)}</div>`
+          : `<div class="rp-answer is-empty"><span class="rp-answer-label">Resposta do cliente</span>${q.transcript ? "Sem texto; há transcrição abaixo." : q.required ? "Aguardando resposta." : "Opcional, sem resposta."}</div>`;
+
+        return `
+          <article class="rp-question"
+            id="question-${esc(q.id)}"
+            data-status="${isAnswered ? "answered" : isDoubt ? "doubt" : "pending"}"
+            data-session="${sIdx}"
+            data-search="${esc((q.text + " " + q.content + " " + q.transcript).toLowerCase())}">
+            <div class="rp-q-top">
+              <span class="rp-q-num">${String(number).padStart(2, "0")}</span>
+              <h3 class="rp-q-title">${esc(q.text)}</h3>
+              <span class="rp-q-status ${isAnswered ? "is-answered" : isDoubt ? "is-doubt" : ""}">${status}</span>
+            </div>
+            ${answer}
+            ${renderChosenOptions(q)}
+            ${renderAnswerImages(q)}
+            ${renderAnswerFiles(q)}
+            ${q.transcript ? `<div class="rp-transcript"><span class="rp-answer-label">Transcrição</span>${esc(q.transcript)}</div>` : ""}
+            ${q.audio ? `<div class="rp-audio"><audio controls preload="none" src="${safeUrl(q.audio)}">Áudio indisponível.</audio></div>` : ""}
+            <div class="rp-q-foot">
+              <span>${q.required ? "Obrigatória" : "Opcional"}</span>
+              ${q.updated ? `<span>Atualizada ${fmtDate(q.updated, true)}</span>` : ""}
+            </div>
+          </article>
+        `;
+      }).join("");
+
+      if (!qs) return "";
+      return `
+        <div class="rp-session" data-session="${sIdx}">
+          <div class="rp-session-head">
+            <strong>${esc(section.title)}</strong>
+            <span>${section.questions.length} pergunta${section.questions.length === 1 ? "" : "s"}</span>
+          </div>
+          ${qs}
+        </div>
+      `;
+    }).join("");
+
+    applyFilters();
+  }
+
+  function applyFilters() {
+    const term = state.search.toLowerCase();
+    document.querySelectorAll(".rp-question").forEach(q => {
+      const st = q.dataset.status;
+      const sess = q.dataset.session;
+      const statusOk = state.filter === "all" || state.filter === st;
+      const sessionOk = state.sessionFilter === "all" || state.sessionFilter === sess;
+      const searchOk = !term || q.dataset.search.includes(term);
+      q.hidden = !(statusOk && sessionOk && searchOk);
+    });
+    document.querySelectorAll("[data-filter]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.filter === state.filter)));
+    document.querySelectorAll(".rp-session").forEach(s => {
+      const visible = [...s.querySelectorAll(".rp-question")].some(q => !q.hidden);
+      s.hidden = !visible;
+    });
+  }
+
+  function renderAll() {
+    const b = state.briefing || {};
+    const clientName = b.client_name || (b.client && b.client.name) || "—";
+    $("#report-title").innerHTML = `Entendendo o <em>${esc((b.title || "projeto").replace(/^briefing\s*/i, ""))}.</em>`;
+    $("#client-name").textContent = clientName;
+    $("#briefing-name").textContent = b.title || "Briefing";
+    $("#briefing-status").textContent = b.status_display || b.status || "Em andamento";
+    $("#generated-date").textContent = fmtDate(new Date().toISOString());
+
+    if (clientName && clientName !== "—") {
+      document.title = `Relatório · ${clientName} · Clivo`;
     }
+
+    renderSummary();
+    renderMoodboard();
+    renderInsights();
+    renderQuestions();
+
+    if (window.lucide) setTimeout(() => { try { window.lucide.createIcons(); } catch {} }, 30);
+  }
+
+  async function load() {
+    if (!BID) {
+      $("#questions-root").innerHTML = `<div class="rp-insight-empty">Briefing não identificado na URL.</div>`;
+      return;
+    }
+    try { state.payload = JSON.parse($("#bp").textContent); } catch { state.payload = null; }
+
+    const [briefing, analysis] = await Promise.all([
+      api(`/api/briefings/${encodeURIComponent(BID)}/`),
+      api(`/api/intelligence/briefings/${encodeURIComponent(BID)}/relatorio/`).catch(() => null),
+    ]);
+    state.briefing = briefing;
+    state.containers = getContainers(analysis);
+
+    if (briefing.client) {
+      try {
+        const ci = await api(`/api/intelligence/clientes/${encodeURIComponent(briefing.client)}/`);
+        state.clientContainers = getContainers(ci);
+      } catch { state.clientContainers = {}; }
+    }
+
+    state.sections = buildQuestions(briefing, state.payload);
+    renderAll();
+  }
+
+  // =========================================================================
+  // FILTROS
+  // =========================================================================
+
+  document.addEventListener("click", e => {
+    const f = e.target.closest("[data-filter]");
+    if (f) { state.filter = f.dataset.filter; applyFilters(); }
+  });
+  document.addEventListener("input", e => {
+    if (e.target.id === "question-search") { state.search = e.target.value.trim(); applyFilters(); }
+  });
+  document.addEventListener("change", e => {
+    if (e.target.id === "session-filter") { state.sessionFilter = e.target.value; applyFilters(); }
+  });
+
+  // =========================================================================
+  // BOOT
+  // =========================================================================
+
+  load().catch(err => {
+    console.error(err);
+    $("#questions-root").innerHTML = `<div class="rp-insight-empty">Não foi possível carregar o relatório.</div>`;
+  });
 })();
 </script>
 

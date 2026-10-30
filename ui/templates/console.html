@@ -1,3 +1,4 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -6,13 +7,14 @@
     <meta name="theme-color" content="#FFFFFF">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="Clivo - Console">
-    <title>Clivo</title>
+    <title>Clivo Console</title>
+
+    <link rel="icon" type="image/svg+xml" href="{% static 'img/clivo-logo.svg' %}">
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,450;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    {% load static %}
     <link rel="stylesheet" href="{% static 'css/console.css' %}">
 
     <style>
@@ -29,43 +31,6 @@
         .hidden { display: none !important; }
         @keyframes spin { to { transform: rotate(360deg); } }
         .spin-icon { animation: spin 0.8s linear infinite; }
-
-        .cap-count {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            min-width: 26px;
-            height: 20px;
-            padding: 0 8px;
-            border-radius: 999px;
-            background: var(--bg-secondary);
-            color: var(--text-secondary);
-            font-size: 11px;
-            font-weight: 600;
-            font-variant-numeric: tabular-nums;
-        }
-        .cap-count.zero {
-            color: var(--text-tertiary);
-            background: transparent;
-            border: 1px dashed var(--border-color);
-        }
-        .scope-badge {
-            font-size: 9.5px;
-            font-weight: 600;
-            padding: 2px 7px;
-            border-radius: 999px;
-            text-transform: uppercase;
-            letter-spacing: 0.3px;
-            margin-left: 8px;
-        }
-        .scope-badge.console {
-            background: var(--blue-bg);
-            color: var(--blue);
-        }
-        .scope-badge.workspace {
-            background: var(--purple-bg);
-            color: var(--purple);
-        }
     </style>
 </head>
 <body>
@@ -143,6 +108,12 @@
                             </a>
                             <a href="#" data-nav="workspaces">
                                 <i class="lucide" data-lucide="layers"></i><span>Workspaces</span>
+                            </a>
+                        </div>
+                        <div class="nav-group">
+                            <div class="nav-label">Inteligência</div>
+                            <a href="#" data-nav="ai">
+                                <i class="lucide" data-lucide="sparkles"></i><span>IA</span>
                             </a>
                         </div>
                         <div class="nav-group">
@@ -495,23 +466,206 @@
                         </div>
                     </div>
 
+                    <!-- ===== VIEW: IA ===== -->
+                    <div id="viewAi" class="view-content" style="display:none;">
+
+                        <!-- Explicação didática -->
+                        <div class="ai-intro-card">
+                            <div class="ai-intro-icon"><i class="lucide" data-lucide="sparkles"></i></div>
+                            <div class="ai-intro-text">
+                                <h4>Controle da Inteligência Artificial</h4>
+                                <p>
+                                    Escolha qual provider e modelo serão usados nas análises de briefing.
+                                    As chamadas são registradas abaixo com custo e tokens, para você entender
+                                    exatamente quanto cada operação consome.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="apple-grid">
+
+                            <!-- Provider ativo + config -->
+                            <div class="apple-panel">
+                                <div class="apple-panel-header">
+                                    <div class="apple-panel-title">
+                                        <i class="lucide" data-lucide="cpu" style="width:18px; height:18px; opacity:0.6;"></i>
+                                        <h3>Provider ativo</h3>
+                                    </div>
+                                    <span class="apple-panel-subtitle" id="aiStateSub">—</span>
+                                </div>
+                                <div class="apple-panel-body">
+                                    <div class="ai-config-state" id="aiConfigState">
+                                        <i class="lucide" data-lucide="loader-circle" style="width:14px; height:14px; animation:spin 0.8s linear infinite;"></i>
+                                        <span>Carregando configuração…</span>
+                                    </div>
+
+                                    <div class="apple-form-wrapper">
+                                        <form id="aiConfigForm">
+                                            <div class="apple-form-row">
+                                                <div class="apple-form-group" style="flex:1; margin:0;">
+                                                    <label for="aiProviderSelect">Provider</label>
+                                                    <select id="aiProviderSelect" required>
+                                                        <option value="">Carregando…</option>
+                                                    </select>
+                                                </div>
+                                                <div class="apple-form-group" style="flex:1; margin:0;">
+                                                    <label for="aiModelSelect">Modelo</label>
+                                                    <select id="aiModelSelect" required>
+                                                        <option value="">Selecione um provider primeiro</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <div class="apple-form-row" style="margin-top:10px;">
+                                                <div class="apple-form-group" style="flex:1; margin:0;">
+                                                    <label for="aiModelCustom" id="aiModelCustomLabel" style="display:none;">Ou digite o modelo</label>
+                                                    <input type="text" id="aiModelCustom" placeholder="Ex: gpt-4o-mini" style="display:none;">
+                                                </div>
+                                                <div class="apple-form-actions" style="margin-left:auto;">
+                                                    <button type="submit" class="apple-btn apple-btn-primary" id="aiConfigSaveBtn" style="padding:6px 16px;">
+                                                        <i class="lucide" data-lucide="check" style="width:14px; height:14px;"></i>
+                                                        Salvar
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </form>
+                                    </div>
+
+                                    <div class="ai-stats-grid" id="aiStatsGrid">
+                                        <div class="ai-stat">
+                                            <span class="ai-stat-label">Requisições (30d)</span>
+                                            <span class="ai-stat-value" id="aiStatRequests">—</span>
+                                            <span class="ai-stat-hint">chamadas registradas</span>
+                                        </div>
+                                        <div class="ai-stat">
+                                            <span class="ai-stat-label">Falhas (30d)</span>
+                                            <span class="ai-stat-value" id="aiStatFailed">—</span>
+                                            <span class="ai-stat-hint" id="aiStatFailedHint">—</span>
+                                        </div>
+                                        <div class="ai-stat">
+                                            <span class="ai-stat-label">Custo (30d)</span>
+                                            <span class="ai-stat-value" id="aiStatCost">—</span>
+                                            <span class="ai-stat-hint">USD</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Custo por operação (agrupado) -->
+                            <div class="apple-panel">
+                                <div class="apple-panel-header">
+                                    <div class="apple-panel-title">
+                                        <i class="lucide" data-lucide="receipt" style="width:18px; height:18px; opacity:0.6;"></i>
+                                        <h3>Custo por operação</h3>
+                                    </div>
+                                    <div class="apple-filter" style="border:none; padding:0;">
+                                        <div class="apple-filter-left">
+                                            <select id="aiCostDays">
+                                                <option value="7">7 dias</option>
+                                                <option value="30" selected>30 dias</option>
+                                                <option value="90">90 dias</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="apple-panel-body">
+                                    <div class="ai-grouped-note">
+                                        <i class="lucide" data-lucide="info" style="width:12px; height:12px;"></i>
+                                        <span>Agrupado por operação + provider. Cada linha mostra quantas chamadas e quanto custou.</span>
+                                    </div>
+                                    <div class="apple-table-wrapper">
+                                        <table class="apple-governance-table" style="table-layout:auto;">
+                                            <thead>
+                                                <tr>
+                                                    <th style="width:34%;">Operação</th>
+                                                    <th style="width:22%;">Provider</th>
+                                                    <th style="width:12%;text-align:right;">Chamadas</th>
+                                                    <th style="width:16%;text-align:right;">Tokens</th>
+                                                    <th style="width:16%;text-align:right;">Custo</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="aiCostsTableBody">
+                                                <tr>
+                                                    <td colspan="5" style="text-align:center; padding:30px 0; font-size:12.5px; color:var(--text-tertiary);">
+                                                        Carregando…
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Logs -->
+                        <div class="apple-grid apple-grid-single" style="margin-top:24px;">
+                            <div class="apple-panel">
+                                <div class="apple-panel-header">
+                                    <div class="apple-panel-title">
+                                        <i class="lucide" data-lucide="scroll-text" style="width:18px; height:18px; opacity:0.6;"></i>
+                                        <h3>Logs de chamadas</h3>
+                                        <span class="apple-badge" id="aiLogsCount">0</span>
+                                    </div>
+                                    <div class="apple-filter" style="border:none; padding:0;">
+                                        <div class="apple-filter-left">
+                                            <select id="aiLogsStatus">
+                                                <option value="">Todos os status</option>
+                                                <option value="success">Sucesso</option>
+                                                <option value="failed">Falha</option>
+                                                <option value="timeout">Timeout</option>
+                                                <option value="rate_limited">Rate limited</option>
+                                            </select>
+                                            <select id="aiLogsDays">
+                                                <option value="7">7 dias</option>
+                                                <option value="30" selected>30 dias</option>
+                                                <option value="90">90 dias</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="apple-panel-body">
+                                    <div class="ai-grouped-note">
+                                        <i class="lucide" data-lucide="info" style="width:12px; height:12px;"></i>
+                                        <span>Cada linha é uma chamada individual. Use os filtros para isolar uma operação ou modelo.</span>
+                                    </div>
+                                    <div class="apple-table-wrapper">
+                                        <table class="apple-governance-table" style="table-layout:auto;">
+                                            <thead>
+                                                <tr>
+                                                    <th style="width:140px;">Quando</th>
+                                                    <th style="width:100px;">Provider</th>
+                                                    <th style="width:150px;">Modelo</th>
+                                                    <th style="width:150px;">Operação</th>
+                                                    <th style="width:90px;text-align:center;">Status</th>
+                                                    <th style="width:80px;text-align:right;">Latência</th>
+                                                    <th style="width:85px;text-align:right;">Tokens in</th>
+                                                    <th style="width:85px;text-align:right;">Tokens out</th>
+                                                    <th style="width:85px;text-align:right;">Custo</th>
+                                                    <th>Erro</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="aiLogsTableBody">
+                                                <tr>
+                                                    <td colspan="10" style="text-align:center; padding:30px 0; font-size:12.5px; color:var(--text-tertiary);">
+                                                        Carregando…
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- ===== VIEW: ARMAZENAMENTO ===== -->
                     <div id="viewStorage" class="view-content" style="display:none;">
                         <div class="storage-page">
-
-                            <!-- Seletor de provider (aparece só se houver >1) -->
                             <div id="storageProviderSwitch" class="storage-provider-switch" style="display:none;"></div>
-
-                            <!-- Estado de carregamento -->
                             <div id="storageLoading" class="storage-loading" style="display:none;">
                                 <span class="btn-spinner" style="border-top-color: var(--text-secondary);"></span>
                                 <span>Carregando…</span>
                             </div>
-
-                            <!-- Estado vazio (sem provider) -->
                             <div id="storageEmptyState" class="storage-empty-state" style="display:none;"></div>
-
-                            <!-- Conteúdo real: único container, largura total -->
                             <div id="storageContent" style="display:none;">
                                 <section class="storage-section-editorial" id="storageCapSection"></section>
                             </div>
@@ -650,7 +804,6 @@
 
     <!-- ===== MODALS ===== -->
 
-    <!-- MODAL: ADICIONAR MEMBRO -->
     <div class="apple-modal-overlay" id="addMemberModal">
         <div class="apple-modal">
             <div class="apple-modal-header">
@@ -676,7 +829,6 @@
         </div>
     </div>
 
-    <!-- MODAL: ADICIONAR CONEXÃO -->
     <div class="apple-modal-overlay" id="addConnectionModal">
         <div class="apple-modal">
             <div class="apple-modal-header">
@@ -712,7 +864,6 @@
         </div>
     </div>
 
-    <!-- MODAL: NOVO / EDITAR CONTRATO -->
     <div class="apple-modal-overlay" id="contractModal">
         <div class="apple-modal">
             <div class="apple-modal-header">
@@ -813,7 +964,6 @@
         </div>
     </div>
 
-    <!-- MODAL: EDITAR ORÇAMENTO -->
     <div class="apple-modal-overlay" id="budgetModal">
         <div class="apple-modal">
             <div class="apple-modal-header">
@@ -874,7 +1024,6 @@
         </div>
     </div>
 
-    <!-- MODAL: MUDAR PLANO DO WORKSPACE -->
     <div class="apple-modal-overlay" id="changePlanModal">
         <div class="apple-modal">
             <div class="apple-modal-header">
@@ -916,7 +1065,6 @@
         </div>
     </div>
 
-    <!-- MODAL: CONFIRMAR EXCLUSÃO -->
     <div class="apple-modal-overlay" id="confirmDeleteModal">
         <div class="apple-modal apple-modal-sm">
             <div class="apple-modal-header">
@@ -940,7 +1088,6 @@
         </div>
     </div>
 
-    <!-- TOAST CONTAINER -->
     <div class="apple-toast-container" id="toastContainer"></div>
 
     <script src="https://unpkg.com/lucide@latest"></script>

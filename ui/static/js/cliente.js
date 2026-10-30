@@ -1,5 +1,7 @@
 /* =========================================================================
-   CLIENTES — v11
+   CLIENTES — v12
+   - Nova análise: sem popup; dispara POST, faz polling do job e
+     recarrega o bundle do cliente quando o worker conclui.
    ========================================================================= */
 (function () {
   "use strict";
@@ -134,6 +136,10 @@
     cancelled: "Cancelado",
   };
 
+  // Polling do job de reanálise.
+  const POLL_INTERVAL_MS = 2500;
+  const POLL_MAX_ATTEMPTS = 120; // ~5 min
+
   const state = {
     clients: [],
     filtered: [],
@@ -155,6 +161,7 @@
     reanalyzing: false,
     changingStatus: false,
     codeCopiedTimer: null,
+    reanalysisPolling: null,
   };
 
   const el = {};
@@ -901,31 +908,117 @@
     }
   }
 
+  // -------------------- REANÁLISE MANUAL --------------------
+  function stopReanalysisPolling() {
+    if (state.reanalysisPolling) {
+      clearTimeout(state.reanalysisPolling);
+      state.reanalysisPolling = null;
+    }
+  }
+
+  async function refreshClientBundle() {
+    if (!state.activeId) return;
+    state.detailCache.delete(String(state.activeId));
+    try {
+      const bundle = await fetchBundle(state.activeId);
+      putCachedDetail(state.activeId, bundle);
+      hydrateDetail(state.activeId, bundle);
+    } catch (err) {
+      console.warn("[cliente] falha ao recarregar após reanálise", err);
+    }
+    // Também recarrega a lista de clientes para refletir qualquer
+    // mudança de contexto (`wishes`, `attention` etc.) que a análise
+    // possa ter produzido.
+    try {
+      const data = await api("/api/clients/");
+      state.clients = Array.isArray(data) ? data : (data && data.results) || [];
+      renderFilters();
+      renderList();
+    } catch (_) {}
+  }
+
+  function pollJobStatus(jobId, attempt) {
+    if (!jobId) return;
+    attempt = attempt || 1;
+    stopReanalysisPolling();
+
+    const tick = async () => {
+      try {
+        const status = await api(
+          `/api/intelligence/jobs/${jobId}/status/`,
+        );
+        if (status.status === "completed" || status.status === "failed") {
+          stopReanalysisPolling();
+          if (el.reanalyzeBtn) {
+            el.reanalyzeBtn.classList.remove("is-loading");
+            el.reanalyzeBtn.disabled = false;
+          }
+          state.reanalyzing = false;
+          if (status.status === "completed") {
+            await refreshClientBundle();
+          } else {
+            console.warn(
+              "[cliente] job de reanálise falhou", status.error_message,
+            );
+          }
+          return;
+        }
+        if (attempt >= POLL_MAX_ATTEMPTS) {
+          stopReanalysisPolling();
+          if (el.reanalyzeBtn) {
+            el.reanalyzeBtn.classList.remove("is-loading");
+            el.reanalyzeBtn.disabled = false;
+          }
+          state.reanalyzing = false;
+          return;
+        }
+        state.reanalysisPolling = setTimeout(() => {
+          pollJobStatus(jobId, attempt + 1);
+        }, POLL_INTERVAL_MS);
+      } catch (err) {
+        console.warn("[cliente] falha no polling do job", err);
+        if (attempt >= POLL_MAX_ATTEMPTS) {
+          stopReanalysisPolling();
+          if (el.reanalyzeBtn) {
+            el.reanalyzeBtn.classList.remove("is-loading");
+            el.reanalyzeBtn.disabled = false;
+          }
+          state.reanalyzing = false;
+          return;
+        }
+        state.reanalysisPolling = setTimeout(() => {
+          pollJobStatus(jobId, attempt + 1);
+        }, POLL_INTERVAL_MS);
+      }
+    };
+    tick();
+  }
+
   async function triggerReanalysis() {
     if (!state.activeId || !el.reanalyzeBtn) return;
     if (state.reanalyzing) return;
     state.reanalyzing = true;
     el.reanalyzeBtn.classList.add("is-loading");
     el.reanalyzeBtn.disabled = true;
-    const started = Date.now();
+
     try {
       const result = await api(
         "/api/intelligence/clients/" + state.activeId + "/reanalyze/",
-        {
-          method: "POST",
-          body: {},
-        },
+        { method: "POST", body: {} },
       );
-      const wait = Math.max(0, 400 - (Date.now() - started));
-      if (wait) await new Promise((res) => setTimeout(res, wait));
       const jobId = (result && result.job_id) || "";
-      showToast(
-        jobId
-          ? "Análise agendada (" + String(jobId).slice(0, 8) + ")"
-          : "Análise agendada",
-        "success",
-      );
+      if (!jobId) {
+        state.reanalyzing = false;
+        el.reanalyzeBtn.classList.remove("is-loading");
+        el.reanalyzeBtn.disabled = false;
+        return;
+      }
+      // Sem popup. Polling recarrega os containers quando concluir.
+      pollJobStatus(jobId, 1);
     } catch (err) {
+      state.reanalyzing = false;
+      el.reanalyzeBtn.classList.remove("is-loading");
+      el.reanalyzeBtn.disabled = false;
       if (err && err.status === 404) {
         showToast(
           "Análise manual ainda não disponível neste ambiente",
@@ -941,10 +1034,6 @@
       } else {
         showToast((err && err.message) || "Falha ao agendar", "error");
       }
-    } finally {
-      state.reanalyzing = false;
-      el.reanalyzeBtn.classList.remove("is-loading");
-      el.reanalyzeBtn.disabled = false;
     }
   }
 
@@ -1167,6 +1256,7 @@
     state.reanalyzing = false;
     state.changingStatus = false;
     state.codeCopiedTimer = null;
+    stopReanalysisPolling();
 
     cacheElements();
     bindEvents();
@@ -1182,6 +1272,7 @@
       } catch (e) {}
       state.abortDetail = null;
     }
+    stopReanalysisPolling();
     state.listCache = new Map();
     state.detailCache = new Map();
     state.prefetching = new Set();

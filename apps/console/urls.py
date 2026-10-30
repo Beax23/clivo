@@ -22,6 +22,7 @@ from apps.console.api.views.user_admin_views import AdminUserViewSet
 from apps.console.api.views.storage_views import StorageViewSet
 from apps.console.api.views.quota_views import QuotaViewSet
 from apps.console.api.views.storage_budget_views import StorageBudgetViewSet
+from apps.console.api.views.ai_state_views import AIStateViewSet
 
 router = DefaultRouter()
 
@@ -67,6 +68,9 @@ router.register(r'quota', QuotaViewSet, basename='quota')
 # Console V1 — visão administrativa (read-only)
 router.register(r'workspaces', AdminWorkspaceViewSet, basename='admin-workspace')
 router.register(r'users', AdminUserViewSet, basename='admin-user')
+
+# Console V1 — controle da IA
+router.register(r'ai', AIStateViewSet, basename='ai')
 
 urlpatterns = [
     path('api/console/', include(router.urls)),

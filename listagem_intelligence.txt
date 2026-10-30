@@ -1,10 +1,10 @@
 ================================================================================
 LISTAGEM COMPLETA DO MÓDULO intelligence
-Gerado em: 27/10/2026 12:03:22
-Total de arquivos: 43
+Gerado em: 30/10/2026 11:54:00
+Total de arquivos: 45
 ================================================================================
 ================================================================================
-ARQUIVO 1 DE 43
+ARQUIVO 1 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\intelligence
 ARQUIVO: __init__.py
@@ -15,7 +15,7 @@ LINHAS: 0
 
 
 ================================================================================
-ARQUIVO 2 DE 43
+ARQUIVO 2 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\intelligence
 ARQUIVO: admin.py
@@ -184,7 +184,7 @@ class AnalysisRunAdmin(admin.ModelAdmin):
         return False
 
 ================================================================================
-ARQUIVO 3 DE 43
+ARQUIVO 3 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\intelligence\api
 ARQUIVO: __init__.py
@@ -210,7 +210,7 @@ __all__ = [
 ]
 
 ================================================================================
-ARQUIVO 4 DE 43
+ARQUIVO 4 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\intelligence\api
 ARQUIVO: serializers.py
@@ -347,13 +347,13 @@ class ContainerPayloadSerializer(serializers.Serializer):
     )
 
 ================================================================================
-ARQUIVO 5 DE 43
+ARQUIVO 5 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\intelligence\api
 ARQUIVO: views.py
-TAMANHO: 8,57 KB
+TAMANHO: 13,65 KB
 EXTENSAO: .py
-LINHAS: 271
+LINHAS: 434
 ================================================================================
 
 """
@@ -361,33 +361,26 @@ Views da API de Inteligência.
 
 Endpoints:
     GET  /api/intelligence/mesa/
-        Containers da Mesa para o workspace atual (opcional ?client=).
-
     GET  /api/intelligence/clientes/<client_id>/
-        Containers do Cliente.
-
     GET  /api/intelligence/briefings/<briefing_id>/relatorio/
-        Relatório do briefing (8 containers).
-
     GET  /api/intelligence/tags/
-        Lista tags do workspace (?client=&state=).
-
     GET  /api/intelligence/tags/<id>/
-        Detalhe da tag + histórico.
-
     PATCH /api/intelligence/tags/<id>/
-        Transição de estado (confirmada/descartada) com histórico.
+    POST /api/intelligence/briefings/<id>/reanalyze/
+    POST /api/intelligence/clients/<id>/reanalyze/
+    GET  /api/intelligence/jobs/<job_id>/status/
 
 Autorização:
     - Usuário autenticado.
     - Membro do workspace (via `user_has_capability` do módulo
       `workspaces`, que é o único ponto de autorização cross-app).
     - Capability necessária: `intelligence.insight.view` para leitura
-      e `intelligence.tag.manage` para transição de tag.
+      e reanálise; `intelligence.tag.manage` para transição de tag.
 """
 
 import logging
 
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -399,9 +392,12 @@ from apps.intelligence.api.serializers import (
     InsightTagHistorySerializer,
     TagTransitionSerializer,
 )
-from apps.intelligence.models import InsightItem
+from apps.intelligence.models import (
+    AnalysisJob, InsightEvent, InsightItem,
+)
 from apps.intelligence.services import (
     ContainerService,
+    IngestService,
     TagService,
     InvalidTagTransitionError,
 )
@@ -414,10 +410,6 @@ logger = logging.getLogger('intelligence')
 
 
 def _resolve_workspace(request):
-    """
-    Resolve o workspace ativo da sessão. Retorna None se não houver.
-    Reusa o contrato de `workspaces` — sem duplicar resolução.
-    """
     ws_id = request.session.get('current_workspace_id')
     if not ws_id:
         return None
@@ -425,9 +417,6 @@ def _resolve_workspace(request):
 
 
 def _require(workspace, user, capability: str):
-    """
-    Retorna (True, None) ou (False, Response 403).
-    """
     if workspace is None:
         return False, Response(
             {'error': 'Nenhum workspace ativo'},
@@ -628,19 +617,373 @@ class TagDetailView(APIView):
 
         return Response(InsightItemSerializer(tag).data)
 
+
+# =========================================================================
+# REANÁLISE MANUAL
+# =========================================================================
+
+class _ReanalyzeBase(APIView):
+    """
+    Base para as views de reanálise manual.
+
+    Cada clique gera um InsightEvent novo com
+    `source_kind=manual.reanalyze` e `occurrence_id` = timestamp
+    monotônico. Isso evita que a idempotência por `dedupe_key`
+    bloqueie cliques repetidos legítimos — o operador pode pedir
+    reanálise quantas vezes quiser.
+
+    Devolve `job_id` para o frontend acompanhar o andamento.
+    """
+
+    permission_classes = [IsAuthenticated]
+    capability = 'intelligence.insight.view'
+
+    def _ingest(self, request, workspace, client_id, briefing_id=None):
+        occurrence_id = (
+            f'manual-{timezone.now().timestamp()}-{request.user.id}'
+        )
+        data_version = f'manual-{timezone.now().isoformat()}'
+
+        event, job, created = IngestService.ingest_change_event(
+            workspace_id=workspace.id,
+            client_id=client_id,
+            briefing_id=briefing_id,
+            source_kind=InsightEvent.SOURCE_KIND_MANUAL_REANALYZE,
+            occurrence_id=occurrence_id,
+            data_version=data_version,
+        )
+
+        if event is None or job is None:
+            return Response(
+                {'error': 'Falha ao agendar reanálise'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        return Response(
+            {
+                'job_id': str(job.id),
+                'created': created,
+                'event_id': str(event.id),
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class BriefingReanalyzeView(_ReanalyzeBase):
+    """
+    POST /api/intelligence/briefings/<briefing_id>/reanalyze/
+
+    Agenda reanálise manual do briefing. A análise é executada pelo
+    worker (`python manage.py intelligence_worker`). O frontend
+    acompanha pelo `job_id`.
+    """
+
+    def post(self, request, briefing_id):
+        workspace = _resolve_workspace(request)
+        ok, err = _require(
+            workspace, request.user, self.capability,
+        )
+        if not ok:
+            return err
+
+        from apps.briefings.models import Briefing
+        briefing = Briefing.objects.filter(
+            id=briefing_id, workspace=workspace,
+        ).first()
+        if briefing is None:
+            return Response(
+                {'error': 'Briefing não encontrado'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return self._ingest(
+            request,
+            workspace,
+            client_id=briefing.client_id,
+            briefing_id=briefing.id,
+        )
+
+
+class ClientReanalyzeView(_ReanalyzeBase):
+    """
+    POST /api/intelligence/clients/<client_id>/reanalyze/
+
+    Agenda reanálise manual do cliente (sem briefing específico).
+    A análise cobre o estado consolidado do cliente.
+    """
+
+    def post(self, request, client_id):
+        workspace = _resolve_workspace(request)
+        ok, err = _require(
+            workspace, request.user, self.capability,
+        )
+        if not ok:
+            return err
+
+        from apps.clients.models import Client
+        client = Client.objects.filter(
+            id=client_id, workspace=workspace,
+        ).first()
+        if client is None:
+            return Response(
+                {'error': 'Cliente não encontrado'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return self._ingest(
+            request,
+            workspace,
+            client_id=client.id,
+            briefing_id=None,
+        )
+
+
+# =========================================================================
+# JOB STATUS (polling do frontend)
+# =========================================================================
+
+class JobStatusView(APIView):
+    """
+    GET /api/intelligence/jobs/<job_id>/status/
+
+    Devolve o estado atual do job + se o run associado concluiu.
+    Usado pelo frontend para saber quando recarregar os containers.
+
+    Retorna:
+        {
+            "job_id": str,
+            "status": "pending"|"processing"|"completed"|"failed",
+            "run_id": str | None,
+            "run_status": str | None,
+            "has_insights": bool,
+            "error_message": str,
+        }
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, job_id):
+        workspace = _resolve_workspace(request)
+        ok, err = _require(
+            workspace, request.user, 'intelligence.insight.view',
+        )
+        if not ok:
+            return err
+
+        job = AnalysisJob.objects.filter(
+            id=job_id, workspace=workspace,
+        ).first()
+        if job is None:
+            return Response(
+                {'error': 'Job não encontrado'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        run = job.runs.order_by('-created_at').first()
+        has_insights = bool(run and run.insights.exists())
+
+        return Response({
+            'job_id': str(job.id),
+            'status': job.status,
+            'run_id': str(run.id) if run else None,
+            'run_status': run.status if run else None,
+            'has_insights': has_insights,
+            'error_message': job.last_error_message or '',
+        })
+
 ================================================================================
-ARQUIVO 6 DE 43
+ARQUIVO 6 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\intelligence
 ARQUIVO: apps.py
-TAMANHO: 0,61 KB
+TAMANHO: 9,48 KB
 EXTENSAO: .py
-LINHAS: 19
+LINHAS: 292
 ================================================================================
+
+"""
+AppConfig do módulo intelligence.
+
+INICIALIZAÇÃO AUTOMÁTICA DO WORKER
+==================================
+O worker de análise (`intelligence_worker`) precisa rodar continuamente
+para processar os `AnalysisJob` pendentes. Este AppConfig inicia o
+worker em uma thread daemon sempre que a aplicação Django sobe —
+sem exigir terminal, sem exigir systemd, sem exigir NSSM.
+
+Isso funciona em QUALQUER ambiente que execute Python:
+
+    - DESENVOLVIMENTO (`python manage.py runserver`)
+    - PRODUÇÃO LINUX (`gunicorn`, `uWSGI`)
+    - PRODUÇÃO WINDOWS (`waitress`, `runserver` em prod)
+    - PaaS (Render, Railway, Heroku, Fly.io)
+    - Contêiner (Docker, se um dia você usar)
+
+CONTROLE POR VARIÁVEIS DE AMBIENTE
+==================================
+O comportamento é controlado por 3 variáveis de ambiente. Nenhuma
+delas é obrigatória — o default é "worker embutido ligado", que é o
+que funciona em todos os ambientes sem configuração.
+
+    INTELLIGENCE_WORKER_DISABLED
+        "1"  → NÃO inicia o worker neste processo.
+               Use quando o worker rodar em processo separado
+               (systemd, NSSM, "Background Worker" de PaaS).
+        ""   → inicia (default).
+
+    INTELLIGENCE_WORKER_MODE
+        "auto"     → default. Inicia o worker em TODOS os processos
+                     que não forem comandos de management
+                     (`migrate`, `shell`, `test`, etc.).
+                     Em gunicorn com N workers, você terá N workers
+                     embutidos. Seguro pela lógica de
+                     `select_for_update(skip_locked=True)`, mas
+                     consome CPU proporcional.
+        "single"   → inicia o worker apenas em UM processo por
+                     instância. Use a variável
+                     INTELLIGENCE_WORKER_LEADER=1 para marcar QUAL
+                     processo é o líder. Os demais não iniciam.
+                     Ideal para gunicorn onde você quer 1 worker
+                     embutido e não quer gerenciar processo separado.
+        "off"      → equivalente a INTELLIGENCE_WORKER_DISABLED=1.
+
+    INTELLIGENCE_WORKER_LEADER
+        "1"  → este processo é o líder (só relevante em mode=single).
+        ""   → não é líder.
+
+SEGURANÇA
+=========
+    - A thread é `daemon=True`: morre junto com o processo principal.
+    - Exceções dentro do worker são logadas, nunca propagadas.
+    - `ready()` nunca bloqueia o startup do Django.
+    - `_should_start_worker()` evita iniciar worker em comandos de
+      management como `migrate`, `makemigrations`, `shell`, `test`,
+      `collectstatic`, `createsuperuser`, `seed_*`, etc.
+
+REAPROVEITAMENTO
+================
+O loop do worker é o `Command.handle()` do management command
+`intelligence_worker`. Fonte única de verdade do processamento de
+jobs. Não duplica lógica.
+"""
+
+import logging
+import os
+import sys
+import threading
+import time
 
 from django.apps import AppConfig
 from django.utils.translation import gettext_lazy as _
 
+logger = logging.getLogger('intelligence')
+
+
+# Intervalo entre polls do worker (segundos).
+_WORKER_INTERVAL_SECONDS = 5
+
+# Delay inicial antes do primeiro poll. Dá tempo para o Django
+# terminar de montar o app registry, as conexões de banco e o
+# middleware. Sem isso, a primeira query pode falhar.
+_WORKER_STARTUP_DELAY_SECONDS = 2
+
+
+# =========================================================================
+# HELPERS DE AMBIENTE
+# =========================================================================
+
+def _env_flag(name: str) -> bool:
+    """Lê uma env var booleana ('1'/'true'/'yes' = True)."""
+    raw = os.environ.get(name, '').strip().lower()
+    return raw in ('1', 'true', 'yes', 'on')
+
+
+def _worker_disabled() -> bool:
+    """
+    Worker desativado explicitamente neste processo.
+
+    Duas formas equivalentes:
+        - INTELLIGENCE_WORKER_DISABLED=1
+        - INTELLIGENCE_WORKER_MODE=off
+    """
+    if _env_flag('INTELLIGENCE_WORKER_DISABLED'):
+        return True
+    mode = os.environ.get(
+        'INTELLIGENCE_WORKER_MODE', 'auto',
+    ).strip().lower()
+    if mode == 'off':
+        return True
+    return False
+
+
+def _worker_mode() -> str:
+    """
+    Modo do worker: 'auto', 'single' ou 'off'.
+
+    Default: 'auto'.
+    """
+    raw = os.environ.get(
+        'INTELLIGENCE_WORKER_MODE', 'auto',
+    ).strip().lower()
+    if raw in ('auto', 'single', 'off'):
+        return raw
+    logger.warning(
+        'INTELLIGENCE_WORKER_MODE inválido: %r. Usando "auto".',
+        raw,
+    )
+    return 'auto'
+
+
+def _is_leader_process() -> bool:
+    """
+    True apenas quando este processo é o líder (mode=single).
+
+    Em mode=auto, é sempre True (todos iniciam).
+    Em mode=single, é True só no processo com
+    INTELLIGENCE_WORKER_LEADER=1.
+    """
+    mode = _worker_mode()
+    if mode == 'auto':
+        return True
+    if mode == 'single':
+        return _env_flag('INTELLIGENCE_WORKER_LEADER')
+    return False
+
+
+def _is_runserver_autoreload_child() -> bool:
+    """
+    Detecta o processo filho do autoreload do `runserver`.
+
+    Em desenvolvimento, `runserver` inicia DOIS processos. O
+    `ready()` roda em ambos. Sem essa checagem, o worker subiria
+    duas vezes no dev.
+    """
+    if 'runserver' not in sys.argv:
+        return False
+    return os.environ.get('RUN_MAIN') != 'true'
+
+
+def _is_management_command_that_should_not_run_worker() -> bool:
+    """
+    True quando o processo atual é um `manage.py <comando>` que NÃO
+    é `runserver` e NÃO deve iniciar o worker.
+
+    Exemplos: migrate, makemigrations, shell, test, collectstatic,
+    createsuperuser, seed_*, sync_*, bootstrap_console, etc.
+
+    Exceção: `runserver` — inicia worker.
+    """
+    argv = sys.argv or []
+    if not any('manage.py' in arg for arg in argv):
+        return False
+    if 'runserver' in argv:
+        return False
+    return True
+
+
+# =========================================================================
+# APPCONFIG
+# =========================================================================
 
 class IntelligenceConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
@@ -651,15 +994,108 @@ class IntelligenceConfig(AppConfig):
         """
         Inicializa o módulo intelligence.
 
-        Signals não são registrados por padrão. A ingestão de eventos
-        é explícita, via `IngestService.ingest_change_event(...)`.
-        Conectar `briefings` e `clients` a este serviço é
-        responsabilidade dos módulos de origem.
+        - Não registra signals (ingestão é explícita).
+        - Inicia o worker embutido quando aplicável.
         """
-        pass
+        if _is_runserver_autoreload_child():
+            return
+
+        if _is_management_command_that_should_not_run_worker():
+            return
+
+        if _worker_disabled():
+            logger.info(
+                'Worker de Inteligência desativado neste processo '
+                '(INTELLIGENCE_WORKER_DISABLED=1 ou '
+                'INTELLIGENCE_WORKER_MODE=off).',
+            )
+            return
+
+        if not _is_leader_process():
+            logger.debug(
+                'Worker de Inteligência não iniciado neste processo '
+                '(mode=single e INTELLIGENCE_WORKER_LEADER!=1).',
+            )
+            return
+
+        self._start_worker_thread()
+
+    # ------------------------------------------------------------------
+    # THREAD
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _start_worker_thread() -> None:
+        """
+        Inicia o worker em uma thread daemon.
+
+        Idempotente por processo.
+        """
+        if getattr(
+            IntelligenceConfig, '_worker_thread_started', False,
+        ):
+            return
+        IntelligenceConfig._worker_thread_started = True
+
+        thread = threading.Thread(
+            target=IntelligenceConfig._run_worker_loop,
+            name='intelligence-worker',
+            daemon=True,
+        )
+        thread.start()
+
+        logger.info(
+            'Worker de Inteligência iniciado em thread daemon '
+            '(mode=%s, interval=%ss, startup_delay=%ss).',
+            _worker_mode(),
+            _WORKER_INTERVAL_SECONDS,
+            _WORKER_STARTUP_DELAY_SECONDS,
+        )
+
+    @staticmethod
+    def _run_worker_loop() -> None:
+        """
+        Loop principal do worker.
+
+        Reaproveita `Command.handle()` do management command.
+        """
+        time.sleep(_WORKER_STARTUP_DELAY_SECONDS)
+
+        try:
+            from apps.intelligence.management.commands.intelligence_worker import (
+                Command as WorkerCommand,
+            )
+        except Exception:
+            logger.exception(
+                'Falha ao importar o management command do worker. '
+                'O worker NÃO será iniciado.',
+            )
+            return
+
+        while True:
+            try:
+                command = WorkerCommand()
+                command.handle(
+                    interval=_WORKER_INTERVAL_SECONDS,
+                    run_once=False,
+                )
+                logger.warning(
+                    'Worker retornou de handle() inesperadamente. '
+                    'Encerrando thread.',
+                )
+                return
+            except KeyboardInterrupt:
+                logger.info('Worker interrompido por KeyboardInterrupt.')
+                return
+            except Exception:
+                logger.exception(
+                    'Exceção no loop do worker. Reiniciando em %ss.',
+                    _WORKER_INTERVAL_SECONDS,
+                )
+                time.sleep(_WORKER_INTERVAL_SECONDS)
 
 ================================================================================
-ARQUIVO 7 DE 43
+ARQUIVO 7 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\intelligence
 ARQUIVO: exceptions.py
@@ -709,7 +1145,7 @@ class BudgetExceededError(IntelligenceError):
     pass
 
 ================================================================================
-ARQUIVO 8 DE 43
+ARQUIVO 8 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\intelligence\management\commands
 ARQUIVO: intelligence_worker.py
@@ -819,7 +1255,7 @@ class Command(BaseCommand):
             JobService.mark_as_failed(job, str(exc))
 
 ================================================================================
-ARQUIVO 9 DE 43
+ARQUIVO 9 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\intelligence\migrations
 ARQUIVO: __init__.py
@@ -830,7 +1266,7 @@ LINHAS: 0
 
 
 ================================================================================
-ARQUIVO 10 DE 43
+ARQUIVO 10 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\intelligence\migrations
 ARQUIVO: 0001_initial.py
@@ -1047,7 +1483,7 @@ class Migration(migrations.Migration):
 
 
 ================================================================================
-ARQUIVO 11 DE 43
+ARQUIVO 11 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\intelligence\migrations
 ARQUIVO: 0002_alter_insightevent_source_kind_insightcostallocation_and_more.py
@@ -1121,7 +1557,67 @@ class Migration(migrations.Migration):
 
 
 ================================================================================
-ARQUIVO 12 DE 43
+ARQUIVO 12 DE 45
+================================================================================
+PASTA: C:\clivo-v1\apps\intelligence\migrations
+ARQUIVO: 0003_alter_insightevent_source_kind.py
+TAMANHO: 1,19 KB
+EXTENSAO: .py
+LINHAS: 18
+================================================================================
+
+# Generated by Django 6.1.1 on 2026-10-27 15:27
+
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ('intelligence', '0002_alter_insightevent_source_kind_insightcostallocation_and_more'),
+    ]
+
+    operations = [
+        migrations.AlterField(
+            model_name='insightevent',
+            name='source_kind',
+            field=models.CharField(choices=[('briefing.answer.submitted', 'Resposta de briefing enviada'), ('briefing.note.created', 'Nota de briefing criada'), ('briefing.note.updated', 'Nota de briefing atualizada'), ('briefing.note.deleted', 'Nota de briefing excluída'), ('briefing.supplementary.question_added', 'Pergunta complementar adicionada'), ('briefing.supplementary.question_removed', 'Pergunta complementar removida'), ('briefing.supplementary.completed', 'Perguntas complementares concluídas'), ('client.note.created', 'Nota de cliente criada'), ('client.note.updated', 'Nota de cliente atualizada'), ('client.note.deleted', 'Nota de cliente excluída'), ('client.updated', 'Cliente atualizado'), ('client.context.updated', 'Contexto do cliente atualizado')], db_index=True, max_length=50),
+        ),
+    ]
+
+
+================================================================================
+ARQUIVO 13 DE 45
+================================================================================
+PASTA: C:\clivo-v1\apps\intelligence\migrations
+ARQUIVO: 0004_alter_insightevent_source_kind.py
+TAMANHO: 1,20 KB
+EXTENSAO: .py
+LINHAS: 18
+================================================================================
+
+# Generated by Django 6.1.1 on 2026-10-28 18:31
+
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ('intelligence', '0003_alter_insightevent_source_kind'),
+    ]
+
+    operations = [
+        migrations.AlterField(
+            model_name='insightevent',
+            name='source_kind',
+            field=models.CharField(choices=[('briefing.answer.submitted', 'Resposta de briefing enviada'), ('briefing.note.created', 'Nota de briefing criada'), ('briefing.note.updated', 'Nota de briefing atualizada'), ('briefing.note.deleted', 'Nota de briefing excluída'), ('briefing.supplementary.question_added', 'Pergunta complementar adicionada'), ('briefing.supplementary.question_removed', 'Pergunta complementar removida'), ('briefing.supplementary.completed', 'Perguntas complementares concluídas'), ('client.note.created', 'Nota de cliente criada'), ('client.note.updated', 'Nota de cliente atualizada'), ('client.note.deleted', 'Nota de cliente excluída'), ('client.updated', 'Cliente atualizado'), ('client.context.updated', 'Contexto do cliente atualizado'), ('manual.reanalyze', 'Reanálise manual')], db_index=True, max_length=50),
+        ),
+    ]
+
+
+================================================================================
+ARQUIVO 14 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\intelligence
 ARQUIVO: models.py
@@ -1136,7 +1632,7 @@ from django.db import models
 
 
 ================================================================================
-ARQUIVO 13 DE 43
+ARQUIVO 15 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\intelligence\models
 ARQUIVO: __init__.py
@@ -1166,7 +1662,7 @@ __all__ = [
 ]
 
 ================================================================================
-ARQUIVO 14 DE 43
+ARQUIVO 16 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\intelligence\models
 ARQUIVO: analysis_job.py
@@ -1258,7 +1754,7 @@ class AnalysisJob(models.Model):
         return f'{self.status} · {self.workspace_id} · {self.id}'
 
 ================================================================================
-ARQUIVO 15 DE 43
+ARQUIVO 17 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\intelligence\models
 ARQUIVO: analysis_run.py
@@ -1362,7 +1858,7 @@ class AnalysisRun(models.Model):
         return f'{self.status} · {self.model} · {self.id}'
 
 ================================================================================
-ARQUIVO 16 DE 43
+ARQUIVO 18 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\intelligence\models
 ARQUIVO: insight_cost_allocation.py
@@ -1495,13 +1991,13 @@ class InsightCostAllocation(models.Model):
         return f'{self.insight_id} · {value} ({self.allocation_rule})'
 
 ================================================================================
-ARQUIVO 17 DE 43
+ARQUIVO 19 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\intelligence\models
 ARQUIVO: insight_event.py
-TAMANHO: 4,74 KB
+TAMANHO: 5,69 KB
 EXTENSAO: .py
-LINHAS: 122
+LINHAS: 146
 ================================================================================
 
 """
@@ -1520,15 +2016,14 @@ de briefing, o UUID da ClientNote + updated_at, ou um `updated_at`
 monotônico). Isso impede que a mesma nota atualizada duas vezes seja
 silenciosamente ignorada como "duplicada para sempre".
 
-NOTAS DE BRIEFING vs NOTAS DE CLIENTE
--------------------------------------
-- `SOURCE_KIND_BRIEFING_NOTE_*`: emitidas por `briefings` quando
-  uma `BriefingNote` (journal do arquiteto dentro de um briefing)
-  muda.
-- `SOURCE_KIND_CLIENT_NOTE_*`: emitidas por `clients` quando uma
-  `ClientNote` (anotação da equipe sobre o cliente) muda.
-
-São coisas diferentes. Não confundir.
+REANÁLISE MANUAL
+----------------
+`SOURCE_KIND_MANUAL_REANALYZE` é usado pela view de reanálise (o
+botão "Nova análise"). Ele NÃO representa uma mudança real nas
+fontes — representa uma decisão explícita do operador de reprocessar
+o estado atual. O `occurrence_id` é o timestamp da chamada, então
+cada clique gera um evento novo e um job novo. A idempotência por
+`dedupe_key` não bloqueia cliques repetidos legítimos.
 """
 
 import uuid
@@ -1543,22 +2038,47 @@ class InsightEvent(models.Model):
     SOURCE_KIND_BRIEFING_NOTE_CREATED = 'briefing.note.created'
     SOURCE_KIND_BRIEFING_NOTE_UPDATED = 'briefing.note.updated'
     SOURCE_KIND_BRIEFING_NOTE_DELETED = 'briefing.note.deleted'
+    SOURCE_KIND_BRIEFING_SUPPLEMENTARY_QUESTION_ADDED = (
+        'briefing.supplementary.question_added'
+    )
+    SOURCE_KIND_BRIEFING_SUPPLEMENTARY_QUESTION_REMOVED = (
+        'briefing.supplementary.question_removed'
+    )
+    SOURCE_KIND_BRIEFING_SUPPLEMENTARY_COMPLETED = (
+        'briefing.supplementary.completed'
+    )
     SOURCE_KIND_CLIENT_NOTE_CREATED = 'client.note.created'
     SOURCE_KIND_CLIENT_NOTE_UPDATED = 'client.note.updated'
     SOURCE_KIND_CLIENT_NOTE_DELETED = 'client.note.deleted'
     SOURCE_KIND_CLIENT_UPDATED = 'client.updated'
     SOURCE_KIND_CLIENT_CONTEXT_UPDATED = 'client.context.updated'
 
+    # Reanálise manual: o operador pediu reprocessamento.
+    SOURCE_KIND_MANUAL_REANALYZE = 'manual.reanalyze'
+
     SOURCE_KIND_CHOICES = [
         (SOURCE_KIND_BRIEFING_ANSWER, 'Resposta de briefing enviada'),
         (SOURCE_KIND_BRIEFING_NOTE_CREATED, 'Nota de briefing criada'),
         (SOURCE_KIND_BRIEFING_NOTE_UPDATED, 'Nota de briefing atualizada'),
         (SOURCE_KIND_BRIEFING_NOTE_DELETED, 'Nota de briefing excluída'),
+        (
+            SOURCE_KIND_BRIEFING_SUPPLEMENTARY_QUESTION_ADDED,
+            'Pergunta complementar adicionada',
+        ),
+        (
+            SOURCE_KIND_BRIEFING_SUPPLEMENTARY_QUESTION_REMOVED,
+            'Pergunta complementar removida',
+        ),
+        (
+            SOURCE_KIND_BRIEFING_SUPPLEMENTARY_COMPLETED,
+            'Perguntas complementares concluídas',
+        ),
         (SOURCE_KIND_CLIENT_NOTE_CREATED, 'Nota de cliente criada'),
         (SOURCE_KIND_CLIENT_NOTE_UPDATED, 'Nota de cliente atualizada'),
         (SOURCE_KIND_CLIENT_NOTE_DELETED, 'Nota de cliente excluída'),
         (SOURCE_KIND_CLIENT_UPDATED, 'Cliente atualizado'),
         (SOURCE_KIND_CLIENT_CONTEXT_UPDATED, 'Contexto do cliente atualizado'),
+        (SOURCE_KIND_MANUAL_REANALYZE, 'Reanálise manual'),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -1628,7 +2148,7 @@ class InsightEvent(models.Model):
         super().save(*args, **kwargs)
 
 ================================================================================
-ARQUIVO 18 DE 43
+ARQUIVO 20 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\intelligence\models
 ARQUIVO: insight_evidence.py
@@ -1697,7 +2217,7 @@ class InsightEvidence(models.Model):
         return f'{self.source_type} · {self.source_ref[:40]}'
 
 ================================================================================
-ARQUIVO 19 DE 43
+ARQUIVO 21 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\intelligence\models
 ARQUIVO: insight_item.py
@@ -1980,7 +2500,7 @@ class InsightItem(models.Model):
         return self.tag_history.exists()
 
 ================================================================================
-ARQUIVO 20 DE 43
+ARQUIVO 22 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\intelligence\models
 ARQUIVO: insight_tag_history.py
@@ -2088,7 +2608,7 @@ class InsightTagHistory(models.Model):
         )
 
 ================================================================================
-ARQUIVO 21 DE 43
+ARQUIVO 23 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\intelligence\services
 ARQUIVO: __init__.py
@@ -2124,13 +2644,13 @@ __all__ = [
 ]
 
 ================================================================================
-ARQUIVO 22 DE 43
+ARQUIVO 24 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\intelligence\services
 ARQUIVO: analysis_service.py
-TAMANHO: 23,67 KB
+TAMANHO: 30,85 KB
 EXTENSAO: .py
-LINHAS: 645
+LINHAS: 813
 ================================================================================
 
 """
@@ -2146,26 +2666,40 @@ REGRA ARQUITETURAL
     - registra ProviderLog e UsageRecord,
     - devolve um payload normalizado.
 
-`AnalysisService` é responsável por:
-    - preparar input (via contratos públicos),
-    - validar a saída da IA,
-    - persistir insights, evidências e histórico,
-    - alocar custo aos insights produzidos,
-    - marcar insights anteriores como stale.
+RESOLUÇÃO DE PROVIDER/MODELO
+----------------------------
+Quando `INTELLIGENCE_PROVIDER` / `INTELLIGENCE_MODEL` estão definidos
+em settings, eles vencem. Quando NÃO estão definidos, o serviço lê
+`AIConfigService.get_or_create_default()` — a config ativa do Console.
 
-ANÁLISE PARCIAL
----------------
-`AnalysisJob.target_kinds` define quais kinds devem ser produzidos.
-Quando vazio, produz o conjunto completo padrão. Quando preenchido,
-o prompt é instruído a produzir APENAS esses kinds, e a validação
-rejeita kinds fora da lista.
+O provider/modelo escolhidos são PERSISTIDOS no `AnalysisRun` como
+snapshot histórico.
 
-MULTIMODAL
-----------
-Se `briefings.public.get_reference_document_payloads()` devolver
-imagens acessíveis, o payload inclui entradas `images` que a ponte
-`console.public.call_ai` encaminha ao provider. Se a interface não
-estiver disponível, o input degrada para texto sem inventar imagens.
+ESCOPO DOS KINDS
+----------------
+A `user_message` lista EXPLICITAMENTE os `target_kinds` da execução.
+
+IDEMPOTÊNCIA POR TENTATIVA
+--------------------------
+O `input_hash` inclui `job.attempt_count`. Cada tentativa do worker
+cria um `AnalysisRun` NOVO. Isso é essencial porque:
+
+    - o `created_at` do run é atualizado a cada tentativa (é
+      `auto_now_add=True`, não dá para alterar via `save()`);
+    - o `StalenessService` compara `latest_event.created_at` com
+      `run.created_at` — se o run for reaproveitado, o
+      `created_at` continua sendo o original (velho), e o run
+      é sempre considerado stale;
+    - com um run novo por tentativa, o `created_at` é sempre
+      posterior ao evento `manual.reanalyze` que disparou o job;
+    - o `request_id` (=run.id) também muda, o que força o
+      `AICallService` a fazer uma chamada real ao provider em vez
+      de retornar `raw_content=""` do `UsageRecord` antigo.
+
+Ao criar um run novo, também DELETAMOS os `UsageRecord` e
+`ProviderLog` de runs anteriores do MESMO job — evita lixo no
+banco e garante que nenhum artefato antigo interfira na nova
+tentativa.
 """
 
 import hashlib
@@ -2194,7 +2728,6 @@ from apps.intelligence.exceptions import (
 logger = logging.getLogger('intelligence')
 
 
-# Kinds que EXIGEM evidência para serem publicados.
 KINDS_REQUIRING_EVIDENCE = frozenset({
     InsightItem.KIND_DESIRE,
     InsightItem.KIND_ATTENTION,
@@ -2210,7 +2743,6 @@ KINDS_REQUIRING_EVIDENCE = frozenset({
 })
 
 
-# Conjunto padrão de kinds por escopo de job (quando target_kinds vazio).
 DEFAULT_KINDS_WITH_BRIEFING = [
     InsightItem.KIND_SUMMARY_BRIEFING,
     InsightItem.KIND_DESIRE,
@@ -2227,6 +2759,10 @@ DEFAULT_KINDS_WITH_BRIEFING = [
     InsightItem.KIND_READINESS_ASSESSMENT,
     InsightItem.KIND_EXECUTIVE_SUMMARY,
     InsightItem.KIND_TAG,
+    InsightItem.KIND_PREFERENCE_PROFILE,
+    InsightItem.KIND_KNOWLEDGE_ACCUMULATED,
+    InsightItem.KIND_HOW_TO_CONDUCT,
+    InsightItem.KIND_CLIENT_PROFILE,
 ]
 
 DEFAULT_KINDS_WITHOUT_BRIEFING = [
@@ -2243,18 +2779,13 @@ class AnalysisService:
 
     @staticmethod
     def execute(job: AnalysisJob) -> Optional[AnalysisRun]:
-        """
-        Executa o fluxo completo.
-
-        A chamada à IA acontece FORA de qualquer transação — não
-        bloqueia o banco durante a latência do provider.
-        """
-        with transaction.atomic():
-            run = AnalysisService._create_analysis_run(job)
-            if run is None:
-                return None
-
+        run = None
         try:
+            with transaction.atomic():
+                run = AnalysisService._create_analysis_run(job)
+                if run is None:
+                    return None
+
             from apps.console import public as console_public
             allowed, reason = console_public.is_ai_execution_allowed(job.workspace)
             if not allowed:
@@ -2281,8 +2812,6 @@ class AnalysisService:
                     duration_ms=ai_response.get('duration_ms'),
                 )
 
-            # Alocação de custo e staleness — fora da transação principal
-            # para não bloquear o commit dos insights.
             try:
                 from apps.intelligence.services.cost_allocation_service import (
                     CostAllocationService,
@@ -2308,24 +2837,29 @@ class AnalysisService:
             return run
 
         except StaleAnalysisError:
-            with transaction.atomic():
-                run.status = AnalysisRun.STATUS_SKIPPED_STALE
-                run.is_stale = True
-                run.completed_at = timezone.now()
-                run.save(update_fields=[
-                    'status', 'is_stale', 'completed_at', 'updated_at',
-                ])
+            if run is not None:
+                with transaction.atomic():
+                    run.status = AnalysisRun.STATUS_SKIPPED_STALE
+                    run.is_stale = True
+                    run.completed_at = timezone.now()
+                    run.save(update_fields=[
+                        'status', 'is_stale', 'completed_at', 'updated_at',
+                    ])
             raise
 
         except Exception as exc:
-            logger.exception('Falha na execução da análise (Run=%s)', run.id)
-            with transaction.atomic():
-                run.status = AnalysisRun.STATUS_FAILED
-                run.error_message = str(exc)
-                run.completed_at = timezone.now()
-                run.save(update_fields=[
-                    'status', 'error_message', 'completed_at', 'updated_at',
-                ])
+            logger.exception(
+                'Falha na execução da análise (Run=%s)',
+                run.id if run else '<none>',
+            )
+            if run is not None:
+                with transaction.atomic():
+                    run.status = AnalysisRun.STATUS_FAILED
+                    run.error_message = str(exc)
+                    run.completed_at = timezone.now()
+                    run.save(update_fields=[
+                        'status', 'error_message', 'completed_at', 'updated_at',
+                    ])
             raise
 
     # ------------------------------------------------------------------
@@ -2334,14 +2868,6 @@ class AnalysisService:
 
     @staticmethod
     def _resolve_target_kinds(run: AnalysisRun) -> List[str]:
-        """
-        Resolve quais kinds este run deve produzir.
-
-        Prioridade:
-            1. `job.target_kinds` (definido pelo agendador, ex.: análise
-               parcial de um container específico).
-            2. Default por escopo (com ou sem briefing).
-        """
         job = run.job
         requested = job.target_kinds or []
         valid = {c[0] for c in InsightItem.KIND_CHOICES}
@@ -2354,25 +2880,86 @@ class AnalysisService:
         return list(DEFAULT_KINDS_WITHOUT_BRIEFING)
 
     # ------------------------------------------------------------------
+    # RESOLUÇÃO DE PROVIDER/MODELO
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _resolve_provider_and_model() -> tuple:
+        prompt_version = getattr(settings, 'INTELLIGENCE_PROMPT_VERSION', 'v1')
+
+        explicit_provider = getattr(settings, 'INTELLIGENCE_PROVIDER', None)
+        explicit_model = getattr(settings, 'INTELLIGENCE_MODEL', None)
+
+        if explicit_provider and explicit_model:
+            return (explicit_provider, explicit_model, prompt_version)
+
+        try:
+            from apps.console.services.ai_config_service import AIConfigService
+            config = AIConfigService.get_or_create_default()
+        except Exception:
+            logger.warning(
+                'AIProviderConfig indisponível. Usando fallback de settings.',
+            )
+            config = None
+
+        if config is not None and config.is_active:
+            return (
+                explicit_provider or config.provider.key,
+                explicit_model or config.model,
+                prompt_version,
+            )
+
+        return (
+            explicit_provider or 'openai',
+            explicit_model or 'gpt-4o-mini',
+            prompt_version,
+        )
+
+    # ------------------------------------------------------------------
     # CRIAÇÃO DO RUN
     # ------------------------------------------------------------------
 
     @staticmethod
     def _create_analysis_run(job: AnalysisJob) -> Optional[AnalysisRun]:
         """
-        Cria o run aplicando idempotência por `input_hash`.
+        Cria um `AnalysisRun` NOVO para esta tentativa do job.
 
-        O `input_hash` inclui workspace + prompt + provider + model +
-        payload + target_kinds. Isso diferencia análises parciais
-        (kinds distintos) de re-execuções completas.
+        O `input_hash` inclui `job.attempt_count` (incrementado pelo
+        `JobService.claim_next_job` antes de chamar `execute`). Isso
+        garante que cada tentativa cria um run distinto:
+
+            - Tentativa 1: hash A → run 1
+            - Tentativa 2: hash B → run 2
+            - Tentativa 3: hash C → run 3
+
+        Motivos:
+            - O `created_at` do run é `auto_now_add=True`. Reaproveitar
+              o run mantém o `created_at` ORIGINAL, o que faz o
+              `StalenessService` sempre rejeitar como stale quando o
+              evento `manual.reanalyze` é posterior ao run original.
+            - O `request_id` (=run.id) muda a cada tentativa, então
+              o `AICallService` faz uma chamada real ao provider em
+              vez de devolver `raw_content=""` do `UsageRecord`
+              antigo.
+
+        Se já existe um run `COMPLETED` para ESTA tentativa (mesmo
+        attempt_count), retorna `None` — idempotência real (o worker
+        reivindicou o mesmo job duas vezes sem incrementar o
+        attempt_count não deveria acontecer, mas é defesa em
+        profundidade).
+
+        Antes de criar o run novo, DELETA os `UsageRecord` e
+        `ProviderLog` de runs anteriores do MESMO job — evita lixo no
+        banco e garante que nenhum artefato antigo interfira na nova
+        tentativa.
         """
         input_payload = AnalysisService._prepare_input(job)
         if not input_payload:
             raise AnalysisInputError('Falha ao preparar input para hashing.')
 
-        model = getattr(settings, 'INTELLIGENCE_MODEL', 'gpt-4o-mini')
-        prompt_version = getattr(settings, 'INTELLIGENCE_PROMPT_VERSION', 'v1')
-        provider = getattr(settings, 'INTELLIGENCE_PROVIDER', 'openai')
+        provider, model, prompt_version = (
+            AnalysisService._resolve_provider_and_model()
+        )
 
         target_kinds = AnalysisService._resolve_target_kinds_from_job(job)
         payload_hash = hashlib.sha256(
@@ -2382,7 +2969,13 @@ class AnalysisService:
             ).encode('utf-8')
         ).hexdigest()
 
+        # `job.id` distingue jobs diferentes com o mesmo input.
+        # `job.attempt_count` distingue tentativas do MESMO job.
+        # Juntos, garantem hash único por tentativa — e, por
+        # consequência, `created_at` sempre atual no run.
         composite = '|'.join([
+            str(job.id),
+            str(job.attempt_count),
             str(job.workspace_id),
             prompt_version,
             provider,
@@ -2391,16 +2984,41 @@ class AnalysisService:
         ])
         input_hash = hashlib.sha256(composite.encode('utf-8')).hexdigest()
 
-        existing = AnalysisRun.objects.filter(
+        # ------------------------------------------------------------------
+        # 1. Se já existe run COMPLETED para este attempt_count → idempotente
+        #
+        #    Defesa em profundidade: `claim_next_job` incrementa
+        #    `attempt_count` antes de chamar `execute`, então este
+        #    cenário não deveria ocorrer. Mas se ocorrer, o run está
+        #    completo e a IA já produziu os insights. Não roda de novo.
+        # ------------------------------------------------------------------
+        completed = AnalysisRun.objects.filter(
             input_hash=input_hash,
             status=AnalysisRun.STATUS_COMPLETED,
         ).first()
-        if existing:
+        if completed is not None:
             logger.info(
-                'Run idêntico já concluído (hash=%s). Ignorando.', input_hash,
+                'Run idêntico já concluído para este attempt (hash=%s). '
+                'Ignorando.', input_hash,
             )
             return None
 
+        # ------------------------------------------------------------------
+        # 2. Limpa artefatos de runs anteriores do MESMO job.
+        #
+        #    Como cada tentativa cria um run novo, os `UsageRecord` e
+        #    `ProviderLog` das tentativas anteriores ficam órfãos
+        #    (apontando para `request_id` de runs antigos). Deletamos
+        #    para manter o banco limpo e evitar que o `StalenessService`
+        #    ou o `CostAllocationService` tropecem neles.
+        # ------------------------------------------------------------------
+        previous_runs = AnalysisRun.objects.filter(job=job)
+        for prev_run in previous_runs:
+            AnalysisService._cleanup_run_artifacts(prev_run)
+
+        # ------------------------------------------------------------------
+        # 3. Cria run novo
+        # ------------------------------------------------------------------
         return AnalysisRun.objects.create(
             job=job,
             workspace=job.workspace,
@@ -2416,6 +3034,47 @@ class AnalysisService:
         )
 
     @staticmethod
+    def _cleanup_run_artifacts(run: AnalysisRun) -> None:
+        """
+        Remove `UsageRecord` e `ProviderLog` de um run anterior.
+
+        Chamado antes de criar um run novo para a mesma tentativa
+        de job. Não levanta — falhas de limpeza não impedem a nova
+        tentativa.
+
+        Não mexe em `InsightItem` — esses são artefatos do run
+        anterior, mas o `StalenessService` marca como stale
+        apropriadamente quando o run novo conclui. Deletá-los
+        aqui quebraria a auditoria histórica.
+        """
+        try:
+            from apps.console.models import UsageRecord, ProviderLog
+
+            deleted_usage, _ = UsageRecord.objects.filter(
+                provider__key=run.provider,
+                request_id=str(run.id),
+            ).delete()
+            if deleted_usage:
+                logger.info(
+                    'UsageRecord antigo do run=%s deletado '
+                    '(forçar chamada real).', run.id,
+                )
+
+            deleted_log, _ = ProviderLog.objects.filter(
+                provider__key=run.provider,
+                request_id=str(run.id),
+            ).delete()
+            if deleted_log:
+                logger.info(
+                    'ProviderLog antigo do run=%s deletado.', run.id,
+                )
+        except Exception:
+            logger.exception(
+                'Falha ao limpar artefatos do run=%s. Prosseguindo.',
+                run.id,
+            )
+
+    @staticmethod
     def _resolve_target_kinds_from_job(job: AnalysisJob) -> List[str]:
         requested = job.target_kinds or []
         valid = {c[0] for c in InsightItem.KIND_CHOICES}
@@ -2427,15 +3086,11 @@ class AnalysisService:
         return list(DEFAULT_KINDS_WITHOUT_BRIEFING)
 
     # ------------------------------------------------------------------
-    # INPUT (via contratos públicos)
+    # INPUT
     # ------------------------------------------------------------------
 
     @staticmethod
     def _prepare_input(job_or_run) -> Optional[Dict[str, Any]]:
-        """
-        Monta o payload a partir dos contratos públicos.
-        Nenhum import direto de models de `briefings`/`clients`.
-        """
         from apps.briefings import public as briefings_public
         from apps.clients import public as clients_public
 
@@ -2453,9 +3108,6 @@ class AnalysisService:
                 raise AnalysisInputError('Briefing não encontrado.')
             payload['briefing'] = briefing_snap
 
-            # Multimodal: tenta obter imagens via contrato público.
-            # Se a interface não existir ou devolver vazio, o input
-            # degrada para texto SEM inventar imagens.
             images = AnalysisService._collect_images(
                 briefings_public, briefing_snap,
             )
@@ -2466,13 +3118,6 @@ class AnalysisService:
 
     @staticmethod
     def _collect_images(briefings_public, briefing_snap: dict) -> List[Dict]:
-        """
-        Coleta imagens acessíveis do briefing via contrato público.
-
-        Regra: se `get_reference_document_payloads` não existir ou
-        devolver payloads sem URL acessível, retorna lista vazia.
-        NUNCA inventa descrição de imagem a partir do ID.
-        """
         getter = getattr(
             briefings_public, 'get_reference_document_payloads', None,
         )
@@ -2525,15 +3170,11 @@ class AnalysisService:
         return result
 
     # ------------------------------------------------------------------
-    # IA — via ponte do console
+    # IA
     # ------------------------------------------------------------------
 
     @staticmethod
     def _call_ai_via_console(run: AnalysisRun, input_data: dict) -> dict:
-        """
-        Chama a ponte `console.public.call_ai`, que executa o provider
-        real e registra uso/custo. Devolve payload normalizado.
-        """
         from apps.console import public as console_public
 
         call_ai = getattr(console_public, 'call_ai', None)
@@ -2545,8 +3186,22 @@ class AnalysisService:
             )
 
         system_prompt = get_prompt()
+
+        target_kinds = AnalysisService._resolve_target_kinds(run)
+        kinds_list = '\n'.join(f'  - "{k}"' for k in target_kinds)
+
         user_message = (
-            "Analise os dados abaixo e produza insights no formato JSON:\n\n"
+            "Analise os dados abaixo e produza insights no formato JSON.\n\n"
+            "============================================================================\n"
+            "KINDS A PRODUZIR NESTA EXECUÇÃO (use SOMENTE estes):\n"
+            "============================================================================\n"
+            f"{kinds_list}\n\n"
+            "Se a análise não tiver evidência suficiente para um kind\n"
+            "que exige evidência, NÃO invente — produza apenas os kinds\n"
+            "que conseguir sustentar.\n\n"
+            "============================================================================\n"
+            "DADOS:\n"
+            "============================================================================\n"
             f"{json.dumps(input_data, ensure_ascii=False, indent=2, default=str)}"
         )
 
@@ -2594,22 +3249,40 @@ class AnalysisService:
         ai_response: dict,
         target_kinds: Optional[List[str]] = None,
     ) -> List[Dict]:
-        """
-        Valida o JSON. Exige 'insights' (lista) com 'kind' válido,
-        'content' não vazio e 'confidence' válida.
-
-        Se `target_kinds` for fornecido, rejeita kinds fora da lista
-        (análise parcial não pode produzir o que não foi pedido).
-
-        Rejeita `evidences=[]` para kinds que exigem evidência.
-        """
         raw = ai_response.get('raw_content') or ''
+
+        if not raw.strip():
+            logger.error(
+                'Resposta da IA veio VAZIA. Isso geralmente significa '
+                'que o `AICallService` devolveu `raw_content=""` '
+                'porque o `UsageRecord` já existia (idempotência) e '
+                'o `metadata["raw_content"]` não foi persistido. '
+                'Solução: deletar o UsageRecord antigo com '
+                '`request_id=<run.id>` e tentar de novo.'
+            )
+            raise AIResponseError(
+                'Resposta da IA veio vazia. O `UsageRecord` antigo '
+                'pode ter sido reaproveitado sem `raw_content`. '
+                'Delete o `UsageRecord` do run e tente novamente.'
+            )
+
         try:
             data = json.loads(raw)
         except json.JSONDecodeError as exc:
+            logger.error(
+                'Resposta da IA não é JSON. raw_content=%r '
+                '(primeiros 500 chars)',
+                raw[:500],
+            )
             raise AIResponseError(f'Resposta da IA não é JSON válido: {exc}')
 
         if not isinstance(data, dict) or 'insights' not in data:
+            logger.error(
+                'Resposta da IA não tem chave "insights". '
+                'chaves=%r, raw=%r',
+                list(data.keys()) if isinstance(data, dict) else type(data).__name__,
+                raw[:500],
+            )
             raise AIResponseError("Resposta da IA não contém a chave 'insights'.")
 
         insights = data['insights']
@@ -2623,7 +3296,11 @@ class AnalysisService:
         validated = []
         for i, item in enumerate(insights):
             if not isinstance(item, dict):
+                logger.error(
+                    'Insight #%d não é dict. Recebido: %r', i, item,
+                )
                 raise AIResponseError(f'Insight #{i} não é um objeto.')
+
             kind = item.get('kind')
             content = (item.get('content') or '').strip()
             confidence = item.get(
@@ -2631,15 +3308,32 @@ class AnalysisService:
             )
 
             if kind not in valid_kinds:
+                logger.error(
+                    'Insight #%d: kind inválido. '
+                    'Recebido=%r. Item completo=%r',
+                    i, kind, item,
+                )
                 raise AIResponseError(f'Insight #{i}: kind inválido ({kind}).')
+
             if kind not in allowed:
+                logger.error(
+                    'Insight #%d: kind "%s" fora do target_kinds. '
+                    'Permitidos=%r',
+                    i, kind, sorted(allowed),
+                )
                 raise AIResponseError(
                     f'Insight #{i}: kind "{kind}" não solicitado nesta '
                     f'execução (target_kinds).'
                 )
+
             if not content:
                 raise AIResponseError(f'Insight #{i}: content vazio.')
             if confidence not in valid_confidences:
+                logger.error(
+                    'Insight #%d: confidence inválida. '
+                    'Recebido=%r, permitidos=%r',
+                    i, confidence, sorted(valid_confidences),
+                )
                 raise AIResponseError(
                     f'Insight #{i}: confidence inválida ({confidence}).'
                 )
@@ -2649,6 +3343,10 @@ class AnalysisService:
                 raise AIResponseError(f'Insight #{i}: evidences deve ser lista.')
 
             if kind in KINDS_REQUIRING_EVIDENCE and not evidences:
+                logger.error(
+                    'Insight #%d (%s): exige evidência, recebeu [].',
+                    i, kind,
+                )
                 raise AIResponseError(
                     f'Insight #{i} ({kind}): evidência obrigatória ausente.'
                 )
@@ -2669,11 +3367,6 @@ class AnalysisService:
 
     @staticmethod
     def _apply_ai_results(run, ai_response, insights_data, duration_ms):
-        """
-        Persiste os insights e evidências, e atualiza as métricas do run.
-        Detecta stale comparando a data de criação do run com o
-        `created_at` do último `InsightEvent` do alvo.
-        """
         latest_event = (
             InsightEvent.objects
             .filter(
@@ -2715,11 +3408,6 @@ class AnalysisService:
 
     @staticmethod
     def _persist_evidences(insight, raw_evidences, workspace):
-        """
-        Persiste as evidências, validando que cada fonte pertence ao
-        mesmo workspace do insight. Fontes inválidas são descartadas
-        com log, nunca silenciosamente aceitas.
-        """
         from apps.briefings import public as briefings_public
         from apps.clients import public as clients_public
 
@@ -2780,7 +3468,7 @@ class AnalysisService:
             )
 
 ================================================================================
-ARQUIVO 23 DE 43
+ARQUIVO 25 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\intelligence\services
 ARQUIVO: budget_service.py
@@ -2817,13 +3505,13 @@ class BudgetService:
         return True
 
 ================================================================================
-ARQUIVO 24 DE 43
+ARQUIVO 26 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\intelligence\services
 ARQUIVO: container_service.py
-TAMANHO: 3,94 KB
+TAMANHO: 7,71 KB
 EXTENSAO: .py
-LINHAS: 133
+LINHAS: 264
 ================================================================================
 
 """
@@ -2833,21 +3521,173 @@ REGRA ARQUITETURAL
 ------------------
 Os containers são estruturas FIXAS (Mesa, Cliente, Relatório). Este
 service é a ÚNICA fonte de verdade para montar o payload de cada um.
-Views e serializers delegam aqui — nunca inventam um container novo.
 
-Filtragem:
-    - Por `kind` válido do container.
-    - Por cliente/workspace/briefing quando aplicável.
-    - Ignora insights `is_stale=True` por padrão (a interface pode
-      pedir para incluir).
+NORMALIZAÇÃO DE `content`
+-------------------------
+O `content` de cada `InsightItem` deve seguir o contrato do
+`prompt_loader.py`:
+
+    - desire / attention / demais bullets:
+        "afirmação — motivo", máx ~140 chars.
+    - summary.briefing:
+        texto analítico MÁXIMO 500 caracteres (truncado aqui, no
+        service), sempre terminando em ponto final.
+    - executive.summary:
+        texto corrido, preservado na íntegra.
+
+O truncamento do resumo em 500 caracteres acontece AQUI, para que
+o CSS nunca precise cortar por linhas. O texto sempre termina em
+ponto final (ou "…" se não houver ponto próximo do limite).
 """
 
 import logging
+import re
 from typing import Dict, List, Optional
 
 from apps.intelligence.models import InsightItem
 
 logger = logging.getLogger('intelligence')
+
+
+_SUBJECT_PREFIXES = [
+    re.compile(r'^o\s+cliente\s+', re.IGNORECASE),
+    re.compile(r'^a\s+cliente\s+', re.IGNORECASE),
+    re.compile(r'^os\s+clientes\s+', re.IGNORECASE),
+    re.compile(r'^as\s+clientes\s+', re.IGNORECASE),
+    re.compile(r'^ele\s+', re.IGNORECASE),
+    re.compile(r'^ela\s+', re.IGNORECASE),
+    re.compile(r'^eles\s+', re.IGNORECASE),
+    re.compile(r'^elas\s+', re.IGNORECASE),
+    re.compile(r'^o\s+briefing\s+', re.IGNORECASE),
+    re.compile(r'^a\s+briefing\s+', re.IGNORECASE),
+    re.compile(r'^o\s+projeto\s+', re.IGNORECASE),
+    re.compile(r'^a\s+análise\s+', re.IGNORECASE),
+]
+
+_TRAILING_NOISE = [
+    re.compile(r'\s*\.\s*$'),
+    re.compile(r'\s*\.\.\.\s*$'),
+    re.compile(r'\s*…\s*$'),
+    re.compile(r',?\s*etc\.?\s*$', re.IGNORECASE),
+    re.compile(r',?\s*e\s+outros\.?\s*$', re.IGNORECASE),
+    re.compile(r',?\s*entre\s+outros\.?\s*$', re.IGNORECASE),
+]
+
+# Tamanho máximo de um bullet curto na saída.
+_MAX_BULLET_LENGTH = 140
+
+# Tamanho máximo do resumo. Garante que o texto SEMPRE fecha e caiba
+# no container sem corte no frontend.
+_RESUMO_MAX_CHARS = 400
+
+
+def _normalize_bullet(raw: str) -> str:
+    """
+    Normaliza um bullet curto (desire, attention, etc.).
+
+    Idempotente. Aplica remoção de prefixos/sufixos e truncamento
+    em ~140 chars.
+
+    NÃO é usado para summary.briefing nem executive.summary.
+    """
+    if not raw:
+        return ''
+
+    text = raw.strip()
+
+    changed = True
+    while changed:
+        changed = False
+        for pat in _SUBJECT_PREFIXES:
+            new_text = pat.sub('', text)
+            if new_text != text:
+                text = new_text.strip()
+                changed = True
+
+    changed = True
+    while changed:
+        changed = False
+        for pat in _TRAILING_NOISE:
+            new_text = pat.sub('', text)
+            if new_text != text:
+                text = new_text.strip()
+                changed = True
+
+    if text and text[0].isalpha() and text[0].islower():
+        text = text[0].upper() + text[1:]
+
+    if len(text) > _MAX_BULLET_LENGTH:
+        text = text[: _MAX_BULLET_LENGTH - 1].rstrip() + '…'
+
+    return text
+
+
+def _truncate_resumo(raw: str) -> str:
+    """
+    Trunca o resumo em `_RESUMO_MAX_CHARS` caracteres.
+
+    Regras:
+        - Se já cabe → devolve como veio (só strip).
+        - Se precisa cortar → tenta cortar no último ponto final
+          antes do limite (para o texto terminar de forma natural).
+        - Se não houver ponto nos últimos 30% do texto → corta no
+          limite e adiciona "…".
+
+    Idempotente: rodar duas vezes dá o mesmo resultado.
+    """
+    if not raw:
+        return ''
+
+    text = raw.strip()
+
+    if len(text) <= _RESUMO_MAX_CHARS:
+        return text
+
+    head = text[:_RESUMO_MAX_CHARS]
+
+    # Procura o último ponto final nos últimos 30% do head.
+    safe_floor = int(_RESUMO_MAX_CHARS * 0.7)
+    last_dot = head.rfind('.')
+
+    if last_dot >= safe_floor:
+        return head[: last_dot + 1].rstrip()
+
+    return head[: _RESUMO_MAX_CHARS - 1].rstrip() + '…'
+
+
+def _normalize_content(raw: str, kind: str) -> str:
+    """
+    Decide a normalização com base no kind.
+
+    - summary.briefing → trunca em 500 chars, termina em ponto.
+    - executive.summary → preserva (texto corrido, sem truncar).
+    - demais           → normaliza como bullet curto.
+    """
+    if not raw:
+        return ''
+
+    if kind == InsightItem.KIND_SUMMARY_BRIEFING:
+        return _truncate_resumo(raw)
+
+    if kind == InsightItem.KIND_EXECUTIVE_SUMMARY:
+        return raw.strip()
+
+    return _normalize_bullet(raw)
+
+
+def _serialize_item(item: InsightItem) -> Dict:
+    return {
+        'id': str(item.id),
+        'kind': item.kind,
+        'kind_display': item.get_kind_display(),
+        'confidence': item.confidence,
+        'confidence_display': item.get_confidence_display(),
+        'content': _normalize_content(item.content, item.kind),
+        'metadata': item.metadata or {},
+        'review_state': item.review_state,
+        'is_stale': item.is_stale,
+        'created_at': item.created_at.isoformat(),
+    }
 
 
 class ContainerService:
@@ -2860,21 +3700,6 @@ class ContainerService:
         briefing=None,
         include_stale: bool = False,
     ) -> Dict:
-        """
-        Monta os cinco containers da Mesa.
-
-        Retorna:
-            {
-                'containers': {
-                    '01_desejos_prioridades': [insight, ...],
-                    '02_pontos_atencao': [...],
-                    '03_mudancas': [...],
-                    '04_novidades': [...],
-                    '05_resumo': [...],
-                },
-                'counts': {slot: int, ...},
-            }
-        """
         return ContainerService._build(
             container=InsightItem.CONTAINER_MESA,
             workspace=workspace,
@@ -2890,12 +3715,11 @@ class ContainerService:
         client,
         include_stale: bool = False,
     ) -> Dict:
-        """Monta os cinco containers do Cliente."""
         return ContainerService._build(
             container=InsightItem.CONTAINER_CLIENTE,
             workspace=workspace,
             client=client,
-            briefing=None,  # conhecimento do cliente é transversal a briefings
+            briefing=None,
             include_stale=include_stale,
         )
 
@@ -2906,7 +3730,6 @@ class ContainerService:
         briefing,
         include_stale: bool = False,
     ) -> Dict:
-        """Monta o relatório do briefing (8 containers fixos)."""
         return ContainerService._build(
             container=InsightItem.CONTAINER_RELATORIO,
             workspace=workspace,
@@ -2914,10 +3737,6 @@ class ContainerService:
             briefing=briefing,
             include_stale=include_stale,
         )
-
-    # ------------------------------------------------------------------
-    # INTERNO
-    # ------------------------------------------------------------------
 
     @staticmethod
     def _build(
@@ -2955,13 +3774,13 @@ class ContainerService:
             for kind in slot_kinds:
                 collected.extend(by_kind.get(kind, []))
             collected.sort(key=lambda i: i.created_at, reverse=True)
-            containers[slot_name] = collected
+            containers[slot_name] = [_serialize_item(i) for i in collected]
             counts[slot_name] = len(collected)
 
         return {'containers': containers, 'counts': counts}
 
 ================================================================================
-ARQUIVO 25 DE 43
+ARQUIVO 27 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\intelligence\services
 ARQUIVO: cost_allocation_service.py
@@ -3154,13 +3973,13 @@ class CostAllocationService:
             return None
 
 ================================================================================
-ARQUIVO 26 DE 43
+ARQUIVO 28 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\intelligence\services
 ARQUIVO: ingest_service.py
-TAMANHO: 2,86 KB
+TAMANHO: 3,73 KB
 EXTENSAO: .py
-LINHAS: 94
+LINHAS: 115
 ================================================================================
 
 """
@@ -3169,8 +3988,9 @@ IngestService — porta de entrada para novos eventos de inteligência.
 FRONTEIRA
 ---------
 Este serviço recebe apenas IDs e metadados — nunca instâncias de
-models de outros módulos. A resolução dos objetos é feita pelo
-JobService, que por sua vez usa contratos públicos.
+models de outros módulos. A resolução dos objetos é feita aqui,
+via imports diretos dos models (mesmo padrão já usado no arquivo
+original).
 
 IDEMPOTÊNCIA
 ------------
@@ -3178,6 +3998,13 @@ A `dedupe_key` inclui `occurrence_id`, que distingue eventos atômicos
 legítimos (ex: duas edições na mesma nota) de reentrância do mesmo
 evento. Quem chama é responsável por fornecer um `occurrence_id`
 estável para o fato (ex: UUID do evento de origem, updated_at).
+
+RETORNO
+-------
+Passou a devolver `(event, job, created)` em vez de `(event, created)`.
+O `job` é o `AnalysisJob` agendado (ou reutilizado) para o evento.
+Isso permite que a view de `reanalyze` devolva o `job_id` ao
+frontend sem precisar buscar o "job mais recente" por heurística.
 """
 
 import logging
@@ -3200,14 +4027,17 @@ class IngestService:
         client_id,
         source_kind: str,
         occurrence_id: str,
+        data_version: str,
         briefing_id=None,
         source_ref: str = '',
-        data_version: str,
     ):
         """
         Registra um evento de mudança e agenda uma análise.
 
-        Retorna (event, created).
+        Retorna (event, job, created).
+
+        `job` é o AnalysisJob agendado (novo ou já existente para o
+        mesmo job_key). Nunca é None em caso de sucesso.
         """
         from apps.workspaces.models import Workspace
         from apps.clients.models import Client
@@ -3217,9 +4047,9 @@ class IngestService:
             workspace = Workspace.objects.get(id=workspace_id)
             client = Client.objects.get(id=client_id)
             briefing = Briefing.objects.get(id=briefing_id) if briefing_id else None
-        except Exception as exc:
+        except Exception:
             logger.exception('Falha ao resolver objetos do evento de ingestão')
-            return (None, False)
+            return (None, None, False)
 
         dedupe_key = ':'.join([
             str(workspace.id),
@@ -3243,12 +4073,22 @@ class IngestService:
         )
 
         if not created:
-            logger.info("Evento duplicado ignorado (dedupe_key=%s)", dedupe_key)
-            return (event, False)
+            logger.info(
+                'Evento duplicado ignorado (dedupe_key=%s)', dedupe_key,
+            )
+            # Mesmo quando o evento é duplicado, o job correspondente
+            # já existe. Recupera-o para devolver ao chamador.
+            job = JobService.find_job_for_event(
+                workspace_id=workspace.id,
+                client_id=client.id,
+                briefing_id=briefing.id if briefing else None,
+                data_version=data_version,
+            )
+            return (event, job, False)
 
-        logger.info("Novo evento registrado: %s", source_kind)
+        logger.info('Novo evento registrado: %s', source_kind)
 
-        JobService.schedule_analysis_job(
+        job = JobService.schedule_analysis_job(
             workspace_id=workspace.id,
             client_id=client.id,
             briefing_id=briefing.id if briefing else None,
@@ -3256,16 +4096,16 @@ class IngestService:
             data_version=data_version,
         )
 
-        return (event, True)
+        return (event, job, True)
 
 ================================================================================
-ARQUIVO 27 DE 43
+ARQUIVO 29 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\intelligence\services
 ARQUIVO: job_service.py
-TAMANHO: 4,77 KB
+TAMANHO: 5,55 KB
 EXTENSAO: .py
-LINHAS: 139
+LINHAS: 163
 ================================================================================
 
 """
@@ -3367,6 +4207,30 @@ class JobService:
         return job
 
     @staticmethod
+    def find_job_for_event(
+        *,
+        workspace_id,
+        client_id,
+        briefing_id,
+        data_version: str,
+    ) -> Optional[AnalysisJob]:
+        """
+        Recupera o job correspondente a um evento que já foi ingerido.
+
+        Usado quando `ingest_change_event` encontra um dedupe_key
+        existente — o evento é duplicado, mas o chamador ainda precisa
+        do `job_id`. A busca é feita por (workspace, client, briefing,
+        data_version) no job mais recente.
+        """
+        qs = AnalysisJob.objects.filter(
+            workspace_id=workspace_id,
+            client_id=client_id,
+            briefing_id=briefing_id,
+            data_version=data_version,
+        ).order_by('-created_at')
+        return qs.first()
+
+    @staticmethod
     def claim_next_job() -> Optional[AnalysisJob]:
         """
         Reivindica atomicamente um job pendente.
@@ -3409,41 +4273,445 @@ class JobService:
         job.save(update_fields=['status', 'failed_at', 'last_error_message', 'updated_at'])
 
 ================================================================================
-ARQUIVO 28 DE 43
+ARQUIVO 30 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\intelligence\services
 ARQUIVO: prompt_loader.py
-TAMANHO: 0,43 KB
+TAMANHO: 17,76 KB
 EXTENSAO: .py
-LINHAS: 17
+LINHAS: 421
 ================================================================================
 
 """
 Carregador do system prompt da Inteligência.
 
-Fonte: settings.INTELLIGENCE_SYSTEM_PROMPT, com fallback mínimo.
+Este prompt é o CONTRATO entre o módulo `intelligence` e o modelo de
+IA. Ele define:
+
+    1. O formato de saída (JSON com chave "insights").
+    2. O vocabulário de `kind` e `confidence`.
+    3. As regras de formato POR KIND (não uma regra genérica).
+    4. As regras de evidência por kind.
+    5. As regras de linguagem (sem termos técnicos, português claro).
+
+REGRAS POR KIND (resumo):
+
+    desire (desejo)
+        - Exatamente 4 itens na execução (se houver material).
+        - Formato: "afirmação curta — motivo em poucas palavras"
+        - Máximo 2 linhas (~140 chars).
+        - Linguagem natural, sem jargão técnico.
+
+    attention (ponto de atenção)
+        - Exatamente 4 itens na execução (se houver material).
+        - Formato: "risco/tensão — motivo em poucas palavras"
+        - Máximo 2 linhas (~140 chars).
+        - Linguagem natural, sem jargão técnico.
+
+    summary.briefing (resumo)
+        - Texto EXTENSO (150–400 palavras).
+        - Análise CRÍTICA, não descritiva.
+        - Cruza: respostas do cliente + imagens enviadas +
+          imagens de referência do arquiteto + notas do arquiteto +
+          conhecimento acumulado do cliente.
+        - Aponta tensões, lacunas, riscos e leituras não óbvias.
+
+    Demais kinds seguem regras próprias, sempre com foco em
+    bullet curto e útil.
+
+Fonte primária: `settings.INTELLIGENCE_SYSTEM_PROMPT`. Se não estiver
+definido, cai no DEFAULT_SYSTEM_PROMPT deste módulo.
 """
 
 from django.conf import settings
 
 
-_DEFAULT_PROMPT = (
-    "Você é um analista que produz insights estruturados em JSON. "
-    "Responda apenas com um objeto JSON contendo a chave 'insights'."
-)
+DEFAULT_SYSTEM_PROMPT = """Você é um arquiteto sênior analisando o briefing de um cliente. Sua função é produzir uma leitura CRÍTICA, ÚTIL e INTELIGENTE do material — não uma paráfrase do que o cliente escreveu.
+
+============================================================================
+FORMATO DE SAÍDA (OBRIGATÓRIO)
+============================================================================
+
+Responda APENAS com um objeto JSON válido. Sem markdown. Sem cercas de código. Sem texto antes ou depois.
+
+O objeto tem UMA chave de topo: "insights". Seu valor é uma lista de objetos. Cada objeto tem EXATAMENTE estas 4 chaves:
+
+    {
+      "kind":       string,   // ver vocabulário abaixo
+      "content":    string,   // ver regras POR KIND abaixo
+      "confidence": string,   // ver vocabulário abaixo
+      "evidences":  list      // ver vocabulário abaixo
+    }
+
+============================================================================
+LINGUAGEM (REGRA GLOBAL)
+============================================================================
+
+Você escreve para um ARQUITETO HUMANO, não para um sistema. Portanto:
+
+    PROIBIDO usar na saída:
+        - "kind", "confidence", "evidence", "insight", "briefing",
+          "metadata", "JSON", "campo", "schema", "payload", "token".
+        - "o cliente declarou que", "o cliente informou que",
+          "de acordo com o briefing".
+        - Termos de backend, banco de dados, API, modelo.
+
+    PERMITIDO e DESEJADO:
+        - Português claro e direto.
+        - Nomes próprios (Obassi, Moxie, Opção A).
+        - Números e unidades (R$ 40 mil, 80m², 2 gatos).
+        - Verbos de análise: "indica", "sugere", "contrasta",
+          "falta", "compromete", "facilita".
+
+============================================================================
+VOCABULÁRIO DE "kind" (use APENAS estes valores)
+============================================================================
+
+    "desire"                   — o que o cliente quer, deseja, valoriza
+    "attention"                — ponto de atenção, cuidado, risco
+    "change"                   — mudança de ideia, preferência, direção
+    "news"                     — novidade, informação nova relevante
+    "summary.briefing"         — resumo analítico do briefing
+    "preference.profile"       — perfil consolidado de preferências
+    "knowledge.accumulated"    — conhecimento acumulado sobre o cliente
+    "how_to_conduct"           — como conduzir melhor o relacionamento
+    "client.profile"           — perfil do cliente (jeito, estilo)
+    "executive.summary"        — síntese executiva do material
+    "success.criteria"         — critério de sucesso do projeto
+    "analysis.reference"       — leitura de referências visuais
+    "restriction"              — restrição explícita do cliente
+    "gap"                      — lacuna, informação ausente
+    "inconsistency"            — inconsistência, contradição
+    "cross.insight"            — insight cruzado entre fontes
+    "recommended.question"     — pergunta recomendada
+    "assessment.readiness"     — avaliação de prontidão
+    "tag"                      — etiqueta/tema curto (1-2 palavras)
+
+============================================================================
+VOCABULÁRIO DE "confidence" (use APENAS estes valores)
+============================================================================
+
+    "fact"            — fato explícito, dito pelo cliente
+    "interpretation"  — interpretação sua, leitura cruzada
+    "gap"             — informação ausente
+    "contradiction"   — contradição ou dúvida
+
+============================================================================
+VOCABULÁRIO DE "evidences"
+============================================================================
+
+Cada evidência tem EXATAMENTE estas 3 chaves:
+
+    {
+      "source_type": string,
+      "source_ref":  string,
+      "quote":       string
+    }
+
+source_type aceita:
+    "briefing.answer" | "briefing.note" | "client.context"
+
+REGRAS DE EVIDÊNCIA POR KIND:
+
+    Exigem PELO MENOS UMA evidência:
+        desire, attention, restriction, preference.profile,
+        client.profile, how_to_conduct, knowledge.accumulated,
+        success.criteria, analysis.reference, executive.summary,
+        summary.briefing
+
+    NÃO exigem evidência:
+        change, news, gap, inconsistency, cross.insight,
+        recommended.question, assessment.readiness, tag
+
+============================================================================
+REGRA CRÍTICA: "desire" (DESEJOS)
+============================================================================
+
+Produza EXATAMENTE 4 itens de kind="desire" (se houver material
+suficiente; se não houver, produza menos, nunca invente).
+
+Cada item deve ter o formato:
+
+    "afirmação curta — motivo em poucas palavras"
+
+Regras:
+    - Máximo 2 linhas na tela (~140 caracteres no total).
+    - A afirmação é o que o cliente QUER (substantivo + adjetivo).
+    - O motivo explica POR QUE isso é um desejo (o que revela
+      sobre o cliente, o estilo de vida, os valores).
+    - Linguagem natural, sem sujeito explícito ("o cliente...").
+    - Sem ponto final.
+
+Exemplos CORRETOS:
+    "mesa de jantar Opção A — valoriza peça clássica como centro da casa"
+    "espaço para os gatos — rotina gira em torno dos dois animais"
+    "cozinha integrada — gosta de receber amigos enquanto cozinha"
+    "luz natural abundante — trabalha em casa e precisa de claridade"
+
+Exemplos ERRADOS (muito longos, com jargão, sem motivo):
+    "O cliente demonstrou preferência pela Opção A de mesa de jantar,
+     o que indica um gosto por design clássico e sofisticado."  ← longo
+    "kind=desire confidence=fact"  ← jargão técnico
+    "prefere Opção A"  ← sem motivo
+
+============================================================================
+REGRA CRÍTICA: "attention" (PONTOS DE ATENÇÃO)
+============================================================================
+
+Produza EXATAMENTE 4 itens de kind="attention" (se houver material
+suficiente; se não houver, produza menos, nunca invente).
+
+Cada item deve ter o formato:
+
+    "risco/tensão — motivo em poucas palavras"
+
+Regras:
+    - Máximo 2 linhas na tela (~140 caracteres).
+    - O risco/tensão é o que PODE DAR ERRADO ou o que está
+      implícito mas não resolvido.
+    - O motivo explica POR QUE isso é um ponto de atenção (o que
+      compromete, o que falta, o que conflita).
+    - Linguagem natural, sem sujeito explícito.
+    - Sem ponto final.
+
+Exemplos CORRETOS:
+    "orçamento R$ 40 mil pode apertar — 80m² com padrão alto não fecha"
+    "gatos sem área própria — risco de conflito com área social"
+    "cozinha integrada sem exaustão — odor e gordura no living"
+    "falta detalhar cômodos — impossível dimensionar sem programa"
+
+Exemplos ERRADOS (longos, vagos, sem motivo):
+    "O orçamento pode ser um problema."  ← vago, sem motivo
+    "Falta informação sobre o projeto."  ← genérico
+    "O briefing não detalha os cômodos, o que pode comprometer o
+     dimensionamento e a distribuição dos ambientes."  ← longo
+
+============================================================================
+REGRA CRÍTICA: "summary.briefing" (RESUMO)
+============================================================================
+
+O resumo NÃO é um bullet. É uma ANÁLISE EXTENSA e CRÍTICA, com
+150 a 400 palavras.
+
+O que o resumo DEVE fazer:
+    - Cruzar as RESPOSTAS do cliente com as IMAGENS ENVIADAS por
+      ele (fotos do espaço, referências).
+    - Cruzar com as IMAGENS DE REFERÊNCIA do arquiteto (se houver).
+    - Incorporar as ANOTAÇÕES do arquiteto (notas internas).
+    - Considerar o CONHECIMENTO ACUMULADO do cliente (histórico
+      de briefings anteriores, perfil consolidado).
+    - Apontar TENSÕES entre o que o cliente diz e o que mostra
+      (ex: diz "minimalista" mas envia referências maximalistas).
+    - Apontar LACUNAS que o arquiteto precisa investigar antes de
+      desenhar.
+    - Apontar LEITURAS NÃO ÓBVIAS (o que o cliente não disse mas
+      está implícito).
+    - Ser CRÍTICO, não elogioso. Não repita o que o cliente falou
+      como se fosse verdade absoluta — questione, contextualize.
+
+O que o resumo NÃO deve fazer:
+    - Não listar respostas uma a uma.
+    - Não usar bullets dentro do campo `content`.
+    - Não inventar informação que não está no material.
+    - Não usar jargão técnico.
+
+Formato do content:
+    - Texto corrido (parágrafos curtos, 3 a 5).
+    - Português claro.
+    - Pode usar nomes próprios e números.
+    - Pode citar trechos curtos entre aspas (máx 10 palavras).
+
+============================================================================
+REGRAS POR KIND (demais)
+============================================================================
+
+    restriction
+        → Bullet curto: "restrição concreta — impacto"
+        → Ex: "orçamento fixo R$ 40 mil — limita acabamentos premium"
+
+    gap
+        → Bullet curto: "o que falta — por que importa"
+        → Ex: "falta detalhar cômodos — impossível dimensionar"
+
+    inconsistency
+        → Bullet curto: "o que conflita — onde está a tensão"
+        → Ex: "diz minimalista, envia referências maximalistas"
+
+    cross.insight
+        → Bullet curto: "leitura cruzada — o que revela"
+        → Ex: "gatos + home office — precisa de área isolada"
+
+    recommended.question
+        → Pergunta direta, 1 frase.
+        → Ex: "Como os gatos circulam pela casa hoje?"
+
+    assessment.readiness
+        → Bullet curto: "estado atual — o que falta para avançar"
+
+    tag
+        → 1 a 2 palavras, minúsculas.
+        → Ex: "pet-friendly", "home-office", "minimalista"
+
+    preference.profile, client.profile, how_to_conduct,
+    knowledge.accumulated, success.criteria, analysis.reference,
+    executive.summary
+        → Bullet curto e útil, formato "afirmação — motivo".
+
+============================================================================
+CRITICIDADE (REGRA TRANSVERSAL)
+============================================================================
+
+Toda análise deve ser CRÍTICA, ÚTIL e INTELIGENTE. Isso significa:
+
+    1. Não repita o que o cliente disse. Interprete.
+    2. Aponte o que NÃO está dito mas está implícito.
+    3. Aponte tensões entre fontes (resposta vs imagem, resposta
+       vs nota do arquiteto, resposta vs histórico).
+    4. Aponte o que falta para o arquiteto conseguir desenhar.
+    5. Prefira a leitura não óbvia à leitura superficial.
+
+Exemplo de leitura superficial (ERRADO):
+    "O cliente quer uma cozinha integrada."
+
+Exemplo de leitura crítica (CERTO):
+    "cozinha integrada — mas sem exaustão mencionada, risco de
+     odor e gordura no living"
+
+============================================================================
+EXEMPLO COMPLETO
+============================================================================
+
+{
+  "insights": [
+    {
+      "kind": "desire",
+      "content": "mesa de jantar Opção A — peça clássica como centro da casa",
+      "confidence": "fact",
+      "evidences": [
+        {
+          "source_type": "briefing.answer",
+          "source_ref": "UUID-DA-RESPOSTA",
+          "quote": "Escolhi a Opção A para a mesa de jantar."
+        }
+      ]
+    },
+    {
+      "kind": "desire",
+      "content": "espaço para os gatos — rotina gira em torno dos dois animais",
+      "confidence": "fact",
+      "evidences": [
+        {
+          "source_type": "briefing.answer",
+          "source_ref": "UUID-DA-RESPOSTA-2",
+          "quote": "Tenho dois gatos, Obassi e Moxie."
+        }
+      ]
+    },
+    {
+      "kind": "desire",
+      "content": "cozinha integrada — gosta de receber enquanto cozinha",
+      "confidence": "interpretation",
+      "evidences": [
+        {
+          "source_type": "briefing.answer",
+          "source_ref": "UUID-DA-RESPOSTA-3",
+          "quote": "Gosto de cozinhar para amigos."
+        }
+      ]
+    },
+    {
+      "kind": "desire",
+      "content": "luz natural abundante — trabalha em casa e precisa de claridade",
+      "confidence": "interpretation",
+      "evidences": [
+        {
+          "source_type": "briefing.answer",
+          "source_ref": "UUID-DA-RESPOSTA-4",
+          "quote": "Trabalho home office três dias por semana."
+        }
+      ]
+    },
+    {
+      "kind": "attention",
+      "content": "orçamento R$ 40 mil pode apertar — 80m² com padrão alto não fecha",
+      "confidence": "interpretation",
+      "evidences": [
+        {
+          "source_type": "briefing.answer",
+          "source_ref": "UUID-DA-RESPOSTA-5",
+          "quote": "Nosso orçamento é de 40 mil."
+        }
+      ]
+    },
+    {
+      "kind": "attention",
+      "content": "gatos sem área própria — risco de conflito com área social",
+      "confidence": "interpretation",
+      "evidences": [
+        {
+          "source_type": "briefing.answer",
+          "source_ref": "UUID-DA-RESPOSTA-2",
+          "quote": "Tenho dois gatos, Obassi e Moxie."
+        }
+      ]
+    },
+    {
+      "kind": "attention",
+      "content": "cozinha integrada sem exaustão — odor e gordura no living",
+      "confidence": "interpretation",
+      "evidences": [
+        {
+          "source_type": "briefing.answer",
+          "source_ref": "UUID-DA-RESPOSTA-3",
+          "quote": "Gosto de cozinhar para amigos."
+        }
+      ]
+    },
+    {
+      "kind": "attention",
+      "content": "falta detalhar cômodos — impossível dimensionar sem programa",
+      "confidence": "gap",
+      "evidences": []
+    },
+    {
+      "kind": "summary.briefing",
+      "content": "O cliente descreve uma casa de 80m² com orçamento fixo de R$ 40 mil, mas o conjunto de respostas e referências sugere um padrão de acabamento acima do que esse valor comporta. A preferência pela mesa de jantar Opção A, uma peça clássica e de presença, contrasta com a menção a um estilo 'clean' nas referências visuais enviadas — há uma tensão entre o que o cliente diz querer e o que ele efetivamente mostra como referência. A presença dos dois gatos, Obassi e Moxie, aparece nas respostas mas não nas imagens: nenhuma das fotos enviadas mostra áreas pensadas para os animais, o que indica que esse requisito ainda não foi traduzido em espaço. O home office três dias por semana é mencionado, mas não há indicação de qual cômodo abrigaria essa função — se for a sala, compromete a integração com a cozinha; se for um quarto, reduz o número de dormitórios disponíveis. A cozinha integrada é desejo declarado, mas não há menção a exaustão ou ventilação, o que é um risco concreto em um living. As anotações do arquiteto reforçam a percepção de que o programa de necessidades ainda está incompleto: não há detalhamento de cômodos, não há planta, não há medidas. Antes de avançar para o desenho, o arquiteto precisa resolver três tensões: o orçamento versus o padrão das referências; os gatos versus a ausência de área própria; e o home office versus a integração dos ambientes sociais.",
+      "confidence": "interpretation",
+      "evidences": [
+        {
+          "source_type": "briefing.answer",
+          "source_ref": "UUID-DA-RESPOSTA-5",
+          "quote": "Nosso orçamento é de 40 mil."
+        }
+      ]
+    }
+  ]
+}
+
+============================================================================
+REGRAS FINAIS
+============================================================================
+
+1. NÃO repita insights. Cada item é único.
+2. NÃO invente UUIDs em "source_ref". Use apenas os IDs reais das respostas/notas que estão no material.
+3. "content" nunca pode ser vazio.
+4. Se não houver material suficiente para 4 desejos ou 4 pontos de atenção, produza menos — NUNCA invente para completar 4.
+5. O resumo precisa ter 150 a 400 palavras.
+6. Responda APENAS o JSON.
+"""
 
 
 def get_prompt() -> str:
-    return getattr(settings, 'INTELLIGENCE_SYSTEM_PROMPT', _DEFAULT_PROMPT)
+    return getattr(settings, 'INTELLIGENCE_SYSTEM_PROMPT', DEFAULT_SYSTEM_PROMPT)
 
 ================================================================================
-ARQUIVO 29 DE 43
+ARQUIVO 31 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\intelligence\services
 ARQUIVO: staleness_service.py
-TAMANHO: 1,91 KB
+TAMANHO: 2,92 KB
 EXTENSAO: .py
-LINHAS: 69
+LINHAS: 92
 ================================================================================
 
 """
@@ -3452,9 +4720,20 @@ execução nova os substitui.
 
 REGRA
 -----
-Quando um run novo conclui com sucesso, os insights de runs
-anteriores do MESMO cliente E MESMO briefing que têm `kind` coberto
-pelo run novo passam a `is_stale=True`.
+Um run novo torna stale os insights de runs anteriores do MESMO
+workspace e MESMO cliente cujos `kind` estão cobertos pelo run novo.
+O escopo de comparação cobre:
+
+    - briefing=X   (quando o run novo tem briefing)
+    - briefing=None (para kinds de cliente que o run também produz)
+
+Por quê os dois escopos: um run com briefing gera kinds de briefing
+E kinds de cliente. Os kinds de cliente (preference.profile,
+client.profile, how_to_conduct, knowledge.accumulated) têm
+`briefing=None` no InsightItem, mesmo tendo sido produzidos por um
+run com briefing. Comparar só pelo `briefing` do run novo deixaria
+esses insights antigos "vivos" — o que mostraria duas versões
+concorrentes nos containers do Cliente.
 
 NÃO apaga nada. O insight antigo continua consultável, mas sinalizado
 como desatualizado. A interface pode exibi-lo com aviso ou ocultá-lo
@@ -3464,6 +4743,7 @@ por padrão.
 import logging
 
 from django.db import transaction
+from django.db.models import Q
 
 from apps.intelligence.models import AnalysisRun, InsightItem
 
@@ -3477,8 +4757,12 @@ class StalenessService:
         """
         Marca como stale os insights de runs anteriores compatíveis.
 
-        Compatibilidade: mesmo workspace, mesmo cliente, mesmo briefing
-        (incluindo ambos NULL para análises de cliente sem briefing).
+        Compatibilidade:
+            - mesmo workspace
+            - mesmo cliente
+            - mesmo `briefing` do run (para kinds de briefing)
+              OU `briefing=None` (para kinds de cliente que o run
+              também produz)
 
         Retorna a quantidade de insights marcados.
         """
@@ -3491,12 +4775,19 @@ class StalenessService:
         if not new_kinds:
             return 0
 
+        # Escopo do briefing: o `briefing` do run novo, se houver.
+        # Insights de cliente têm `briefing=None` mesmo quando
+        # produzidos por um run com briefing.
+        scope_q = Q(briefing=new_run.briefing)
+        if new_run.briefing_id is not None:
+            scope_q |= Q(briefing__isnull=True)
+
         qs = (
             InsightItem.objects
             .filter(
+                scope_q,
                 workspace=new_run.workspace,
                 client=new_run.client,
-                briefing=new_run.briefing,
                 kind__in=new_kinds,
                 is_stale=False,
             )
@@ -3511,13 +4802,13 @@ class StalenessService:
 
         logger.info(
             'StalenessService: %d insights marcados como stale '
-            '(run=%s, kinds=%s)',
-            updated, new_run.id, new_kinds,
+            '(run=%s, kinds=%s, briefing=%s)',
+            updated, new_run.id, new_kinds, new_run.briefing_id,
         )
         return updated
 
 ================================================================================
-ARQUIVO 30 DE 43
+ARQUIVO 32 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\intelligence\services
 ARQUIVO: tag_service.py
@@ -3670,7 +4961,7 @@ class TagService:
         return qs
 
 ================================================================================
-ARQUIVO 31 DE 43
+ARQUIVO 33 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\intelligence\tests
 ARQUIVO: __init__.py
@@ -3681,7 +4972,7 @@ LINHAS: 0
 
 
 ================================================================================
-ARQUIVO 32 DE 43
+ARQUIVO 34 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\intelligence\tests
 ARQUIVO: conftest.py
@@ -3875,7 +5166,7 @@ def allow_quota(mocker):
     )
 
 ================================================================================
-ARQUIVO 33 DE 43
+ARQUIVO 35 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\intelligence\tests
 ARQUIVO: test_analysis_integration.py
@@ -3980,7 +5271,7 @@ class TestAnalysisIntegration:
         assert log.status == 'success'
 
 ================================================================================
-ARQUIVO 34 DE 43
+ARQUIVO 36 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\intelligence\tests
 ARQUIVO: test_analysis_service.py
@@ -4230,7 +5521,7 @@ def test_kind_requiring_evidence_rejects_empty_evidences(
         AnalysisService.execute(analysis_job)
 
 ================================================================================
-ARQUIVO 35 DE 43
+ARQUIVO 37 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\intelligence\tests
 ARQUIVO: test_containers.py
@@ -4399,7 +5690,7 @@ class TestBuildRelatorio:
         assert contents == ['main']
 
 ================================================================================
-ARQUIVO 36 DE 43
+ARQUIVO 38 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\intelligence\tests
 ARQUIVO: test_cost_allocation.py
@@ -4551,7 +5842,7 @@ class TestCostAllocation:
         assert CostAllocationService.allocate_for_run(run, {}) == []
 
 ================================================================================
-ARQUIVO 37 DE 43
+ARQUIVO 39 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\intelligence\tests
 ARQUIVO: test_full_flow.py
@@ -4850,7 +6141,7 @@ class TestFullFlow:
         assert first_desire.is_stale is True
 
 ================================================================================
-ARQUIVO 38 DE 43
+ARQUIVO 40 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\intelligence\tests
 ARQUIVO: test_ingest_service.py
@@ -4910,7 +6201,7 @@ def test_ingest_accepts_legit_new_occurrence(workspace, client):
     assert InsightEvent.objects.count() == 2
 
 ================================================================================
-ARQUIVO 39 DE 43
+ARQUIVO 41 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\intelligence\tests
 ARQUIVO: test_tag_history.py
@@ -5052,7 +6343,7 @@ class TestTagTransition:
         assert history[1].new_state == 'discarded'
 
 ================================================================================
-ARQUIVO 40 DE 43
+ARQUIVO 42 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\intelligence\tests
 ARQUIVO: test_worker_staleness.py
@@ -5190,7 +6481,7 @@ def test_worker_two_runs_marks_first_stale(
     assert first_insight.is_stale is True
 
 ================================================================================
-ARQUIVO 41 DE 43
+ARQUIVO 43 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\intelligence\tests
 ARQUIVO: test_worker.py
@@ -5317,13 +6608,13 @@ def test_claim_skips_locked_rows(analysis_job, django_db_blocker):
     assert results[0] is None
 
 ================================================================================
-ARQUIVO 42 DE 43
+ARQUIVO 44 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\intelligence
 ARQUIVO: urls.py
-TAMANHO: 1,64 KB
+TAMANHO: 2,40 KB
 EXTENSAO: .py
-LINHAS: 60
+LINHAS: 81
 ================================================================================
 
 """
@@ -5336,9 +6627,12 @@ prefixo explícito):
     GET     /api/intelligence/mesa/
     GET     /api/intelligence/clientes/<uuid:client_id>/
     GET     /api/intelligence/briefings/<uuid:briefing_id>/relatorio/
+    POST    /api/intelligence/briefings/<uuid:briefing_id>/reanalyze/
+    POST    /api/intelligence/clientes/<uuid:client_id>/reanalyze/
     GET     /api/intelligence/tags/
     GET     /api/intelligence/tags/<uuid:tag_id>/
     PATCH   /api/intelligence/tags/<uuid:tag_id>/
+    GET     /api/intelligence/jobs/<uuid:job_id>/status/
 
 Sem este prefixo, as rotas colidiriam com:
     - /mesa/        (apps.workspaces.urls → MesaRedirectView)
@@ -5356,6 +6650,9 @@ from apps.intelligence.api.views import (
     RelatorioView,
     TagListView,
     TagDetailView,
+    BriefingReanalyzeView,
+    ClientReanalyzeView,
+    JobStatusView,
 )
 
 
@@ -5371,9 +6668,19 @@ urlpatterns = [
         name='intelligence-cliente',
     ),
     path(
+        'api/intelligence/clientes/<uuid:client_id>/reanalyze/',
+        ClientReanalyzeView.as_view(),
+        name='intelligence-client-reanalyze',
+    ),
+    path(
         'api/intelligence/briefings/<uuid:briefing_id>/relatorio/',
         RelatorioView.as_view(),
         name='intelligence-relatorio',
+    ),
+    path(
+        'api/intelligence/briefings/<uuid:briefing_id>/reanalyze/',
+        BriefingReanalyzeView.as_view(),
+        name='intelligence-briefing-reanalyze',
     ),
     path(
         'api/intelligence/tags/',
@@ -5385,10 +6692,15 @@ urlpatterns = [
         TagDetailView.as_view(),
         name='intelligence-tag-detail',
     ),
+    path(
+        'api/intelligence/jobs/<uuid:job_id>/status/',
+        JobStatusView.as_view(),
+        name='intelligence-job-status',
+    ),
 ]
 
 ================================================================================
-ARQUIVO 43 DE 43
+ARQUIVO 45 DE 45
 ================================================================================
 PASTA: C:\clivo-v1\apps\intelligence
 ARQUIVO: views.py

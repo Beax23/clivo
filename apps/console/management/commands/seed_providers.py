@@ -25,6 +25,18 @@ class Command(BaseCommand):
             'description': 'Provedor de modelos de linguagem.',
         },
         {
+            'key': 'gemini',
+            'name': 'Google Gemini',
+            'category': 'ai',
+            'description': 'Modelos Gemini do Google (Flash, Pro).',
+        },
+        {
+            'key': 'anthropic',
+            'name': 'Anthropic',
+            'category': 'ai',
+            'description': 'Modelos Claude da Anthropic.',
+        },
+        {
             'key': 'backblaze_b2',
             'name': 'Backblaze B2',
             'category': 'storage',

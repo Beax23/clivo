@@ -97,6 +97,30 @@ class JobService:
         return job
 
     @staticmethod
+    def find_job_for_event(
+        *,
+        workspace_id,
+        client_id,
+        briefing_id,
+        data_version: str,
+    ) -> Optional[AnalysisJob]:
+        """
+        Recupera o job correspondente a um evento que já foi ingerido.
+
+        Usado quando `ingest_change_event` encontra um dedupe_key
+        existente — o evento é duplicado, mas o chamador ainda precisa
+        do `job_id`. A busca é feita por (workspace, client, briefing,
+        data_version) no job mais recente.
+        """
+        qs = AnalysisJob.objects.filter(
+            workspace_id=workspace_id,
+            client_id=client_id,
+            briefing_id=briefing_id,
+            data_version=data_version,
+        ).order_by('-created_at')
+        return qs.first()
+
+    @staticmethod
     def claim_next_job() -> Optional[AnalysisJob]:
         """
         Reivindica atomicamente um job pendente.

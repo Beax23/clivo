@@ -8,9 +8,12 @@ prefixo explícito):
     GET     /api/intelligence/mesa/
     GET     /api/intelligence/clientes/<uuid:client_id>/
     GET     /api/intelligence/briefings/<uuid:briefing_id>/relatorio/
+    POST    /api/intelligence/briefings/<uuid:briefing_id>/reanalyze/
+    POST    /api/intelligence/clientes/<uuid:client_id>/reanalyze/
     GET     /api/intelligence/tags/
     GET     /api/intelligence/tags/<uuid:tag_id>/
     PATCH   /api/intelligence/tags/<uuid:tag_id>/
+    GET     /api/intelligence/jobs/<uuid:job_id>/status/
 
 Sem este prefixo, as rotas colidiriam com:
     - /mesa/        (apps.workspaces.urls → MesaRedirectView)
@@ -28,6 +31,9 @@ from apps.intelligence.api.views import (
     RelatorioView,
     TagListView,
     TagDetailView,
+    BriefingReanalyzeView,
+    ClientReanalyzeView,
+    JobStatusView,
 )
 
 
@@ -43,9 +49,19 @@ urlpatterns = [
         name='intelligence-cliente',
     ),
     path(
+        'api/intelligence/clientes/<uuid:client_id>/reanalyze/',
+        ClientReanalyzeView.as_view(),
+        name='intelligence-client-reanalyze',
+    ),
+    path(
         'api/intelligence/briefings/<uuid:briefing_id>/relatorio/',
         RelatorioView.as_view(),
         name='intelligence-relatorio',
+    ),
+    path(
+        'api/intelligence/briefings/<uuid:briefing_id>/reanalyze/',
+        BriefingReanalyzeView.as_view(),
+        name='intelligence-briefing-reanalyze',
     ),
     path(
         'api/intelligence/tags/',
@@ -56,5 +72,10 @@ urlpatterns = [
         'api/intelligence/tags/<uuid:tag_id>/',
         TagDetailView.as_view(),
         name='intelligence-tag-detail',
+    ),
+    path(
+        'api/intelligence/jobs/<uuid:job_id>/status/',
+        JobStatusView.as_view(),
+        name='intelligence-job-status',
     ),
 ]

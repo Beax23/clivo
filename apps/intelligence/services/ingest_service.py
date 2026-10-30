@@ -4,8 +4,9 @@ IngestService — porta de entrada para novos eventos de inteligência.
 FRONTEIRA
 ---------
 Este serviço recebe apenas IDs e metadados — nunca instâncias de
-models de outros módulos. A resolução dos objetos é feita pelo
-JobService, que por sua vez usa contratos públicos.
+models de outros módulos. A resolução dos objetos é feita aqui,
+via imports diretos dos models (mesmo padrão já usado no arquivo
+original).
 
 IDEMPOTÊNCIA
 ------------
@@ -13,6 +14,13 @@ A `dedupe_key` inclui `occurrence_id`, que distingue eventos atômicos
 legítimos (ex: duas edições na mesma nota) de reentrância do mesmo
 evento. Quem chama é responsável por fornecer um `occurrence_id`
 estável para o fato (ex: UUID do evento de origem, updated_at).
+
+RETORNO
+-------
+Passou a devolver `(event, job, created)` em vez de `(event, created)`.
+O `job` é o `AnalysisJob` agendado (ou reutilizado) para o evento.
+Isso permite que a view de `reanalyze` devolva o `job_id` ao
+frontend sem precisar buscar o "job mais recente" por heurística.
 """
 
 import logging
@@ -35,14 +43,17 @@ class IngestService:
         client_id,
         source_kind: str,
         occurrence_id: str,
+        data_version: str,
         briefing_id=None,
         source_ref: str = '',
-        data_version: str,
     ):
         """
         Registra um evento de mudança e agenda uma análise.
 
-        Retorna (event, created).
+        Retorna (event, job, created).
+
+        `job` é o AnalysisJob agendado (novo ou já existente para o
+        mesmo job_key). Nunca é None em caso de sucesso.
         """
         from apps.workspaces.models import Workspace
         from apps.clients.models import Client
@@ -52,9 +63,9 @@ class IngestService:
             workspace = Workspace.objects.get(id=workspace_id)
             client = Client.objects.get(id=client_id)
             briefing = Briefing.objects.get(id=briefing_id) if briefing_id else None
-        except Exception as exc:
+        except Exception:
             logger.exception('Falha ao resolver objetos do evento de ingestão')
-            return (None, False)
+            return (None, None, False)
 
         dedupe_key = ':'.join([
             str(workspace.id),
@@ -78,12 +89,22 @@ class IngestService:
         )
 
         if not created:
-            logger.info("Evento duplicado ignorado (dedupe_key=%s)", dedupe_key)
-            return (event, False)
+            logger.info(
+                'Evento duplicado ignorado (dedupe_key=%s)', dedupe_key,
+            )
+            # Mesmo quando o evento é duplicado, o job correspondente
+            # já existe. Recupera-o para devolver ao chamador.
+            job = JobService.find_job_for_event(
+                workspace_id=workspace.id,
+                client_id=client.id,
+                briefing_id=briefing.id if briefing else None,
+                data_version=data_version,
+            )
+            return (event, job, False)
 
-        logger.info("Novo evento registrado: %s", source_kind)
+        logger.info('Novo evento registrado: %s', source_kind)
 
-        JobService.schedule_analysis_job(
+        job = JobService.schedule_analysis_job(
             workspace_id=workspace.id,
             client_id=client.id,
             briefing_id=briefing.id if briefing else None,
@@ -91,4 +112,4 @@ class IngestService:
             data_version=data_version,
         )
 
-        return (event, True)
+        return (event, job, True)
