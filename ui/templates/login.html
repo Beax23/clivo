@@ -92,330 +92,145 @@
     </div>
 
     <!-- ============================================
-         CONTEÚDO PRINCIPAL - SPLIT SCREEN
+         CONTEÚDO PRINCIPAL — formulário centralizado
          ============================================ -->
     <div class="login-page">
         <div class="login-container">
 
-            <!-- ===== LADO ESQUERDO ===== -->
-            <div class="login-card-wrapper">
+            <!-- Topbar com logo -->
+            <div class="login-topbar">
+                <a href="/" class="login-logo">
+                    <span class="login-logo-text">Clivo</span>
+                </a>
+            </div>
 
-                <div class="login-topbar">
-                    <div class="login-logo">
-                        <span class="login-logo-text">Clivo</span>
+            <!-- Card centralizado -->
+            <div class="login-card-center">
+                <div class="login-card">
+
+                    <div class="card-header">
+                        <div class="header-text-container">
+                            <h2 id="formTitle">Bem-vindo de volta</h2>
+                            <p id="formSubtitle">Entre para continuar</p>
+                        </div>
+                        <button class="back-btn" id="backToLoginFromSignup" style="display:none;">
+                            <i class="fas fa-arrow-left"></i>
+                            Voltar
+                        </button>
                     </div>
-                </div>
 
-                <div class="login-card-center">
-                    <div class="login-card">
+                    <!-- ===== FORMULÁRIO DE LOGIN ===== -->
+                    <form id="loginForm" class="login-form">
+                        {% csrf_token %}
+                        <div class="message-container" id="messageContainer"></div>
 
-                        <div class="card-header">
-                            <div class="header-text-container">
-                                <h2 id="formTitle">Bem-vindo de volta</h2>
-                                <p id="formSubtitle">Entre para continuar</p>
-                            </div>
-                            <button class="back-btn" id="backToLoginFromSignup" style="display:none;">
-                                <i class="fas fa-arrow-left"></i>
-                                Voltar
-                            </button>
+                        <button type="button" class="btn btn-google btn-full" id="googleLoginBtn">
+                            <svg class="google-icon" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                                <path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"/>
+                                <path fill="#FF3D00" d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 16.318 4 9.656 8.337 6.306 14.691z"/>
+                                <path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238A11.91 11.91 0 0 1 24 36c-5.202 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z"/>
+                                <path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303a12.04 12.04 0 0 1-4.087 5.571l.003-.002 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z"/>
+                            </svg>
+                            <span>Continuar com o Google</span>
+                        </button>
+
+                        <div class="divider-text" id="loginDivider">
+                            <span>ou</span>
                         </div>
 
-                        <!-- ===== FORMULÁRIO DE LOGIN ===== -->
-                        <form id="loginForm" class="login-form">
+                        <div class="form-group">
+                            <label for="email">Email</label>
+                            <input type="email" id="email" placeholder="voce@email.com" required autocomplete="email">
+                        </div>
+
+                        <div class="form-group">
+                            <div class="label-row">
+                                <label for="password">Senha</label>
+                                <button type="button" class="forgot-link" id="forgotPasswordBtn">Esqueci a senha</button>
+                            </div>
+                            <div class="input-wrap">
+                                <input type="password" id="password" placeholder="••••••••" required autocomplete="current-password">
+                                <button type="button" class="toggle-password" id="togglePassword">
+                                    <i class="far fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary btn-full" id="loginBtn">
+                            <span class="btn-text">Entrar</span>
+                        </button>
+
+                        <div class="login-footer" id="loginFooter">
+                            <p>
+                                Não tem uma conta?
+                                <button type="button" class="link-btn" id="createAccountBtn">Cadastre-se</button>
+                            </p>
+                        </div>
+                    </form>
+
+                    <!-- ===== FORMULÁRIO DE CADASTRO ===== -->
+                    <div id="signupContainer" class="signup-form-container">
+                        <form id="signupForm">
                             {% csrf_token %}
-                            <div class="message-container" id="messageContainer"></div>
+                            <div class="message-container" id="signupMessageContainer"></div>
 
-                            <button type="button" class="btn btn-google btn-full" id="googleLoginBtn">
-                                <svg class="google-icon" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                                    <path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"/>
-                                    <path fill="#FF3D00" d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 16.318 4 9.656 8.337 6.306 14.691z"/>
-                                    <path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238A11.91 11.91 0 0 1 24 36c-5.202 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z"/>
-                                    <path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303a12.04 12.04 0 0 1-4.087 5.571l.003-.002 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z"/>
-                                </svg>
-                                <span>Continuar com o Google</span>
-                            </button>
-
-                            <div class="divider-text" id="loginDivider">
-                                <span>ou</span>
+                            <div class="form-group">
+                                <label for="signupName">Nome completo</label>
+                                <input type="text" id="signupName" placeholder="Seu nome" required autocomplete="name">
                             </div>
 
                             <div class="form-group">
-                                <label for="email">Email</label>
-                                <input type="email" id="email" placeholder="voce@email.com" required autocomplete="email">
+                                <label for="signupEmail">Email</label>
+                                <input type="email" id="signupEmail" placeholder="seu@email.com" required autocomplete="email">
                             </div>
 
                             <div class="form-group">
-                                <div class="label-row">
-                                    <label for="password">Senha</label>
-                                    <button type="button" class="forgot-link" id="forgotPasswordBtn">Esqueci a senha</button>
-                                </div>
+                                <label for="signupPassword">Senha</label>
                                 <div class="input-wrap">
-                                    <input type="password" id="password" placeholder="••••••••" required autocomplete="current-password">
-                                    <button type="button" class="toggle-password" id="togglePassword">
+                                    <input type="password" id="signupPassword" placeholder="Mínimo 6 caracteres" required>
+                                    <button type="button" class="toggle-password" id="toggleSignupPassword">
                                         <i class="far fa-eye"></i>
                                     </button>
                                 </div>
                             </div>
 
-                            <button type="submit" class="btn btn-primary btn-full" id="loginBtn">
-                                <span class="btn-text">Entrar</span>
+                            <div class="form-group">
+                                <label for="signupConfirm">Confirmar senha</label>
+                                <div class="input-wrap">
+                                    <input type="password" id="signupConfirm" placeholder="Confirme sua senha" required>
+                                    <button type="button" class="toggle-password" id="toggleSignupConfirm">
+                                        <i class="far fa-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary btn-full" id="signupBtn">
+                                <span class="btn-text">Cadastrar</span>
                             </button>
 
-                            <div class="login-footer" id="loginFooter">
+                            <div class="login-footer" style="margin-top:20px;">
                                 <p>
-                                    Não tem uma conta?
-                                    <button type="button" class="link-btn" id="createAccountBtn">Cadastre-se</button>
+                                    Já tem uma conta?
+                                    <button type="button" class="link-btn" id="backToLoginBtn">Fazer login</button>
                                 </p>
                             </div>
                         </form>
-
-                        <!-- ===== FORMULÁRIO DE CADASTRO ===== -->
-                        <div id="signupContainer" class="signup-form-container">
-                            <form id="signupForm">
-                                {% csrf_token %}
-                                <div class="message-container" id="signupMessageContainer"></div>
-
-                                <div class="form-group">
-                                    <label for="signupName">Nome completo</label>
-                                    <input type="text" id="signupName" placeholder="Seu nome" required autocomplete="name">
-                                </div>
-
-                                <div class="form-group">
-                                    <label for="signupEmail">Email</label>
-                                    <input type="email" id="signupEmail" placeholder="seu@email.com" required autocomplete="email">
-                                </div>
-
-                                <div class="form-group">
-                                    <label for="signupPassword">Senha</label>
-                                    <div class="input-wrap">
-                                        <input type="password" id="signupPassword" placeholder="Mínimo 6 caracteres" required>
-                                        <button type="button" class="toggle-password" id="toggleSignupPassword">
-                                            <i class="far fa-eye"></i>
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div class="form-group">
-                                    <label for="signupConfirm">Confirmar senha</label>
-                                    <div class="input-wrap">
-                                        <input type="password" id="signupConfirm" placeholder="Confirme sua senha" required>
-                                        <button type="button" class="toggle-password" id="toggleSignupConfirm">
-                                            <i class="far fa-eye"></i>
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <button type="submit" class="btn btn-primary btn-full" id="signupBtn">
-                                    <span class="btn-text">Cadastrar</span>
-                                </button>
-
-                                <div class="login-footer" style="margin-top:20px;">
-                                    <p>
-                                        Já tem uma conta?
-                                        <button type="button" class="link-btn" id="backToLoginBtn">Fazer login</button>
-                                    </p>
-                                </div>
-                            </form>
-                        </div>
-
                     </div>
-                </div>
 
-                <div class="login-terms" id="loginTerms">
-                    <p>
-                        Ao continuar, você concorda com nossos
-                        <a href="/termos/" class="link">Termos de Uso</a>
-                        e nossa
-                        <a href="/privacidade/" class="link">Política de Privacidade</a>.
-                        <span style="display:block;margin-top:6px;color:#B7B7BE;font-size:11px;">
-                            © 2026 Clivo
-                        </span>
-                    </p>
                 </div>
             </div>
 
-            <!-- ===== LADO DIREITO — MURAL v3 (elementos reais das abas) ===== -->
-            <div class="login-mural">
-                <div class="login-mural-inner">
-
-                    <!-- MOCKUP FIEL DAS TELAS -->
-                    <div class="mural-app" aria-hidden="true">
-
-                        <!-- Topbar: workspace switch + greeting + botão Nova análise (real) -->
-                        <header class="mural-app-top">
-                            <div class="mural-ws">
-                                <span class="mural-ws-avatar">C</span>
-                                <span class="mural-ws-name">Estúdio Clivo</span>
-                                <i class="fas fa-chevron-down mural-ws-chev"></i>
-                            </div>
-                            <button class="mural-btn-reanalyze" tabindex="-1">
-                                <i class="fas fa-wand-magic-sparkles"></i>
-                                <span>Nova análise</span>
-                            </button>
-                        </header>
-
-                        <!-- Grid de 3 colunas fiel ao .cl-body / .fx-body -->
-                        <div class="mural-app-grid">
-
-                            <!-- COLUNA 1 — lista de briefings (fiel ao .ms-brief) -->
-                            <div class="mural-col mural-col--list">
-                                <div class="mural-colhead">
-                                    <span class="mural-colhead-title">Briefings</span>
-                                    <span class="mural-colhead-count">3</span>
-                                </div>
-
-                                <div class="mural-search">
-                                    <i class="fas fa-magnifying-glass"></i>
-                                    <span>Buscar briefings…</span>
-                                </div>
-
-                                <!-- Item ativo -->
-                                <div class="mural-item is-active">
-                                    <span class="mural-item-thumb" style="background:linear-gradient(135deg,#4A6CF7,#6B8AFB);"></span>
-                                    <div class="mural-item-body">
-                                        <div class="mural-item-top">
-                                            <span class="mural-item-name">Apartamento 302</span>
-                                            <span class="mural-item-pill is-blue">
-                                                <span class="mural-item-pill-dot"></span>
-                                                Em andamento
-                                            </span>
-                                        </div>
-                                        <span class="mural-item-client">Mariana Alves</span>
-                                        <div class="mural-item-bar"><span style="width:72%"></span></div>
-                                    </div>
-                                </div>
-
-                                <!-- Item 2 -->
-                                <div class="mural-item">
-                                    <span class="mural-item-thumb" style="background:linear-gradient(135deg,#17B26A,#3CCB8A);"></span>
-                                    <div class="mural-item-body">
-                                        <div class="mural-item-top">
-                                            <span class="mural-item-name">Casa de praia</span>
-                                            <span class="mural-item-pill is-amber">
-                                                <span class="mural-item-pill-dot"></span>
-                                                Pendências
-                                            </span>
-                                        </div>
-                                        <span class="mural-item-client">Rafael Costa</span>
-                                        <div class="mural-item-bar"><span style="width:45%"></span></div>
-                                    </div>
-                                </div>
-
-                                <!-- Item 3 -->
-                                <div class="mural-item">
-                                    <span class="mural-item-thumb" style="background:linear-gradient(135deg,#9797A1,#B0B0B0);"></span>
-                                    <div class="mural-item-body">
-                                        <div class="mural-item-top">
-                                            <span class="mural-item-name">Reforma cozinha</span>
-                                            <span class="mural-item-pill">
-                                                <span class="mural-item-pill-dot"></span>
-                                                Concluído
-                                            </span>
-                                        </div>
-                                        <span class="mural-item-client">João & Maria</span>
-                                        <div class="mural-item-bar"><span style="width:100%"></span></div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- COLUNA 2 — detalhe (fiel ao .ms-detail-head + .cl-tabs) -->
-                            <div class="mural-col mural-col--detail">
-                                <div class="mural-crumb">
-                                    <span>Briefings</span>
-                                    <i class="fas fa-chevron-right"></i>
-                                    <span>Apartamento 302</span>
-                                </div>
-
-                                <div class="mural-detail-title-row">
-                                    <h3 class="mural-detail-title">Apartamento 302</h3>
-                                    <span class="mural-item-pill is-blue">
-                                        <span class="mural-item-pill-dot"></span>
-                                        Em andamento
-                                    </span>
-                                </div>
-
-                                <div class="mural-detail-meta">
-                                    <span><i class="fas fa-user"></i> Mariana Alves</span>
-                                    <span><i class="fas fa-calendar-plus"></i> Criado em 12 abr</span>
-                                    <span class="is-warning"><i class="fas fa-calendar-clock"></i> Vence em 3 dias</span>
-                                </div>
-
-                                <!-- Tabs reais do Mesa -->
-                                <div class="mural-tabs">
-                                    <span class="is-active">Resumo</span>
-                                    <span>Perguntas adicionais</span>
-                                    <span>Histórico</span>
-                                </div>
-
-                                <!-- Texto do resumo com linhas (simulando parágrafo) -->
-                                <div class="mural-detail-body">
-                                    <div class="mural-line" style="width:94%"></div>
-                                    <div class="mural-line" style="width:87%"></div>
-                                    <div class="mural-line" style="width:78%"></div>
-                                    <div class="mural-line" style="width:92%"></div>
-                                    <div class="mural-line" style="width:60%"></div>
-                                </div>
-
-                                <!-- Moodboard strip real -->
-                                <div class="mural-moodboard">
-                                    <span class="mural-moodboard-label">Moodboard</span>
-                                    <div class="mural-moodboard-row">
-                                        <span style="background:linear-gradient(135deg,#F5EFE3,#E9DCCB);"></span>
-                                        <span style="background:linear-gradient(135deg,#D8E5F5,#A2BFE1);"></span>
-                                        <span style="background:linear-gradient(135deg,#F0E4EF,#D8C7E0);"></span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- COLUNA 3 — Insight (fiel ao .cl-side + .ms-side-section) -->
-                            <div class="mural-col mural-col--side">
-                                <div class="mural-side-head">
-                                    <i class="fas fa-wand-magic-sparkles"></i>
-                                    <span>Insight</span>
-                                </div>
-
-                                <div class="mural-side-section">
-                                    <div class="mural-side-title">
-                                        <i class="fas fa-file-text"></i>
-                                        <span>Resumo</span>
-                                    </div>
-                                    <p class="mural-side-text">Casal jovem, apaixonado por madeira clara e luz natural. Prioriza integração entre cozinha e sala.</p>
-                                </div>
-
-                                <div class="mural-side-section">
-                                    <div class="mural-side-title">
-                                        <i class="fas fa-heart"></i>
-                                        <span>Desejos</span>
-                                    </div>
-                                    <div class="mural-tags">
-                                        <span>Luz natural</span>
-                                        <span>Madeira clara</span>
-                                        <span>Integração</span>
-                                    </div>
-                                </div>
-
-                                <div class="mural-side-section">
-                                    <div class="mural-side-title">
-                                        <i class="fas fa-triangle-exclamation"></i>
-                                        <span>Atenção</span>
-                                    </div>
-                                    <p class="mural-side-text is-muted">Orçamento abaixo do padrão para o metraje.</p>
-                                </div>
-                            </div>
-
-                        </div>
-                    </div>
-
-                    <!-- COPY INSTITUCIONAL (só título + subtítulo, sem tags) -->
-                    <div class="mural-copy">
-                        <h2 class="mural-copy-title">Do briefing à entrega das chaves.</h2>
-                        <p class="mural-copy-text">
-                            Clientes, briefings, perguntas e insights organizados em um só lugar —
-                            para o seu escritório decidir com clareza.
-                        </p>
-                    </div>
-
-                </div>
+            <!-- Rodapé com termos -->
+            <div class="login-terms" id="loginTerms">
+                <p>
+                    Ao continuar, você concorda com nossos
+                    <a href="/termos/" class="link">Termos de Uso</a>
+                    e nossa
+                    <a href="/privacidade/" class="link">Política de Privacidade</a>.
+                    <span style="display:block;margin-top:6px;color:#B7B7BE;font-size:11px;">
+                        © 2026 Clivo
+                    </span>
+                </p>
             </div>
 
         </div>

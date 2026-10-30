@@ -211,55 +211,39 @@ body {
 .toast-close:hover { color: var(--text-primary); }
 
 /* ============================================
-   LAYOUT - SPLIT SCREEN
+   LAYOUT — página inteira com card centralizado
    ============================================ */
 .login-page {
     min-height: 100vh;
     min-height: 100dvh;
     display: flex;
-    align-items: stretch;
-    justify-content: center;
-    overflow: hidden;
+    flex-direction: column;
+    background: var(--bg-primary);
 }
+
 .login-container {
     width: 100%;
     max-width: 100%;
-    display: flex;
-    flex-direction: column;
-    min-height: 100vh;
-    min-height: 100dvh;
-}
-@media (min-width: 1024px) {
-    .login-container {
-        flex-direction: row;
-        align-items: stretch;
-    }
-}
-
-/* ============================================
-   LADO ESQUERDO (Formulário)
-   ============================================ */
-.login-card-wrapper {
-    flex: 0 0 50%;
-    position: relative;
     min-height: 100vh;
     min-height: 100dvh;
     display: flex;
     flex-direction: column;
     padding: 28px 44px;
-    background: var(--bg-primary);
 }
 
+/* ---------- TOPBAR (logo) ---------- */
 .login-topbar {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     width: 100%;
+    flex-shrink: 0;
     animation: fadeIn 0.4s ease forwards;
 }
 .login-logo {
-    display: flex;
+    display: inline-flex;
     align-items: center;
+    text-decoration: none;
+    color: inherit;
 }
 .login-logo-text {
     font-size: 22px;
@@ -269,572 +253,19 @@ body {
     font-family: var(--font-family);
 }
 
+/* ---------- CENTRO ---------- */
 .login-card-center {
-    flex: 1;
+    flex: 1 1 auto;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding-bottom: 2rem;
+    padding: 32px 0;
 }
 
-/* ============================================
-   LADO DIREITO — MURAL v3 (elementos reais das abas)
-   ============================================ */
-.login-mural {
-    flex: 0 0 50%;
-    position: relative;
-    min-height: 100vh;
-    min-height: 100dvh;
-    overflow: hidden;
-    background: var(--bg-primary);
-    padding: 12px 12px 12px 0;
-}
-.login-mural-inner {
-    width: 100%;
-    height: 100%;
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-light);
-    border-radius: var(--radius-2xl);
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    padding: 36px 32px 32px;
-    gap: 28px;
-}
-[data-theme="dark"] .login-mural-inner {
-    background: #0F0F0F;
-    border-color: #1F1F1F;
-}
-
-/* ---------- MOCKUP DO APP ---------- */
-.mural-app {
-    width: 100%;
-    background: var(--bg-primary);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-lg);
-    box-shadow:
-        0 1px 3px rgba(0, 0, 0, 0.04),
-        0 14px 36px rgba(16, 24, 40, 0.07);
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    animation: fadeInScale 0.6s ease 0.1s both;
-    flex: 1 1 auto;
-    min-height: 0;
-}
-[data-theme="dark"] .mural-app {
-    background: #0A0A0A;
-    border-color: #1F1F1F;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.3), 0 14px 36px rgba(0,0,0,0.5);
-}
-
-/* topbar do app (workspace switch + Nova análise) */
-.mural-app-top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    padding: 10px 14px;
-    border-bottom: 1px solid var(--border-light);
-    flex-shrink: 0;
-}
-[data-theme="dark"] .mural-app-top { border-bottom-color: #1F1F1F; }
-
-.mural-ws {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
-}
-.mural-ws-avatar {
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-    background: var(--text-primary);
-    color: var(--bg-primary);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 10px;
-    font-weight: 700;
-    flex-shrink: 0;
-}
-[data-theme="dark"] .mural-ws-avatar {
-    background: #F5F5F5;
-    color: #0A0A0A;
-}
-.mural-ws-name {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--text-primary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.mural-ws-chev {
-    font-size: 8px;
-    color: var(--text-tertiary);
-    opacity: 0.7;
-}
-
-.mural-btn-reanalyze {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    height: 24px;
-    padding: 0 9px;
-    border: 1px solid rgba(74, 108, 247, 0.5);
-    border-radius: 6px;
-    background: var(--blue-bg);
-    color: var(--blue-ink);
-    font-size: 10.5px;
-    font-weight: 600;
-    pointer-events: none;
-    flex-shrink: 0;
-}
-.mural-btn-reanalyze i { font-size: 10px; }
-[data-theme="dark"] .mural-btn-reanalyze {
-    background: #131A33;
-    color: #93C5FD;
-    border-color: rgba(147, 197, 253, 0.5);
-}
-
-/* grid de 3 colunas */
-.mural-app-grid {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr) minmax(0, 1fr);
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow: hidden;
-}
-
-.mural-col {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    padding: 12px 10px;
-    min-width: 0;
-    min-height: 0;
-    overflow: hidden;
-    border-right: 1px solid var(--border-light);
-}
-.mural-col:last-child { border-right: none; }
-[data-theme="dark"] .mural-col { border-right-color: #1F1F1F; }
-
-.mural-col--detail { background: var(--bg-secondary); }
-[data-theme="dark"] .mural-col--detail { background: #0F0F0F; }
-
-/* column head */
-.mural-colhead {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 0 2px 4px;
-    flex-shrink: 0;
-}
-.mural-colhead-title {
-    flex: 1;
-    font-size: 9.5px;
-    font-weight: 700;
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
-    color: var(--text-tertiary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.mural-colhead-count {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 16px;
-    height: 15px;
-    padding: 0 5px;
-    border-radius: 999px;
-    background: var(--bg-secondary);
-    color: var(--text-tertiary);
-    font-size: 9px;
-    font-weight: 600;
-    font-variant-numeric: tabular-nums;
-}
-[data-theme="dark"] .mural-colhead-count { background: #171717; }
-
-/* search */
-.mural-search {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    height: 24px;
-    padding: 0 8px;
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    background: var(--bg-secondary);
-    color: var(--text-tertiary);
-    font-size: 10.5px;
-    flex-shrink: 0;
-    margin-bottom: 2px;
-}
-.mural-search i { font-size: 9px; opacity: 0.7; }
-[data-theme="dark"] .mural-search { background: #0A0A0A; }
-
-/* item de briefing (fiel ao .ms-brief) */
-.mural-item {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    padding: 8px;
-    border-radius: 8px;
-    background: transparent;
-    border: 1px solid transparent;
-    min-width: 0;
-}
-.mural-item.is-active {
-    background: var(--bg-primary);
-    border-color: var(--border-color);
-    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-}
-[data-theme="dark"] .mural-item.is-active {
-    background: #121212;
-    border-color: #262626;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-}
-
-.mural-item-thumb {
-    width: 26px;
-    height: 26px;
-    border-radius: 6px;
-    flex-shrink: 0;
-    border: 1px solid var(--border-light);
-}
-[data-theme="dark"] .mural-item-thumb { border-color: #262626; }
-
-.mural-item-body {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-}
-
-.mural-item-top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 5px;
-    min-width: 0;
-}
-
-.mural-item-name {
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--text-primary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    min-width: 0;
-}
-
-.mural-item-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 3px;
-    height: 16px;
-    padding: 0 6px;
-    border-radius: 999px;
-    font-size: 9px;
-    font-weight: 600;
-    white-space: nowrap;
-    flex-shrink: 0;
-    background: var(--bg-secondary);
-    color: var(--text-secondary);
-}
-[data-theme="dark"] .mural-item-pill { background: #171717; }
-
-.mural-item-pill-dot {
-    width: 4px;
-    height: 4px;
-    border-radius: 50%;
-    background: currentColor;
-}
-
-.mural-item-pill.is-blue {
-    background: var(--blue-bg);
-    color: var(--blue-ink);
-}
-[data-theme="dark"] .mural-item-pill.is-blue {
-    background: #131A33;
-    color: #93C5FD;
-}
-
-.mural-item-pill.is-amber {
-    background: var(--orange-bg);
-    color: var(--orange);
-}
-[data-theme="dark"] .mural-item-pill.is-amber {
-    background: #2A1F0A;
-    color: #F59E0B;
-}
-
-.mural-item-client {
-    font-size: 10px;
-    color: var(--text-tertiary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.mural-item-bar {
-    height: 3px;
-    border-radius: 999px;
-    background: var(--bg-secondary);
-    overflow: hidden;
-    margin-top: 2px;
-}
-[data-theme="dark"] .mural-item-bar { background: #171717; }
-
-.mural-item-bar > span {
-    display: block;
-    height: 100%;
-    border-radius: inherit;
-    background: var(--blue);
-}
-
-/* ---------- COLUNA 2: DETALHE ---------- */
-.mural-crumb {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 9.5px;
-    color: var(--text-tertiary);
-    flex-shrink: 0;
-    margin-bottom: 2px;
-}
-.mural-crumb i { font-size: 7px; opacity: 0.6; }
-
-.mural-detail-title-row {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 6px;
-    min-width: 0;
-}
-.mural-detail-title {
-    font-size: 14px;
-    font-weight: 700;
-    letter-spacing: -0.2px;
-    color: var(--text-primary);
-    margin: 0;
-    line-height: 1.2;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.mural-detail-meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px 10px;
-    font-size: 9.5px;
-    color: var(--text-tertiary);
-    margin-top: 2px;
-    margin-bottom: 4px;
-}
-.mural-detail-meta span {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-}
-.mural-detail-meta i { font-size: 8px; opacity: 0.8; }
-.mural-detail-meta .is-warning { color: var(--orange); }
-.mural-detail-meta .is-warning i { color: var(--orange); }
-
-.mural-tabs {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    border-bottom: 1px solid var(--border-light);
-    padding-bottom: 6px;
-    margin-bottom: 8px;
-    flex-shrink: 0;
-}
-[data-theme="dark"] .mural-tabs { border-bottom-color: #1F1F1F; }
-
-.mural-tabs > span {
-    font-size: 10px;
-    font-weight: 500;
-    color: var(--text-tertiary);
-    padding-bottom: 2px;
-    white-space: nowrap;
-    cursor: default;
-}
-.mural-tabs > span.is-active {
-    color: var(--text-primary);
-    font-weight: 600;
-    border-bottom: 1.5px solid var(--text-primary);
-}
-
-.mural-detail-body {
-    display: flex;
-    flex-direction: column;
-    gap: 7px;
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow: hidden;
-    margin-bottom: 8px;
-}
-
-.mural-line {
-    height: 5px;
-    border-radius: var(--radius-full);
-    background: var(--border-color);
-    opacity: 0.65;
-}
-[data-theme="dark"] .mural-line { background: #262626; }
-
-/* moodboard strip */
-.mural-moodboard {
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-    flex-shrink: 0;
-    margin-top: auto;
-    padding-top: 8px;
-    border-top: 1px solid var(--border-light);
-}
-[data-theme="dark"] .mural-moodboard { border-top-color: #1F1F1F; }
-
-.mural-moodboard-label {
-    font-size: 9px;
-    font-weight: 700;
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
-    color: var(--text-tertiary);
-}
-
-.mural-moodboard-row {
-    display: flex;
-    gap: 5px;
-}
-.mural-moodboard-row > span {
-    flex: 1;
-    height: 26px;
-    border-radius: 6px;
-    border: 1px solid var(--border-light);
-}
-[data-theme="dark"] .mural-moodboard-row > span { border-color: #262626; }
-
-/* ---------- COLUNA 3: INSIGHT ---------- */
-.mural-side-head {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 0 2px 6px;
-    flex-shrink: 0;
-}
-.mural-side-head i {
-    font-size: 10px;
-    color: var(--text-tertiary);
-    opacity: 0.9;
-}
-.mural-side-head span {
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--text-primary);
-    letter-spacing: -0.1px;
-}
-
-.mural-side-section {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    padding: 8px 0;
-    border-top: 1px solid var(--border-light);
-    min-width: 0;
-}
-.mural-side-section:first-of-type {
-    border-top: none;
-    padding-top: 2px;
-}
-[data-theme="dark"] .mural-side-section { border-top-color: #1F1F1F; }
-
-.mural-side-title {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 10px;
-    font-weight: 600;
-    color: var(--text-primary);
-    letter-spacing: -0.1px;
-}
-.mural-side-title i {
-    font-size: 9px;
-    color: var(--text-tertiary);
-    opacity: 0.9;
-}
-
-.mural-side-text {
-    font-size: 10px;
-    line-height: 1.5;
-    color: var(--text-secondary);
-    margin: 0;
-}
-.mural-side-text.is-muted { color: var(--text-tertiary); }
-
-.mural-tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-}
-.mural-tags > span {
-    display: inline-flex;
-    align-items: center;
-    height: 18px;
-    padding: 0 7px;
-    border-radius: 999px;
-    font-size: 9.5px;
-    font-weight: 500;
-    background: var(--bg-secondary);
-    color: var(--text-secondary);
-    white-space: nowrap;
-}
-[data-theme="dark"] .mural-tags > span { background: #171717; }
-
-/* ---------- COPY INSTITUCIONAL ---------- */
-.mural-copy {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    flex-shrink: 0;
-    animation: fadeIn 0.6s ease 0.3s both;
-    max-width: 460px;
-}
-
-.mural-copy-title {
-    font-size: 20px;
-    font-weight: 700;
-    letter-spacing: -0.4px;
-    line-height: 1.25;
-    color: var(--text-primary);
-    margin: 0;
-}
-
-.mural-copy-text {
-    font-size: 13px;
-    line-height: 1.6;
-    color: var(--text-secondary);
-    margin: 0;
-}
-
-[data-theme="dark"] .mural-copy-title { color: var(--text-primary); }
-[data-theme="dark"] .mural-copy-text { color: var(--text-secondary); }
-
-/* ============================================
-   CARD DE LOGIN
-   ============================================ */
+/* ---------- CARD ---------- */
 .login-card {
     width: 100%;
-    max-width: 340px;
+    max-width: 380px;
     padding: 0;
     background: transparent;
     border: none;
@@ -853,14 +284,14 @@ body {
     gap: 4px;
 }
 .card-header h2 {
-    font-size: 20px;
+    font-size: 22px;
     font-weight: 700;
     color: var(--text-primary);
     letter-spacing: -0.4px;
     line-height: 1.2;
 }
 #formSubtitle {
-    font-size: 12.5px;
+    font-size: 13px;
     color: var(--text-secondary);
     font-weight: 400;
     line-height: 1.4;
@@ -884,9 +315,7 @@ body {
     background: var(--bg-secondary);
 }
 
-/* ============================================
-   MESSAGES (Alertas)
-   ============================================ */
+/* ---------- MENSAGENS ---------- */
 .message-container {
     margin-bottom: 16px;
 }
@@ -908,9 +337,7 @@ body {
     border-color: rgba(23, 178, 106, 0.25);
 }
 
-/* ============================================
-   FORMS & INPUTS
-   ============================================ */
+/* ---------- FORM ---------- */
 .login-form,
 .signup-form-container form {
     display: flex;
@@ -949,7 +376,7 @@ body {
 }
 .form-group input {
     width: 100%;
-    height: 40px;
+    height: 42px;
     padding: 0 14px;
     background: var(--bg-primary);
     border: 1px solid var(--border-color);
@@ -984,21 +411,20 @@ body {
     color: var(--text-tertiary);
     cursor: pointer;
     font-size: 13px;
+    padding: 6px;
     transition: color var(--transition);
 }
 .form-group .toggle-password:hover {
     color: var(--text-secondary);
 }
 
-/* ============================================
-   BUTTONS
-   ============================================ */
+/* ---------- BUTTONS ---------- */
 .btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 10px;
-    height: 40px;
+    height: 42px;
     border: none;
     border-radius: var(--radius-md);
     font-size: 13px;
@@ -1036,13 +462,14 @@ body {
     box-shadow: var(--shadow-sm);
     position: relative;
     z-index: 10;
+    height: 42px;
 }
 .btn-google:hover:not(:disabled) {
     background: var(--bg-secondary);
 }
 .btn-google svg {
-    width: 15px;
-    height: 15px;
+    width: 16px;
+    height: 16px;
     flex-shrink: 0;
 }
 .btn .spinner {
@@ -1063,16 +490,14 @@ body {
     background: var(--bg-secondary);
 }
 
-/* ============================================
-   DIVIDER
-   ============================================ */
+/* ---------- DIVIDER ---------- */
 .divider-text {
     display: flex;
     align-items: center;
     gap: 14px;
     color: var(--text-tertiary);
     font-size: 11px;
-    margin: 0;
+    margin: 2px 0;
 }
 .divider-text::before,
 .divider-text::after {
@@ -1082,13 +507,11 @@ body {
     background: var(--border-color);
 }
 
-/* ============================================
-   LOGIN FOOTER
-   ============================================ */
+/* ---------- LOGIN FOOTER ---------- */
 .login-footer {
     text-align: center;
     margin-top: 12px;
-    font-size: 12px;
+    font-size: 12.5px;
     color: var(--text-secondary);
 }
 .login-footer .link-btn {
@@ -1098,7 +521,7 @@ body {
     font-weight: 600;
     cursor: pointer;
     font-family: var(--font-family);
-    font-size: 12px;
+    font-size: 12.5px;
     margin-left: 4px;
 }
 .login-footer .link-btn:hover {
@@ -1106,16 +529,14 @@ body {
     text-underline-offset: 4px;
 }
 
-/* ============================================
-   TERMS & CONDITIONS
-   ============================================ */
+/* ---------- RODAPÉ (termos) ---------- */
 .login-terms {
-    position: absolute;
-    bottom: 28px;
-    left: 44px;
-    font-size: 10.5px;
+    flex-shrink: 0;
+    text-align: center;
+    font-size: 11px;
     color: var(--text-muted);
     line-height: 1.5;
+    padding-top: 24px;
 }
 .login-terms .link {
     color: var(--text-muted);
@@ -1127,9 +548,7 @@ body {
     color: var(--text-secondary);
 }
 
-/* ============================================
-   SIGNUP CONTAINER TOGGLE
-   ============================================ */
+/* ---------- TOGGLE CADASTRO ---------- */
 .signup-form-container {
     display: none;
 }
@@ -1144,7 +563,7 @@ body {
 }
 
 /* ============================================
-   MODAL - ESQUECEU SENHA
+   MODAL — ESQUECEU SENHA
    ============================================ */
 .modal-overlay {
     display: none;
@@ -1258,57 +677,46 @@ body {
 /* ============================================
    RESPONSIVE
    ============================================ */
-@media (max-width: 1200px) {
-    .login-mural-inner {
-        padding: 28px 24px 24px;
-    }
-    .mural-copy-title {
-        font-size: 18px;
-    }
-    .mural-app-grid {
-        grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
-    }
-    .mural-col--side {
-        display: none;
-    }
-}
-
-@media (max-width: 1024px) {
+@media (max-width: 640px) {
     .login-container {
-        flex-direction: column;
+        padding: 20px 20px;
     }
-    .login-mural {
-        display: none;
-    }
-    .login-card-wrapper {
-        padding: 28px 24px;
-        flex: 1;
+    .login-topbar {
         justify-content: center;
     }
+    .login-card-center {
+        padding: 24px 0;
+    }
+    .card-header h2 {
+        font-size: 20px;
+    }
     .login-terms {
-        position: relative;
-        bottom: 0;
-        left: 0;
-        text-align: center;
-        margin-top: 44px;
+        padding-top: 16px;
     }
 }
 
-@media (max-width: 480px) {
-    .card-header h2 {
-        font-size: 19px;
+@media (max-width: 380px) {
+    .login-container {
+        padding: 16px 14px;
     }
     .login-card {
-        padding: 0 8px;
+        max-width: 100%;
     }
 }
 
 /* ============================================
-   DARK THEME — MURAL
+   PREFERS REDUCED MOTION
    ============================================ */
-[data-theme="dark"] .mural-copy-title {
-    color: var(--text-primary);
-}
-[data-theme="dark"] .mural-copy-text {
-    color: var(--text-secondary);
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+    .login-card {
+        opacity: 1;
+        animation: none;
+    }
 }
