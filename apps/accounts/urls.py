@@ -25,6 +25,7 @@ from apps.accounts.views import (
 
 urlpatterns = [
     # ===== PÁGINAS =====
+    # '/' → landing pública (anônimo) ou redirect pós-login (autenticado)
     path('', PostLoginRedirectView.as_view(), name='home'),
     path('login/', LoginView.as_view(), name='login-page'),
     path('console/', ConsoleView.as_view(), name='console'),

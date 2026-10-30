@@ -41,20 +41,24 @@ class GoogleOAuthEntryView(View):
 
 class PostLoginRedirectView(View):
     """
-    Roteador de pós-login.
+    Raiz do site (https://clivoos.com/).
 
-    Usado pelo allauth (Google) após autenticação bem-sucedida.
-    A decisão é a mesma do endpoint /api/auth/entry/ — ambos
-    delegam para resolve_entry_target().
+    Comportamento por estado do usuário:
 
-    Regra:
-        ConsoleMember / superuser  → /console/
-        Qualquer outro autenticado → /workspaces/entrar/
+        Anônimo      → renderiza a landing pública.
+        Autenticado  → resolve o destino via resolve_entry_target()
+                       (/console/ ou /workspaces/entrar/).
+
+    A landing pública existe para atender ao Google OAuth
+    Verification: a home precisa explicar a finalidade do app e
+    por que ele pede acesso ao Drive/Forms.
+
+    NUNCA redireciona para "/" — evita loop.
     """
 
     def get(self, request):
         if not request.user.is_authenticated:
-            return redirect('/login/')
+            return render(request, 'landing.html')
 
         request.session.pop('_clivo_session_type', None)
 
@@ -62,12 +66,12 @@ class PostLoginRedirectView(View):
 
         if target == 'console':
             logger.debug(
-                f"Pós-login (allauth): {request.user.email} → /console/"
+                f"Pós-login (raiz): {request.user.email} → /console/"
             )
             return redirect('/console/')
 
         logger.debug(
-            f"Pós-login (allauth): {request.user.email} → /workspaces/entrar/"
+            f"Pós-login (raiz): {request.user.email} → /workspaces/entrar/"
         )
         return redirect('/workspaces/entrar/')
 
@@ -120,7 +124,7 @@ class ConsoleView(View):
 #
 # Ambas devem:
 #   - retornar 200 sem exigir login;
-#   - estar linkadas na home pública do site (a página de login);
+#   - estar linkadas na home pública do site (a landing em /);
 #   - não ter PDF — precisam ser páginas HTML acessíveis.
 #
 # Não há autenticação. Não há dados dinâmicos. Não há dependência
@@ -151,7 +155,8 @@ class TermsOfUseView(View):
     Página pública de Termos de Uso.
 
     Não é exigida pelo Google, mas é o contrato de uso do Clivo.
-    Está linkada na home pública (login). Não exige autenticação.
+    Está linkada na home pública (landing e login). Não exige
+    autenticação.
     """
 
     def get(self, request):

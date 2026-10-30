@@ -1,0 +1,325 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Clivo — sistema operacional para escritórios de arquitetura. Organize clientes, briefings, perguntas e insights em um só lugar.">
+    <title>Clivo · Do briefing à entrega das chaves</title>
+
+    <link rel="icon" type="image/svg+xml" href="{% static 'img/clivo-logo.svg' %}">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <link rel="stylesheet" href="{% static 'css/landing.css' %}">
+</head>
+<body>
+
+    <!-- =========================================================
+         HEADER
+         ========================================================= -->
+    <header class="ld-header">
+        <a href="/" class="ld-logo">Clivo</a>
+
+        <nav class="ld-nav" aria-label="Navegação principal">
+            <a href="#produto">Produto</a>
+            <a href="#google">Integração Google</a>
+            <a href="#privacidade">Privacidade</a>
+        </nav>
+
+        <div class="ld-header-actions">
+            <a href="/login/" class="ld-btn ld-btn--ghost">Entrar</a>
+            <a href="/login/" class="ld-btn ld-btn--primary">Começar</a>
+        </div>
+    </header>
+
+    <!-- =========================================================
+         HERO
+         ========================================================= -->
+    <main>
+        <section class="ld-hero" id="produto">
+            <div class="ld-hero-inner">
+
+                <div class="ld-hero-copy">
+                    <p class="ld-eyebrow">Sistema operacional para arquitetura</p>
+                    <h1 class="ld-hero-title">Do briefing à entrega das chaves.</h1>
+                    <p class="ld-hero-sub">
+                        O Clivo organiza clientes, briefings, perguntas e
+                        insights em um só lugar — para o seu escritório
+                        decidir com clareza.
+                    </p>
+
+                    <div class="ld-hero-actions">
+                        <a href="/login/" class="ld-btn ld-btn--primary ld-btn--lg">
+                            Começar agora
+                        </a>
+                        <a href="#produto" class="ld-btn ld-btn--ghost ld-btn--lg">
+                            Conhecer o produto
+                        </a>
+                    </div>
+
+                    <ul class="ld-hero-points">
+                        <li><i class="fas fa-check"></i> Briefings reutilizáveis e versionados</li>
+                        <li><i class="fas fa-check"></i> Portal do cliente com respostas por texto, áudio e imagem</li>
+                        <li><i class="fas fa-check"></i> Análise inteligente de cada briefing</li>
+                    </ul>
+                </div>
+
+                <div class="ld-hero-mural" aria-hidden="true">
+                    <!-- Mockup enxuto reutilizando o vocabulário visual da Mesa -->
+                    <div class="ld-mock">
+                        <header class="ld-mock-top">
+                            <span class="ld-mock-ws">C Estúdio Clivo</span>
+                            <span class="ld-mock-pill is-blue">
+                                <span class="ld-mock-pill-dot"></span>
+                                Em andamento
+                            </span>
+                        </header>
+
+                        <div class="ld-mock-grid">
+                            <div class="ld-mock-col">
+                                <span class="ld-mock-label">Briefings</span>
+
+                                <div class="ld-mock-item is-active">
+                                    <span class="ld-mock-thumb" style="background:linear-gradient(135deg,#4A6CF7,#6B8AFB);"></span>
+                                    <div class="ld-mock-item-body">
+                                        <span class="ld-mock-item-name">Apartamento 302</span>
+                                        <span class="ld-mock-item-client">Mariana Alves</span>
+                                        <div class="ld-mock-bar"><span style="width:72%"></span></div>
+                                    </div>
+                                </div>
+
+                                <div class="ld-mock-item">
+                                    <span class="ld-mock-thumb" style="background:linear-gradient(135deg,#17B26A,#3CCB8A);"></span>
+                                    <div class="ld-mock-item-body">
+                                        <span class="ld-mock-item-name">Casa de praia</span>
+                                        <span class="ld-mock-item-client">Rafael Costa</span>
+                                        <div class="ld-mock-bar"><span style="width:45%"></span></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="ld-mock-col ld-mock-col--detail">
+                                <span class="ld-mock-crumb">Briefings · Apartamento 302</span>
+                                <h3 class="ld-mock-title">Apartamento 302</h3>
+                                <p class="ld-mock-meta">Mariana Alves · Criado em 12 abr</p>
+
+                                <div class="ld-mock-lines">
+                                    <span style="width:94%"></span>
+                                    <span style="width:87%"></span>
+                                    <span style="width:78%"></span>
+                                    <span style="width:92%"></span>
+                                    <span style="width:60%"></span>
+                                </div>
+                            </div>
+
+                            <div class="ld-mock-col ld-mock-col--side">
+                                <span class="ld-mock-label">
+                                    <i class="fas fa-wand-magic-sparkles"></i>
+                                    Insight
+                                </span>
+
+                                <div class="ld-mock-side-block">
+                                    <span class="ld-mock-side-title">Resumo</span>
+                                    <p class="ld-mock-side-text">
+                                        Casal jovem, apaixonado por madeira clara e luz natural.
+                                    </p>
+                                </div>
+
+                                <div class="ld-mock-side-block">
+                                    <span class="ld-mock-side-title">Desejos</span>
+                                    <div class="ld-mock-tags">
+                                        <span>Luz natural</span>
+                                        <span>Madeira clara</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- =========================================================
+             INTEGRAÇÃO GOOGLE — explicação obrigatória
+             ========================================================= -->
+        <section class="ld-block" id="google">
+            <div class="ld-block-inner">
+                <p class="ld-eyebrow">Integração opcional</p>
+                <h2 class="ld-block-title">Por que o Clivo pede acesso ao Google?</h2>
+                <p class="ld-block-sub">
+                    O Clivo oferece uma integração <strong>opcional</strong>
+                    com o Google Forms e o Google Drive para importar
+                    formulários já existentes como modelos de briefing.
+                    Quando você conecta sua conta, usamos a permissão
+                    <strong>apenas</strong> para:
+                </p>
+
+                <div class="ld-cards">
+                    <article class="ld-card">
+                        <div class="ld-card-icon"><i class="fas fa-file-alt"></i></div>
+                        <h3 class="ld-card-title">Listar formulários</h3>
+                        <p class="ld-card-text">
+                            Localizar os formulários do Google Forms que você
+                            já criou, para escolher qual importar.
+                        </p>
+                    </article>
+
+                    <article class="ld-card">
+                        <div class="ld-card-icon"><i class="fas fa-file-import"></i></div>
+                        <h3 class="ld-card-title">Importar a estrutura</h3>
+                        <p class="ld-card-text">
+                            Copiar título, descrição, perguntas e opções de
+                            um formulário escolhido por você como modelo
+                            de briefing dentro do Clivo.
+                        </p>
+                    </article>
+
+                    <article class="ld-card">
+                        <div class="ld-card-icon"><i class="fas fa-shield-halved"></i></div>
+                        <h3 class="ld-card-title">Nada além disso</h3>
+                        <p class="ld-card-text">
+                            O Clivo não acessa outros arquivos do seu Drive.
+                            O Google Forms original <strong>não é alterado</strong>.
+                            Você pode revogar o acesso a qualquer momento em
+                            <a href="https://myaccount.google.com/permissions"
+                               target="_blank" rel="noopener">myaccount.google.com/permissions</a>.
+                        </p>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <!-- =========================================================
+             COMO FUNCIONA
+             ========================================================= -->
+        <section class="ld-block ld-block--alt">
+            <div class="ld-block-inner">
+                <p class="ld-eyebrow">Como funciona</p>
+                <h2 class="ld-block-title">Três passos, do cliente à decisão.</h2>
+
+                <ol class="ld-steps">
+                    <li class="ld-step">
+                        <span class="ld-step-num">1</span>
+                        <div>
+                            <h3 class="ld-step-title">Crie o modelo</h3>
+                            <p class="ld-step-text">
+                                Monte um briefing reutilizável com sessões e
+                                perguntas. Publique quando estiver pronto.
+                            </p>
+                        </div>
+                    </li>
+
+                    <li class="ld-step">
+                        <span class="ld-step-num">2</span>
+                        <div>
+                            <h3 class="ld-step-title">Envie ao cliente</h3>
+                            <p class="ld-step-text">
+                                O cliente responde no portal, por texto,
+                                áudio ou imagem. Cada resposta é registrada
+                                com histórico imutável.
+                            </p>
+                        </div>
+                    </li>
+
+                    <li class="ld-step">
+                        <span class="ld-step-num">3</span>
+                        <div>
+                            <h3 class="ld-step-title">Decida com clareza</h3>
+                            <p class="ld-step-text">
+                                O Clivo organiza as respostas e destaca
+                                desejos, pontos de atenção e perguntas
+                                complementares.
+                            </p>
+                        </div>
+                    </li>
+                </ol>
+            </div>
+        </section>
+
+        <!-- =========================================================
+             PRIVACIDADE (âncora para o Google)
+             ========================================================= -->
+        <section class="ld-block" id="privacidade">
+            <div class="ld-block-inner ld-block-inner--narrow">
+                <p class="ld-eyebrow">Transparência</p>
+                <h2 class="ld-block-title">Seus dados, suas regras.</h2>
+                <p class="ld-block-sub">
+                    O Clivo não vende nem compartilha dados pessoais com
+                    terceiros. As credenciais OAuth concedidas pelo Google
+                    são cifradas em repouso. Você pode revogar o acesso
+                    a qualquer momento.
+                </p>
+
+                <div class="ld-links-row">
+                    <a href="/privacidade/" class="ld-btn ld-btn--ghost">
+                        <i class="fas fa-shield-halved"></i>
+                        Política de Privacidade
+                    </a>
+                    <a href="/termos/" class="ld-btn ld-btn--ghost">
+                        <i class="fas fa-file-contract"></i>
+                        Termos de Uso
+                    </a>
+                </div>
+            </div>
+        </section>
+
+        <!-- =========================================================
+             CTA FINAL
+             ========================================================= -->
+        <section class="ld-cta">
+            <div class="ld-cta-inner">
+                <h2 class="ld-cta-title">Pronto para organizar o escritório?</h2>
+                <p class="ld-cta-sub">
+                    Comece agora. É gratuito para começar.
+                </p>
+                <a href="/login/" class="ld-btn ld-btn--primary ld-btn--lg">
+                    Criar conta
+                </a>
+            </div>
+        </section>
+    </main>
+
+    <!-- =========================================================
+         FOOTER
+         ========================================================= -->
+    <footer class="ld-footer">
+        <div class="ld-footer-inner">
+            <div class="ld-footer-brand">
+                <span class="ld-logo">Clivo</span>
+                <p class="ld-footer-tag">
+                    Sistema Operacional para Escritórios de Arquitetura.
+                </p>
+            </div>
+
+            <div class="ld-footer-links">
+                <div class="ld-footer-col">
+                    <span class="ld-footer-col-title">Produto</span>
+                    <a href="/login/">Entrar</a>
+                    <a href="/login/">Criar conta</a>
+                </div>
+
+                <div class="ld-footer-col">
+                    <span class="ld-footer-col-title">Legal</span>
+                    <a href="/privacidade/">Política de Privacidade</a>
+                    <a href="/termos/">Termos de Uso</a>
+                </div>
+
+                <div class="ld-footer-col">
+                    <span class="ld-footer-col-title">Contato</span>
+                    <a href="mailto:suporte@clivoos.com">suporte@clivoos.com</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="ld-footer-bottom">
+            <span>© 2026 Clivo. Todos os direitos reservados.</span>
+        </div>
+    </footer>
+
+</body>
+</html>
