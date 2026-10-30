@@ -107,3 +107,52 @@ class ConsoleView(View):
             return redirect('/workspaces/entrar/')
 
         return render(request, 'console.html')
+
+
+# =========================================================================
+# PÁGINAS LEGAIS (exigidas pelo Google OAuth Verification)
+# =========================================================================
+#
+# O Google exige que o app tenha URLs públicas com:
+#   - Política de Privacidade (obrigatório)
+#   - Termos de Uso (não obrigatório para OAuth, mas exigido pelo
+#     próprio Clivo como contrato de uso do serviço)
+#
+# Ambas devem:
+#   - retornar 200 sem exigir login;
+#   - estar linkadas na home pública do site (a página de login);
+#   - não ter PDF — precisam ser páginas HTML acessíveis.
+#
+# Não há autenticação. Não há dados dinâmicos. Não há dependência
+# de tenant. São páginas institucionais.
+
+
+class PrivacyPolicyView(View):
+    """
+    Página pública de Política de Privacidade.
+
+    Exigida pelo Google OAuth Verification quando o app usa
+    escopos sensíveis (Drive, Forms). Precisa ser acessível sem
+    login, retornar 200 e ter o link presente na home do site.
+
+    Conteúdo cobre:
+        - Quais dados do Google o Clivo acessa (Drive/Forms).
+        - Como os dados são usados.
+        - Como são armazenados e protegidos.
+        - Como o usuário revoga o acesso.
+    """
+
+    def get(self, request):
+        return render(request, 'legal/privacidade.html')
+
+
+class TermsOfUseView(View):
+    """
+    Página pública de Termos de Uso.
+
+    Não é exigida pelo Google, mas é o contrato de uso do Clivo.
+    Está linkada na home pública (login). Não exige autenticação.
+    """
+
+    def get(self, request):
+        return render(request, 'legal/termos.html')

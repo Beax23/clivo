@@ -19,6 +19,8 @@ from apps.accounts.views import (
     GoogleOAuthEntryView,
     PostLoginRedirectView,
     ConsoleView,
+    PrivacyPolicyView,
+    TermsOfUseView,
 )
 
 urlpatterns = [
@@ -50,4 +52,16 @@ urlpatterns = [
     # ===== API - Usuário =====
     path('api/users/', UserCreateView.as_view(), name='user-create'),
     path('api/users/me/', UserMeView.as_view(), name='user-me'),
+
+    # ===== PÁGINAS LEGAIS =====
+    path(
+        'privacidade/',
+        PrivacyPolicyView.as_view(),
+        name='privacy-policy',
+    ),
+    path(
+        'termos/',
+        TermsOfUseView.as_view(),
+        name='terms-of-use',
+    ),
 ]
